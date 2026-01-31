@@ -1,27 +1,100 @@
-import { readdir, writeFile } from 'fs/promises';
+import { readdir, writeFile, readFile } from 'fs/promises';
 import { join } from 'path';
-import type { Plugin } from 'vite';
+import type { Plugin, ViteDevServer } from 'vite';
+
+async function formatWithPrettier(content: string, filePath: string): Promise<string> {
+	try {
+		const prettier = await import('prettier');
+		const config = await prettier.resolveConfig(filePath);
+		return prettier.format(content, {
+			...config,
+			filepath: filePath
+		});
+	} catch {
+		// If prettier fails, return unformatted content
+		return content;
+	}
+}
 
 export function generateResourcesPlugin(): Plugin {
+	let resourcesDir: string;
+
 	return {
 		name: 'vite-plugin-generate-resources',
+
+		configResolved(config) {
+			resourcesDir = join(config.root, 'src/resources');
+		},
 
 		async buildStart() {
 			await generateResourcesFile();
 		},
 
-		async handleHotUpdate({ file }) {
-			// Watch for changes in resource files
-			if (file.includes('/resources/') && file.endsWith('.resource.ts')) {
+		configureServer(server: ViteDevServer) {
+			// Watch the resources directory with absolute path
+			server.watcher.add(resourcesDir);
+
+			const handleFile = async (file: string) => {
+				if (!file.endsWith('.resource.ts')) return;
+				// Small delay to ensure file is fully written
+				await new Promise((resolve) => setTimeout(resolve, 5));
+				await syncResourceName(file);
 				await generateResourcesFile();
-			}
+			};
+
+			server.watcher.on('add', handleFile);
+			server.watcher.on('change', handleFile);
+			server.watcher.on('unlink', async (file) => {
+				if (file.endsWith('.resource.ts')) {
+					await generateResourcesFile();
+				}
+			});
 		}
 	};
 }
 
+async function syncResourceName(filePath: string): Promise<void> {
+	try {
+		const content = await readFile(filePath, 'utf-8');
+		const fileName = filePath.split('/').pop() || '';
+		const resourceName = fileName.replace('.resource.ts', '');
+
+		// If file is empty, scaffold it
+		if (content.trim().length === 0) {
+			const template = `import { defineResource } from './resource';
+
+export const resource = defineResource('${resourceName}')({});
+`;
+			await writeFile(filePath, template, 'utf-8');
+			console.log(`✓ Scaffolded ${fileName}`);
+			return;
+		}
+
+		// Sync defineResource name with filename
+		const defineResourceRegex = /defineResource\s*\(\s*['"]([^'"]+)['"]\s*\)/;
+		const match = content.match(defineResourceRegex);
+
+		if (match && match[1] !== resourceName) {
+			const updatedContent = content.replace(
+				defineResourceRegex,
+				`defineResource('${resourceName}')`
+			);
+			await writeFile(filePath, updatedContent, 'utf-8');
+			console.log(`✓ Synced resource name in ${fileName}: '${match[1]}' → '${resourceName}'`);
+		}
+	} catch {
+		// Ignore errors
+	}
+}
+
 async function generateResourcesFile(): Promise<void> {
 	const resourcesDir = join(process.cwd(), 'src/resources');
-	const outputFile = join(process.cwd(), 'src/resources.remote.ts');
+	const remoteOutputFile = join(process.cwd(), 'src/resources.remote.ts');
+	const helperOutputFile = join(process.cwd(), 'src/resources.ts');
+
+	const methods = ['getMany', 'getOne', 'create', 'update', 'delete'] as const;
+	const methodExportName = (camelName: string, method: string) =>
+		`${camelName}${method.charAt(0).toUpperCase()}${method.slice(1)}`;
 
 	try {
 		const files = await readdir(resourcesDir);
@@ -29,29 +102,78 @@ async function generateResourcesFile(): Promise<void> {
 			(file) => file.endsWith('.resource.ts') && !file.startsWith('.')
 		);
 
-		// Generate imports
-		const imports = resourceFiles
+		// Generate resources.remote.ts - use destructuring to export whatever methods exist
+		const remoteContent =
+			'// Auto-generated file - do not edit manually\n' +
+			resourceFiles
+				.map((file) => {
+					const name = file.replace('.resource.ts', '');
+					const camelName = toCamelCase(name);
+					const importLine = `import { resource as ${camelName}Resource } from './resources/${file.replace('.ts', '')}';`;
+					const destructure = methods
+						.map((method) => `${method}: ${methodExportName(camelName, method)}`)
+						.join(', ');
+					const exportLine = `export const { ${destructure} } = ${camelName}Resource;`;
+					return `${importLine}\n${exportLine}`;
+				})
+				.join('\n\n') +
+			'\n';
+
+		const formattedRemoteContent = await formatWithPrettier(remoteContent, remoteOutputFile);
+		await writeFile(remoteOutputFile, formattedRemoteContent, 'utf-8');
+		console.log(`✓ Generated resources.remote.ts`);
+
+		// Generate resources.ts (helper with useResource)
+		const remoteImports = resourceFiles
+			.flatMap((file) => {
+				const name = file.replace('.resource.ts', '');
+				const camelName = toCamelCase(name);
+				return methods.map((method) => methodExportName(camelName, method));
+			})
+			.join(',\n\t');
+
+		const resourcesMapEntries = resourceFiles
 			.map((file) => {
 				const name = file.replace('.resource.ts', '');
 				const camelName = toCamelCase(name);
-				return `import { resource as ${camelName}Resource } from './resources/${file.replace('.ts', '')}';`;
+				const methodEntries = methods
+					.map((method) => `\t\t${method}: ${methodExportName(camelName, method)}`)
+					.join(',\n');
+				return `\t'${name}': {\n${methodEntries}\n\t}`;
 			})
-			.join('\n');
+			.join(',\n');
 
-		// Generate exports
-		const exports = resourceFiles
-			.map((file) => {
-				const name = file.replace('.resource.ts', '');
-				const camelName = toCamelCase(name);
-				const pascalName = toPascalCase(name);
-				return `export const { getList: get${pascalName}s } = ${camelName}Resource;`;
-			})
-			.join('\n');
+		const helperContent = resourceFiles.length
+			? `// Auto-generated file - do not edit manually
+import {
+	${remoteImports}
+} from './resources.remote';
 
-		const content = `${imports}\n\n${exports}\n`;
+const resources = {
+${resourcesMapEntries}
+} as const;
 
-		await writeFile(outputFile, content, 'utf-8');
-		console.log(`✓ Generated resources.remote.ts with ${resourceFiles.length} resources`);
+export type ResourceMap = typeof resources;
+export type ResourceName = keyof ResourceMap;
+
+export function useResource<K extends ResourceName>(name: K): ResourceMap[K] {
+	return resources[name];
+}
+`
+			: `// Auto-generated file - do not edit manually
+const resources = {} as const;
+
+export type ResourceMap = typeof resources;
+export type ResourceName = keyof ResourceMap;
+
+export function useResource<K extends ResourceName>(name: K): ResourceMap[K] {
+	return resources[name];
+}
+`;
+
+		const formattedHelperContent = await formatWithPrettier(helperContent, helperOutputFile);
+		await writeFile(helperOutputFile, formattedHelperContent, 'utf-8');
+		console.log(`✓ Generated resources.ts`);
 	} catch (error) {
 		console.error('Error generating resources file:', error);
 	}
@@ -59,9 +181,4 @@ async function generateResourcesFile(): Promise<void> {
 
 function toCamelCase(str: string): string {
 	return str.replace(/-([a-z])/g, (g) => g[1].toUpperCase());
-}
-
-function toPascalCase(str: string): string {
-	const camel = toCamelCase(str);
-	return camel.charAt(0).toUpperCase() + camel.slice(1);
 }

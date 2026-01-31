@@ -1,19 +1,27 @@
 <script lang="ts">
-	import { getBerrys, getBerryFlavors, getUsers } from '../resources.remote';
+	import { useResource } from '../resources';
+
+	const { getMany: getBerries, create: createBerry } = useResource('berries');
+	const { getMany: getBerryFirmness } = useResource('berry-firmness');
+	const {} = useResource('berry-flavors');
+	const { getOne: getA } = useResource('a');
+
 </script>
 
 <h1>Berries</h1>
 
-{#each await getBerrys() as berry}
+{#each await getBerries() as berry}
 	<p>{berry.name}</p>
 {/each}
 
-<h2>Berries Flavors</h2>
+<!-- <h2>Berry firmness</h2>
+
+{#each await getBerryFirmness() as firmness}
+	<p>{firmness.name}</p>
+{/each}
+
+<h2>Berry flavors</h2>
 
 {#each await getBerryFlavors() as flavor}
 	<p>{flavor.name}</p>
-{/each}
-
-{#each await getUsers() as user}
-	<p>{user.name} - {user.email}</p>
-{/each}
+{/each} -->

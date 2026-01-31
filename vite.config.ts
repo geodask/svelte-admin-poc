@@ -4,5 +4,5 @@ import inspect from 'vite-plugin-inspect';
 import { generateResourcesPlugin } from './src/lib/vite-plugin-generate-resources';
 
 export default defineConfig({
-	plugins: [generateResourcesPlugin(), sveltekit(), inspect()]
+	plugins: [sveltekit(), inspect(), generateResourcesPlugin()]
 });
