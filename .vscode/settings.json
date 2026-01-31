@@ -2,5 +2,8 @@
 	"files.readonlyInclude": {
 		"src/resources.ts": true,
 		"src/resources.remote.ts": true
+	},
+	"files.associations": {
+		"*.css": "tailwindcss"
 	}
 }
