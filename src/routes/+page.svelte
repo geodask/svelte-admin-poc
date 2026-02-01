@@ -5,7 +5,12 @@
 	import SectionCards from '$lib/components/section-cards.svelte';
 	import SiteHeader from '$lib/components/site-header.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
+	import { useResource } from '../resources';
 	import data from './data';
+
+	const {
+		metadata: { label }
+	} = useResource('berry-flavors');
 </script>
 
 <Sidebar.Provider
@@ -21,6 +26,9 @@
 					<div class="px-4 lg:px-6">
 						<ChartAreaInteractive />
 					</div>
+
+	{label}
+
 					<!-- <DataTable {data} /> -->
 				</div>
 			</div>

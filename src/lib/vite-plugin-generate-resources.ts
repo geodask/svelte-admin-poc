@@ -62,8 +62,15 @@ async function syncResourceName(filePath: string): Promise<void> {
 		// If file is empty, scaffold it
 		if (content.trim().length === 0) {
 			const template = `import { defineResource } from './resource';
+import { z } from 'zod';
 
-export const resource = defineResource('${resourceName}')({});
+const ${resourceName}Schema = z.object({
+	// Define your schema here
+});
+
+export const resource = defineResource('${resourceName}')({
+	schema: ${resourceName}Schema,
+});
 `;
 			await writeFile(filePath, template, 'utf-8');
 			console.log(`✓ Scaffolded ${fileName}`);

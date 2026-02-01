@@ -4,7 +4,7 @@
 	export type { ColumnDef };
 </script>
 
-<script lang="ts">
+<script lang="ts" generics="TData extends Record<string, unknown>">
 	import {
 		getCoreRowModel,
 		getFacetedRowModel,
@@ -56,7 +56,7 @@
 	import { move } from "@dnd-kit/helpers";
 	import { useSortable } from "@dnd-kit-svelte/svelte/sortable";
 
-	let { data: initialData, columns }: { data: Record<string, unknown>[]; columns: ColumnDef<Record<string, unknown>>[] } = $props();
+	let { data: initialData, columns }: { data: TData[]; columns: ColumnDef<TData>[] } = $props();
 	// eslint-disable-next-line svelte/valid-compile -- intentionally capturing initial value as mutable state
 	let data = $state(initialData);
 	let pagination = $state<PaginationState>({ pageIndex: 0, pageSize: 10 });

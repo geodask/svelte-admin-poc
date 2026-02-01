@@ -21,7 +21,7 @@
 			<div class="@container/main flex flex-1 flex-col gap-2">
 				<div class="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
 					{#if columns}
-						<DataTable data={(await getBerries()) as Record<string, unknown>[]} {columns} />
+						<DataTable data={await getBerries()} {columns} />
 					{/if}
 				</div>
 			</div>
