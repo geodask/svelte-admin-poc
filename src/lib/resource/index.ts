@@ -33,3 +33,6 @@ export { defineResource, type Resource } from './define-resource';
 
 // Providers
 export { simpleRestProvider } from './providers';
+
+// Components
+export { ResourceTable } from './components';

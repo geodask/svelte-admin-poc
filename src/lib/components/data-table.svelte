@@ -56,9 +56,8 @@
 	import { move } from '@dnd-kit/helpers';
 	import { useSortable } from '@dnd-kit-svelte/svelte/sortable';
 
-	let { data: initialData, columns }: { data: TData[]; columns: ColumnDef<TData>[] } = $props();
+	let { data, columns }: { data: TData[]; columns: ColumnDef<TData>[] } = $props();
 	// eslint-disable-next-line svelte/valid-compile -- intentionally capturing initial value as mutable state
-	let data = $state(initialData);
 	let pagination = $state<PaginationState>({ pageIndex: 0, pageSize: 10 });
 	let sorting = $state<SortingState>([]);
 	let columnFilters = $state<ColumnFiltersState>([]);
