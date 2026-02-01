@@ -5,7 +5,7 @@ export const {
 	getOne: berriesGetOne,
 	create: berriesCreate,
 	update: berriesUpdate,
-	delete: berriesDelete
+	deleteOne: berriesDeleteOne
 } = berriesResource;
 
 import { resource as berryFirmnessResource } from './resources/berry-firmness.resource';
@@ -14,7 +14,7 @@ export const {
 	getOne: berryFirmnessGetOne,
 	create: berryFirmnessCreate,
 	update: berryFirmnessUpdate,
-	delete: berryFirmnessDelete
+	deleteOne: berryFirmnessDeleteOne
 } = berryFirmnessResource;
 
 import { resource as berryFlavorsResource } from './resources/berry-flavors.resource';
@@ -23,5 +23,5 @@ export const {
 	getOne: berryFlavorsGetOne,
 	create: berryFlavorsCreate,
 	update: berryFlavorsUpdate,
-	delete: berryFlavorsDelete
+	deleteOne: berryFlavorsDeleteOne
 } = berryFlavorsResource;

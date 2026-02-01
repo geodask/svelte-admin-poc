@@ -1,12 +1,10 @@
 <script lang="ts">
 	import AppSidebar from '$lib/components/app-sidebar.svelte';
 	import ChartAreaInteractive from '$lib/components/chart-area-interactive.svelte';
-	import DataTable from '$lib/components/data-table.svelte';
 	import SectionCards from '$lib/components/section-cards.svelte';
 	import SiteHeader from '$lib/components/site-header.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import { useResource } from '../resources';
-	import data from './data';
 
 	const {
 		metadata: { label }
@@ -26,9 +24,6 @@
 					<div class="px-4 lg:px-6">
 						<ChartAreaInteractive />
 					</div>
-
-	{label}
-
 					<!-- <DataTable {data} /> -->
 				</div>
 			</div>

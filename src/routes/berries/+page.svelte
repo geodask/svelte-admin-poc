@@ -3,11 +3,13 @@
 	import DataTable from '$lib/components/data-table.svelte';
 	import SiteHeader from '$lib/components/site-header.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
+	import { type Filter } from '$lib/resource';
+	import type z from 'zod';
 	import { useResource } from '../../resources';
 
 	const {
 		remotes: { getMany: getBerries },
-		metadata: { columns }
+		metadata: { columns, schema }
 	} = useResource('berries');
 </script>
 
@@ -19,9 +21,9 @@
 		<SiteHeader />
 		<div class="flex flex-1 flex-col">
 			<div class="@container/main flex flex-1 flex-col gap-2">
-				<div class="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+				<div class="flex flex-col gap-4 px-4 py-4 md:gap-6 md:py-6">
 					{#if columns}
-						<DataTable data={await getBerries()} {columns} />
+						<DataTable data={(await getBerries({})).data} {columns} />
 					{/if}
 				</div>
 			</div>

@@ -99,7 +99,7 @@ async function generateResourcesFile(): Promise<void> {
 	const remoteOutputFile = join(process.cwd(), 'src/resources.remote.ts');
 	const helperOutputFile = join(process.cwd(), 'src/resources.ts');
 
-	const methods = ['getMany', 'getOne', 'create', 'update', 'delete'] as const;
+	const methods = ['getMany', 'getOne', 'create', 'update', 'deleteOne'] as const;
 	const methodExportName = (camelName: string, method: string) =>
 		`${camelName}${method.charAt(0).toUpperCase()}${method.slice(1)}`;
 

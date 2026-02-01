@@ -7,17 +7,17 @@ import {
 	berriesGetOne,
 	berriesCreate,
 	berriesUpdate,
-	berriesDelete,
+	berriesDeleteOne,
 	berryFirmnessGetMany,
 	berryFirmnessGetOne,
 	berryFirmnessCreate,
 	berryFirmnessUpdate,
-	berryFirmnessDelete,
+	berryFirmnessDeleteOne,
 	berryFlavorsGetMany,
 	berryFlavorsGetOne,
 	berryFlavorsCreate,
 	berryFlavorsUpdate,
-	berryFlavorsDelete
+	berryFlavorsDeleteOne
 } from './resources.remote';
 
 const resources = {
@@ -28,7 +28,7 @@ const resources = {
 			getOne: berriesGetOne,
 			create: berriesCreate,
 			update: berriesUpdate,
-			delete: berriesDelete
+			deleteOne: berriesDeleteOne
 		}
 	},
 	'berry-firmness': {
@@ -38,7 +38,7 @@ const resources = {
 			getOne: berryFirmnessGetOne,
 			create: berryFirmnessCreate,
 			update: berryFirmnessUpdate,
-			delete: berryFirmnessDelete
+			deleteOne: berryFirmnessDeleteOne
 		}
 	},
 	'berry-flavors': {
@@ -48,7 +48,7 @@ const resources = {
 			getOne: berryFlavorsGetOne,
 			create: berryFlavorsCreate,
 			update: berryFlavorsUpdate,
-			delete: berryFlavorsDelete
+			deleteOne: berryFlavorsDeleteOne
 		}
 	}
 } as const;

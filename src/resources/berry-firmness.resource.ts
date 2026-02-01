@@ -1,4 +1,4 @@
-import { defineResource, simpleRestProvider } from './resource';
+import { defineResource, simpleRestProvider } from '$lib/resource';
 import { z } from 'zod';
 
 const schema = z.object({
