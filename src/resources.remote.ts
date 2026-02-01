@@ -43,3 +43,12 @@ export const {
 	update: berryFlavorsUpdate,
 	delete: berryFlavorsDelete
 } = berryFlavorsResource;
+
+import { resource as cResource } from './resources/c.resource';
+export const {
+	getMany: cGetMany,
+	getOne: cGetOne,
+	create: cCreate,
+	update: cUpdate,
+	delete: cDelete
+} = cResource;

@@ -1,5 +1,6 @@
 import { getRequestEvent, query, command } from '$app/server';
 import { z } from 'zod';
+import type { ColumnDef } from '@tanstack/table-core';
 
 export type Provider = {
 	getMany: () => Promise<unknown[]>;
@@ -7,6 +8,27 @@ export type Provider = {
 	create: (data: unknown) => Promise<unknown>;
 	update: (id: string, data: unknown) => Promise<unknown>;
 	delete: (id: string) => Promise<void>;
+};
+
+export type ResourceMetadata = {
+	name: string;
+	label?: string;
+	columns?: ColumnDef<Record<string, unknown>>[];
+	schema?: z.ZodType;
+};
+
+export type Resource = {
+	metadata: ResourceMetadata;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	getMany: any;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	getOne: any;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	create: any;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	update: any;
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	delete: any;
 };
 
 export function simpleRestProvider(url: string): Provider {
@@ -48,11 +70,24 @@ export function simpleRestProvider(url: string): Provider {
 }
 
 export function defineResource<T = unknown>(name: string) {
-	return (options: { provider?: Provider } ) => {
-		const provider = options?.provider;
+	return (options: { 
+		provider?: Provider;
+		label?: string;
+		columns?: ColumnDef<Record<string, unknown>>[];
+		schema?: z.ZodType;
+	}): Resource => {
+		const { provider, label, columns, schema } = options;
+
+		const metadata: ResourceMetadata = {
+			name,
+			label: label ?? name,
+			columns,
+			schema
+		};
 
 		if (provider) {
 			return {
+				metadata,
 				getMany: query(async () => provider.getMany() as Promise<T[]>),
 				getOne: query(z.string(), async (id) => provider.getOne(id) as Promise<T>),
 				create: command(z.any(), async (data) => provider.create(data) as Promise<T>),
@@ -69,6 +104,7 @@ export function defineResource<T = unknown>(name: string) {
 		};
 
 		return {
+			metadata,
 			getMany: query(async () => {
 				notConfigured();
 				return [] as T[];

@@ -1,4 +1,10 @@
 // Auto-generated file - do not edit manually
+import { resource as aResource } from './resources/a.resource';
+import { resource as bResource } from './resources/b.resource';
+import { resource as berriesResource } from './resources/berries.resource';
+import { resource as berryFirmnessResource } from './resources/berry-firmness.resource';
+import { resource as berryFlavorsResource } from './resources/berry-flavors.resource';
+import { resource as cResource } from './resources/c.resource';
 import {
 	aGetMany,
 	aGetOne,
@@ -24,44 +30,74 @@ import {
 	berryFlavorsGetOne,
 	berryFlavorsCreate,
 	berryFlavorsUpdate,
-	berryFlavorsDelete
+	berryFlavorsDelete,
+	cGetMany,
+	cGetOne,
+	cCreate,
+	cUpdate,
+	cDelete
 } from './resources.remote';
 
 const resources = {
 	a: {
-		getMany: aGetMany,
-		getOne: aGetOne,
-		create: aCreate,
-		update: aUpdate,
-		delete: aDelete
+		metadata: aResource.metadata,
+		remotes: {
+			getMany: aGetMany,
+			getOne: aGetOne,
+			create: aCreate,
+			update: aUpdate,
+			delete: aDelete
+		}
 	},
 	b: {
-		getMany: bGetMany,
-		getOne: bGetOne,
-		create: bCreate,
-		update: bUpdate,
-		delete: bDelete
+		metadata: bResource.metadata,
+		remotes: {
+			getMany: bGetMany,
+			getOne: bGetOne,
+			create: bCreate,
+			update: bUpdate,
+			delete: bDelete
+		}
 	},
 	berries: {
-		getMany: berriesGetMany,
-		getOne: berriesGetOne,
-		create: berriesCreate,
-		update: berriesUpdate,
-		delete: berriesDelete
+		metadata: berriesResource.metadata,
+		remotes: {
+			getMany: berriesGetMany,
+			getOne: berriesGetOne,
+			create: berriesCreate,
+			update: berriesUpdate,
+			delete: berriesDelete
+		}
 	},
 	'berry-firmness': {
-		getMany: berryFirmnessGetMany,
-		getOne: berryFirmnessGetOne,
-		create: berryFirmnessCreate,
-		update: berryFirmnessUpdate,
-		delete: berryFirmnessDelete
+		metadata: berryFirmnessResource.metadata,
+		remotes: {
+			getMany: berryFirmnessGetMany,
+			getOne: berryFirmnessGetOne,
+			create: berryFirmnessCreate,
+			update: berryFirmnessUpdate,
+			delete: berryFirmnessDelete
+		}
 	},
 	'berry-flavors': {
-		getMany: berryFlavorsGetMany,
-		getOne: berryFlavorsGetOne,
-		create: berryFlavorsCreate,
-		update: berryFlavorsUpdate,
-		delete: berryFlavorsDelete
+		metadata: berryFlavorsResource.metadata,
+		remotes: {
+			getMany: berryFlavorsGetMany,
+			getOne: berryFlavorsGetOne,
+			create: berryFlavorsCreate,
+			update: berryFlavorsUpdate,
+			delete: berryFlavorsDelete
+		}
+	},
+	c: {
+		metadata: cResource.metadata,
+		remotes: {
+			getMany: cGetMany,
+			getOne: cGetOne,
+			create: cCreate,
+			update: cUpdate,
+			delete: cDelete
+		}
 	}
 } as const;
 

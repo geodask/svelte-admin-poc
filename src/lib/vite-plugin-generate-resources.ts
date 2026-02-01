@@ -37,7 +37,7 @@ export function generateResourcesPlugin(): Plugin {
 			const handleFile = async (file: string) => {
 				if (!file.endsWith('.resource.ts')) return;
 				// Small delay to ensure file is fully written
-				await new Promise((resolve) => setTimeout(resolve, 5));
+				await new Promise((resolve) => setTimeout(resolve, 10));
 				await syncResourceName(file);
 				await generateResourcesFile();
 			};
@@ -102,7 +102,7 @@ async function generateResourcesFile(): Promise<void> {
 			(file) => file.endsWith('.resource.ts') && !file.startsWith('.')
 		);
 
-		// Generate resources.remote.ts - use destructuring to export whatever methods exist
+		// Generate resources.remote.ts - ONLY export remote functions
 		const remoteContent =
 			'// Auto-generated file - do not edit manually\n' +
 			resourceFiles
@@ -110,11 +110,11 @@ async function generateResourcesFile(): Promise<void> {
 					const name = file.replace('.resource.ts', '');
 					const camelName = toCamelCase(name);
 					const importLine = `import { resource as ${camelName}Resource } from './resources/${file.replace('.ts', '')}';`;
-					const destructure = methods
+					const methodExports = methods
 						.map((method) => `${method}: ${methodExportName(camelName, method)}`)
 						.join(', ');
-					const exportLine = `export const { ${destructure} } = ${camelName}Resource;`;
-					return `${importLine}\n${exportLine}`;
+					const destructureLine = `export const { ${methodExports} } = ${camelName}Resource;`;
+					return `${importLine}\n${destructureLine}`;
 				})
 				.join('\n\n') +
 			'\n';
@@ -123,7 +123,15 @@ async function generateResourcesFile(): Promise<void> {
 		await writeFile(remoteOutputFile, formattedRemoteContent, 'utf-8');
 		console.log(`✓ Generated resources.remote.ts`);
 
-		// Generate resources.ts (helper with useResource)
+		// Generate resources.ts - import resources for metadata, remote functions for methods
+		const resourceImports = resourceFiles
+			.map((file) => {
+				const name = file.replace('.resource.ts', '');
+				const camelName = toCamelCase(name);
+				return `import { resource as ${camelName}Resource } from './resources/${file.replace('.ts', '')}';`;
+			})
+			.join('\n');
+
 		const remoteImports = resourceFiles
 			.flatMap((file) => {
 				const name = file.replace('.resource.ts', '');
@@ -139,12 +147,13 @@ async function generateResourcesFile(): Promise<void> {
 				const methodEntries = methods
 					.map((method) => `\t\t${method}: ${methodExportName(camelName, method)}`)
 					.join(',\n');
-				return `\t'${name}': {\n${methodEntries}\n\t}`;
+				return `\t'${name}': {\n\t\tmetadata: ${camelName}Resource.metadata,\n\t\tremotes: {\n${methodEntries}\n\t\t}\n\t}`;
 			})
 			.join(',\n');
 
 		const helperContent = resourceFiles.length
 			? `// Auto-generated file - do not edit manually
+${resourceImports}
 import {
 	${remoteImports}
 } from './resources.remote';
