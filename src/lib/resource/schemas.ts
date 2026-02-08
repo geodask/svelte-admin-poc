@@ -12,7 +12,17 @@ export const SorterSchema = z.object({
 	order: z.enum(['asc', 'desc'])
 });
 
-export const FilterOperators = ['eq', 'ne', 'lt', 'gt', 'lte', 'gte', 'contains', 'in', 'nin'] as const;
+export const FilterOperators = [
+	'eq',
+	'ne',
+	'lt',
+	'gt',
+	'lte',
+	'gte',
+	'contains',
+	'in',
+	'nin'
+] as const;
 
 export const FilterSchema = z.object({
 	field: z.string(),
@@ -79,15 +89,15 @@ export type GetManyResponse<T> = {
 };
 
 export type GetOneResponse<T> = {
-	data: T;
+	data: T | null;
 };
 
 export type CreateResponse<T> = {
-	data: T;
+	data: T | null;
 };
 
 export type UpdateResponse<T> = {
-	data: T;
+	data: T | null;
 };
 
 export type DeleteOneResponse = {

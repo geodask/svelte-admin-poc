@@ -13,6 +13,7 @@ import {
 	type DeleteOneResponse,
 	type GetManyParams
 } from './schemas';
+import type { Icon } from '@lucide/svelte';
 
 // Helper type to extract keys from a Zod object schema
 type SchemaKeys<T extends z.ZodObject> = keyof z.infer<T> & string;
@@ -21,6 +22,7 @@ export type Resource<TSchema extends z.ZodObject> = {
 	metadata: {
 		name: string;
 		label: string;
+		icon?: typeof Icon;
 		columns?: ColumnDef<z.infer<TSchema>>[];
 		schema: TSchema;
 	};
@@ -34,18 +36,17 @@ export type Resource<TSchema extends z.ZodObject> = {
 export function defineResource(name: string) {
 	return <TSchema extends z.ZodObject>(options: {
 		schema: TSchema;
-		provider?: 
-			| Provider<z.infer<TSchema>, SchemaKeys<TSchema>> 
+		provider?:
+			| Provider<z.infer<TSchema>, SchemaKeys<TSchema>>
 			| ((schema: TSchema) => Provider<z.infer<TSchema>, SchemaKeys<TSchema>>);
-		label?: string;
+		label: string;
+		icon?: typeof Icon;
 		columns?: ColumnDef<z.infer<TSchema>>[];
 	}) => {
-		const { provider: providerOption, label, columns, schema } = options;
-		
+		const { provider: providerOption, label, columns, schema, icon } = options;
+
 		// Support both direct provider object and factory function
-		const provider = typeof providerOption === 'function' 
-			? providerOption(schema) 
-			: providerOption;
+		const provider = typeof providerOption === 'function' ? providerOption(schema) : providerOption;
 
 		type TData = z.infer<TSchema>;
 		type TFields = SchemaKeys<TSchema>;
@@ -54,6 +55,7 @@ export function defineResource(name: string) {
 			name,
 			label: label ?? name,
 			columns,
+			icon,
 			schema
 		};
 
@@ -68,7 +70,7 @@ export function defineResource(name: string) {
 		if (provider) {
 			return {
 				metadata,
-				getMany: query(GetManyInputSchema, async (input) => 
+				getMany: query(GetManyInputSchema, async (input) =>
 					provider.getMany(input as GetManyParams<TFields>)
 				),
 				getOne: query(GetOneInputSchema, async (id) => provider.getOne(id)),

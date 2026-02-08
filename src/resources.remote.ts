@@ -8,20 +8,11 @@ export const {
 	deleteOne: berriesDeleteOne
 } = berriesResource;
 
-import { resource as berryFirmnessResource } from './resources/berry-firmness.resource';
+import { resource as recipesResource } from './resources/recipes.resource';
 export const {
-	getMany: berryFirmnessGetMany,
-	getOne: berryFirmnessGetOne,
-	create: berryFirmnessCreate,
-	update: berryFirmnessUpdate,
-	deleteOne: berryFirmnessDeleteOne
-} = berryFirmnessResource;
-
-import { resource as berryFlavorsResource } from './resources/berry-flavors.resource';
-export const {
-	getMany: berryFlavorsGetMany,
-	getOne: berryFlavorsGetOne,
-	create: berryFlavorsCreate,
-	update: berryFlavorsUpdate,
-	deleteOne: berryFlavorsDeleteOne
-} = berryFlavorsResource;
+	getMany: recipesGetMany,
+	getOne: recipesGetOne,
+	create: recipesCreate,
+	update: recipesUpdate,
+	deleteOne: recipesDeleteOne
+} = recipesResource;

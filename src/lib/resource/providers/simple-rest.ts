@@ -23,8 +23,10 @@ export function simpleRestProvider<T extends z.ZodType>(url: string) {
 			});
 
 			const queryString = params.toString();
-      console.log('Fetching from URL:', queryString ? `${url}?${queryString}` : url);
 			const response = await fetch(queryString ? `${url}?${queryString}` : url);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+			}
 			const data = await response.json();
 			const results = data.results ?? data;
 			return {
@@ -35,6 +37,9 @@ export function simpleRestProvider<T extends z.ZodType>(url: string) {
 		getOne: async (id) => {
 			const { fetch } = getRequestEvent();
 			const response = await fetch(`${url}/${id}`);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
+			}
 			const data = await response.json();
 			return { data: schema.parse(data) };
 		},
@@ -45,6 +50,9 @@ export function simpleRestProvider<T extends z.ZodType>(url: string) {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(input)
 			});
+			if (!response.ok) {
+				throw new Error(`Failed to create: ${response.status} ${response.statusText}`);
+			}
 			const result = await response.json();
 			return { data: schema.parse(result) };
 		},
@@ -55,12 +63,18 @@ export function simpleRestProvider<T extends z.ZodType>(url: string) {
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload)
 			});
+			if (!response.ok) {
+				throw new Error(`Failed to update: ${response.status} ${response.statusText}`);
+			}
 			const result = await response.json();
 			return { data: schema.parse(result) };
 		},
 		deleteOne: async (id) => {
 			const { fetch } = getRequestEvent();
-			await fetch(`${url}/${id}`, { method: 'DELETE' });
+			const response = await fetch(`${url}/${id}`, { method: 'DELETE' });
+			if (!response.ok) {
+				throw new Error(`Failed to delete: ${response.status} ${response.statusText}`);
+			}
 			return {};
 		}
 	});

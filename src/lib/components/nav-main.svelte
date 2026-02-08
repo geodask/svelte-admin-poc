@@ -1,11 +1,12 @@
 <script lang="ts">
-	import CirclePlusFilledIcon from '@tabler/icons-svelte/icons/circle-plus-filled';
-	import MailIcon from '@tabler/icons-svelte/icons/mail';
+	import { page } from '$app/state';
 	import { Button } from '$lib/components/ui/button/index.js';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
-	import type { Icon } from '@tabler/icons-svelte';
+	import { type Icon as IconType } from '@lucide/svelte';
+	import CirclePlusFilledIcon from '@tabler/icons-svelte/icons/circle-plus-filled';
+	import MailIcon from '@tabler/icons-svelte/icons/mail';
 
-	let { items }: { items: { title: string; url: string; icon?: Icon }[] } = $props();
+	let { items }: { items: { title: string; url: string; icon?: typeof IconType }[] } = $props();
 </script>
 
 <Sidebar.Group>
@@ -32,7 +33,7 @@
 		<Sidebar.Menu>
 			{#each items as item (item.title)}
 				<Sidebar.MenuItem>
-					<Sidebar.MenuButton tooltipContent={item.title}>
+					<Sidebar.MenuButton isActive={page.url.pathname === item.url} tooltipContent={item.title}>
 						{#snippet child({ props })}
 							<a href={item.url} {...props}>
 								{#if item.icon}

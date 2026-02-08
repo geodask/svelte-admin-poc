@@ -2,7 +2,7 @@
 	import { ResourceTable } from '$lib/resource';
 	import { useResource } from '../../resources';
 
-	const berries = useResource('berries');
+	const resource = useResource('recipes');
 </script>
 
-<ResourceTable resource={berries} showActions />
+<ResourceTable {resource} />

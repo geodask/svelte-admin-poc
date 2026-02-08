@@ -61,7 +61,7 @@ async function syncResourceName(filePath: string): Promise<void> {
 
 		// If file is empty, scaffold it
 		if (content.trim().length === 0) {
-			const template = `import { defineResource } from './resource';
+			const template = `import { defineResource } from '$lib/resource';
 import { z } from 'zod';
 
 const ${resourceName}Schema = z.object({
@@ -172,6 +172,10 @@ ${resourcesMapEntries}
 export type ResourceMap = typeof resources;
 export type ResourceName = keyof ResourceMap;
 
+export function useResources(): ResourceMap {
+	return resources;
+}
+
 export function useResource<K extends ResourceName>(name: K): ResourceMap[K] {
 	return resources[name];
 }
@@ -181,6 +185,10 @@ const resources = {} as const;
 
 export type ResourceMap = typeof resources;
 export type ResourceName = keyof ResourceMap;
+
+export function useResources(): ResourceMap {
+	return resources;
+}
 
 export function useResource<K extends ResourceName>(name: K): ResourceMap[K] {
 	return resources[name];
