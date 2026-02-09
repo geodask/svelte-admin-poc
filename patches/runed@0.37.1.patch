@@ -1,0 +1,16 @@
+diff --git a/dist/utilities/use-search-params/use-search-params.svelte.js b/dist/utilities/use-search-params/use-search-params.svelte.js
+index 8ddeb0eacf7ef5884c222536ff76588a4134d0c7..a1824bdc9779d7a5a8f78184b03efff484d316b1 100644
+--- a/dist/utilities/use-search-params/use-search-params.svelte.js
++++ b/dist/utilities/use-search-params/use-search-params.svelte.js
+@@ -1368,6 +1368,11 @@ export function useSearchParams(schema, options = {}) {
+     const isMounted = new IsMounted();
+     // Track if we've done initial setup (separate from cache initialization)
+     let hasInitialized = false;
++    // Initial URL sync to local cache - on both server and client
++    if (!building && options.updateURL !== false) {
++        const urlParams = page.url.searchParams;
++        searchParams.syncFromURL(urlParams);
++    }
+     // Only run initialization logic after hydration is complete
+     $effect(() => {
+         if (!isMounted.current || building)

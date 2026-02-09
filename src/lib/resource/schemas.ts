@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Base schemas for reusable components
 export const PaginationSchema = z.object({
-	current: z.number().optional(),
+	pageIndex: z.number().optional(),
 	pageSize: z.number().optional(),
 	mode: z.enum(['client', 'server', 'off']).optional()
 });
@@ -36,6 +36,7 @@ export const MetaSchema = z.record(z.string(), z.unknown());
 export const GetManyInputSchema = z
 	.object({
 		pagination: PaginationSchema.optional(),
+		search: z.string().optional(),
 		sorters: z.array(SorterSchema).optional(),
 		filters: z.array(FilterSchema).optional(),
 		meta: MetaSchema.optional()
@@ -68,6 +69,7 @@ export type GetManyParams<TFields extends string = string> = {
 	pagination?: Pagination;
 	sorters?: Sorter<TFields>[];
 	filters?: Filter<TFields>[];
+	search?: string;
 	meta?: Meta;
 };
 
@@ -86,6 +88,7 @@ export type UpdateParams<T> = {
 export type GetManyResponse<T> = {
 	data: T[];
 	total?: number;
+	pageCount?: number;
 };
 
 export type GetOneResponse<T> = {

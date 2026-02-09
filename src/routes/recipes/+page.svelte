@@ -5,4 +5,4 @@
 	const resource = useResource('recipes');
 </script>
 
-<ResourceTable {resource} />
+<ResourceTable {resource} searchable />

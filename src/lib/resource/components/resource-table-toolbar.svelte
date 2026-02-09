@@ -6,33 +6,29 @@
 	import type { Table } from '@tanstack/table-core';
 
 	type Props = {
-		searchColumn?: string;
-		globalFilter?: string;
-		tableFn: () => Table<TData>;
+		searchable: boolean;
+		table: Table<TData>;
 	};
 
-	let { searchColumn, globalFilter, tableFn }: Props = $props();
-
-	const table = $derived(tableFn());
+	let { searchable, table }: Props = $props();
 </script>
 
 <div class="flex items-center justify-between">
 	<div class="flex grow items-center gap-2">
-		<Input
-			placeholder="Search..."
-			class="max-w-sm"
-			value={searchColumn
-				? ((table.getColumn(searchColumn)?.getFilterValue() as string) ?? '')
-				: globalFilter}
-			oninput={(e) => {
-				const value = e.currentTarget.value;
-				if (searchColumn) {
-					table.getColumn(searchColumn)?.setFilterValue(value);
-				} else {
-					globalFilter = value;
+		{#if searchable}
+			<Input
+				placeholder="Search..."
+				class="max-w-sm"
+				bind:value={
+					() => {
+						return table.getState().globalFilter;
+					},
+					(value) => {
+						table.setGlobalFilter(value);
+					}
 				}
-			}}
-		/>
+			/>
+		{/if}
 
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>

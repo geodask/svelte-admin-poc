@@ -18,11 +18,21 @@ import type { Icon } from '@lucide/svelte';
 // Helper type to extract keys from a Zod object schema
 type SchemaKeys<T extends z.ZodObject> = keyof z.infer<T> & string;
 
+// Menu configuration for sidebar visibility
+export type MenuConfig =
+	| boolean
+	| {
+			visible?: boolean;
+			order?: number;
+			group?: string;
+	  };
+
 export type Resource<TSchema extends z.ZodObject> = {
 	metadata: {
 		name: string;
 		label: string;
 		icon?: typeof Icon;
+		menu?: MenuConfig;
 		columns?: ColumnDef<z.infer<TSchema>>[];
 		schema: TSchema;
 	};
@@ -41,9 +51,10 @@ export function defineResource(name: string) {
 			| ((schema: TSchema) => Provider<z.infer<TSchema>, SchemaKeys<TSchema>>);
 		label: string;
 		icon?: typeof Icon;
+		menu?: MenuConfig;
 		columns?: ColumnDef<z.infer<TSchema>>[];
 	}) => {
-		const { provider: providerOption, label, columns, schema, icon } = options;
+		const { provider: providerOption, label, columns, schema, icon, menu = true } = options;
 
 		// Support both direct provider object and factory function
 		const provider = typeof providerOption === 'function' ? providerOption(schema) : providerOption;
@@ -56,6 +67,7 @@ export function defineResource(name: string) {
 			label: label ?? name,
 			columns,
 			icon,
+			menu,
 			schema
 		};
 

@@ -7,14 +7,13 @@
 	import ChevronsLeftIcon from '@tabler/icons-svelte/icons/chevrons-left';
 	import ChevronsRightIcon from '@tabler/icons-svelte/icons/chevrons-right';
 
-	const { tableFn } = $props();
+	const { table } = $props();
 
-	const table = $derived(tableFn());
 </script>
 
 <div class="flex items-center justify-between">
 	<div class="hidden flex-1 text-sm text-muted-foreground lg:flex">
-		{table.getFilteredRowModel().rows.length} row(s) total
+		{table.getRowCount()} row(s) total
 	</div>
 	<div class="flex w-full items-center gap-8 lg:w-fit">
 		<div class="hidden items-center gap-2 lg:flex">
@@ -27,7 +26,7 @@
 				<Select.Trigger size="sm" class="w-20" id="rows-per-page">
 					{table.getState().pagination.pageSize}
 				</Select.Trigger>
-				<Select.Content side="top">
+				<Select.Content preventScroll={false} side="top">
 					{#each [10, 20, 30, 40, 50] as size (size)}
 						<Select.Item value={size.toString()}>
 							{size}

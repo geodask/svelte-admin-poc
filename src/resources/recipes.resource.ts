@@ -1,3 +1,4 @@
+import { getRequestEvent } from '$app/server';
 import { defineResource } from '$lib/resource';
 import { CookingPotIcon } from '@lucide/svelte';
 import { z } from 'zod';
@@ -27,15 +28,30 @@ export const resource = defineResource('recipes')({
 	label: 'Recipes',
 	icon: CookingPotIcon,
 	provider: (schema) => ({
-		getMany: async () => {
-			const response = await fetch('https://dummyjson.com/recipes');
+		getMany: async ({ pagination, search }) => {
+			const { fetch } = getRequestEvent();
+
+			const limit = pagination?.pageSize ?? 30;
+			const skip = (pagination?.pageIndex ?? 0) * limit;
+
+			const path = search ? '/search' : '';
+			const url = new URL(`https://dummyjson.com/recipes${path}`);
+
+			url.searchParams.set('limit', limit.toString());
+			url.searchParams.set('skip', skip.toString());
+			if (search) url.searchParams.set('q', search);
+
+			const response = await fetch(url);
 			const data = await response.json();
+
 			return {
 				data: z.array(schema).parse(data.recipes),
+				pageCount: Math.ceil(data.total / limit),
 				total: data.total
 			};
 		},
 		getOne: async (id) => {
+			const { fetch } = getRequestEvent();
 			const response = await fetch(`https://dummyjson.com/recipes/${id}`);
 			const data = await response.json();
 			return {
@@ -43,6 +59,8 @@ export const resource = defineResource('recipes')({
 			};
 		},
 		create: async (data) => {
+			const { fetch } = getRequestEvent();
+
 			const response = await fetch('https://dummyjson.com/recipes/add', {
 				method: 'POST',
 				headers: {
@@ -56,6 +74,8 @@ export const resource = defineResource('recipes')({
 			};
 		},
 		update: async ({ id, payload }) => {
+			const { fetch } = getRequestEvent();
+			
 			const response = await fetch(`https://dummyjson.com/recipes/${id}`, {
 				method: 'PUT',
 				headers: {
@@ -69,6 +89,8 @@ export const resource = defineResource('recipes')({
 			};
 		},
 		deleteOne: async (id) => {
+			const { fetch } = getRequestEvent();
+			
 			const response = await fetch(`https://dummyjson.com/recipes/${id}`, {
 				method: 'DELETE'
 			});

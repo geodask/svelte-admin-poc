@@ -7,14 +7,13 @@
 	import * as Table from '$lib/components/ui/table/index.js';
 	import {
 		getCoreRowModel,
-		getFilteredRowModel,
-		getPaginationRowModel,
 		getSortedRowModel,
-		type ColumnFiltersState,
-		type PaginationState,
 		type SortingState,
 		type VisibilityState
 	} from '@tanstack/table-core';
+	import { Debounced } from 'runed';
+	import { useSearchParams } from 'runed/kit';
+	import z from 'zod';
 	import ResourceTableActions from './resource-table-actions.svelte';
 	import ResourceTablePagination from './resource-table-pagination.svelte';
 	import ResourceTableToolbar from './resource-table-toolbar.svelte';
@@ -22,15 +21,34 @@
 
 	interface Props {
 		resource: ResourceLike<TData>;
-		paginated?: boolean;
-		pageSize?: number;
 		showActions?: boolean;
+		searchable?: boolean;
 	}
 
-	let { resource, paginated = true, pageSize = 10, showActions = true }: Props = $props();
+	let { resource, showActions = true, searchable = true }: Props = $props();
 
-	// Async data fetch as a derived expression
-	let data = $derived(await resource.remotes.getMany({}));
+	const params = useSearchParams(
+		z.object({
+			q: z.string().default(''),
+			limit: z.coerce.number().default(10),
+			skip: z.coerce.number().default(0)
+		})
+	);
+
+	const pageIndex = $derived(params.skip / params.limit);
+	const pageSize = $derived(params.limit);
+
+	const debouncedSearch = new Debounced(() => params.q, 200);
+
+	let data = $derived(
+		await resource.remotes.getMany({
+			search: debouncedSearch.current,
+			pagination: {
+				pageIndex: $state.eager(pageIndex),
+				pageSize: $state.eager(pageSize)
+			}
+		})
+	);
 
 	const columns = $derived.by(() => {
 		const baseColumns = (resource.metadata.columns ??
@@ -58,13 +76,16 @@
 		return baseColumns;
 	});
 
-	let pagination = $derived<PaginationState>({ pageIndex: 0, pageSize });
 	let sorting = $state<SortingState>([]);
-	let columnFilters = $state<ColumnFiltersState>([]);
 	let columnVisibility = $state<VisibilityState>({});
-	let globalFilter = $state('');
 
 	const table = createSvelteTable({
+		get rowCount() {
+			return data.total;
+		},
+		get pageCount() {
+			return data.pageCount;
+		},
 		get data() {
 			return data.data;
 		},
@@ -73,7 +94,10 @@
 		},
 		state: {
 			get pagination() {
-				return pagination;
+				return {
+					pageIndex,
+					pageSize
+				};
 			},
 			get sorting() {
 				return sorting;
@@ -81,26 +105,44 @@
 			get columnVisibility() {
 				return columnVisibility;
 			},
-			get columnFilters() {
-				return columnFilters;
-			},
 			get globalFilter() {
-				return globalFilter;
+				return params.q;
 			}
+			// get columnFilters() {
+			// 	if (!searchColumn) {
+			// 		return [];
+			// 	}
+
+			// 	return [
+			// 		{
+			// 			id: searchColumn,
+			// 			value: params.q
+			// 		}
+			// 	];
+			// }
 		},
+		manualPagination: true,
+		manualFiltering: true,
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		getRowId: (row, index) => ((row as any).id ?? index).toString(),
 		getCoreRowModel: getCoreRowModel(),
-		get getPaginationRowModel() {
-			return paginated ? getPaginationRowModel() : undefined;
-		},
 		getSortedRowModel: getSortedRowModel(),
-		getFilteredRowModel: getFilteredRowModel(),
 		onPaginationChange: (updater) => {
 			if (typeof updater === 'function') {
-				pagination = updater(pagination);
+				const oldState = {
+					pageIndex,
+					pageSize
+				};
+				const newPagination = updater(oldState);
+				params.update({
+					limit: newPagination.pageSize,
+					skip: newPagination.pageIndex * newPagination.pageSize
+				});
 			} else {
-				pagination = updater;
+				params.update({
+					limit: updater.pageSize,
+					skip: updater.pageIndex * updater.pageSize
+				});
 			}
 		},
 		onSortingChange: (updater) => {
@@ -110,13 +152,23 @@
 				sorting = updater;
 			}
 		},
-		onColumnFiltersChange: (updater) => {
-			if (typeof updater === 'function') {
-				columnFilters = updater(columnFilters);
-			} else {
-				columnFilters = updater;
-			}
-		},
+		// onColumnFiltersChange: (updater) => {
+		// 	if (!searchColumn) {
+		// 		return;
+		// 	}
+		// 	const newFilters =
+		// 		typeof updater === 'function'
+		// 			? updater([
+		// 					{
+		// 						id: searchColumn,
+		// 						value: q
+		// 					}
+		// 				])
+		// 			: updater;
+		// 	params.update({
+		// 		q: (newFilters.find((f) => f.id === searchColumn)?.value as string) ?? ''
+		// 	});
+		// },
 		onColumnVisibilityChange: (updater) => {
 			if (typeof updater === 'function') {
 				columnVisibility = updater(columnVisibility);
@@ -125,18 +177,17 @@
 			}
 		},
 		onGlobalFilterChange: (updater) => {
-			if (typeof updater === 'function') {
-				globalFilter = updater(globalFilter);
-			} else {
-				globalFilter = updater;
-			}
+			const newFilter = typeof updater === 'function' ? updater(params.q) : updater;
+			params.update({ q: newFilter });
 		}
 	});
+
+	let v = $state('');
 </script>
 
 <div class="flex flex-col gap-4">
 	<!-- Toolbar -->
-	<ResourceTableToolbar tableFn={() => table} />
+	<ResourceTableToolbar {table} {searchable} />
 
 	<!-- Table -->
 	<div class="overflow-hidden rounded-lg border">
@@ -177,8 +228,5 @@
 		</Table.Root>
 	</div>
 
-	<!-- Pagination -->
-	{#if paginated}
-		<ResourceTablePagination tableFn={() => table} />
-	{/if}
+	<ResourceTablePagination {table} />
 </div>
