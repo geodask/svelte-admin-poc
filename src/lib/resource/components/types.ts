@@ -4,32 +4,33 @@ import type {
 	DeleteOneResponse,
 	GetManyResponse,
 	GetOneResponse,
-	UpdateResponse
+	UpdateResponse,
+	GetManyParams,
+	GetOneParams,
+	DeleteOneParams
 } from '../schemas';
+import type { RemoteCommand, RemoteQueryFunction } from '@sveltejs/kit';
 
 export type { ColumnDef };
 
 // Full type for the resource object from useResource()
-// Using minimal typing to support SvelteKit's remote function wrappers (query/command)
+// Using SvelteKit's exact remote function types for proper .updates(), .refresh(), etc.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ResourceLike<TData = any> = {
 	metadata: {
 		name: string;
 		label: string;
+		searchable: boolean;
+		exportable: boolean;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		columns?: readonly ColumnDef<any, any>[];
 		schema: unknown;
 	};
 	remotes: {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		getMany: (...args: any[]) => PromiseLike<GetManyResponse<TData>>;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		getOne?: (...args: any[]) => PromiseLike<GetOneResponse<TData>>;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		create?: (...args: any[]) => PromiseLike<CreateResponse<TData>>;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		update?: (...args: any[]) => PromiseLike<UpdateResponse<TData>>;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		deleteOne?: (...args: any[]) => PromiseLike<DeleteOneResponse>;
+		getMany: RemoteQueryFunction<GetManyParams, GetManyResponse<TData>>;
+		getOne: RemoteQueryFunction<GetOneParams, GetOneResponse<TData>>;
+		create: RemoteCommand<Partial<TData>, Promise<CreateResponse<TData>>>;
+		update: RemoteCommand<{ id: string; payload: Partial<TData> }, Promise<UpdateResponse<TData>>>;
+		deleteOne: RemoteCommand<DeleteOneParams, Promise<DeleteOneResponse>>;
 	};
 };

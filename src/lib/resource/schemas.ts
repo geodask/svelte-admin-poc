@@ -43,9 +43,9 @@ export const GetManyInputSchema = z
 	})
 	.default({});
 
-export const GetOneInputSchema = z.string();
+export const GetOneInputSchema = z.string().or(z.number());
 
-export const DeleteOneInputSchema = z.string();
+export const DeleteOneInputSchema = z.string().or(z.number());
 
 // Infer TypeScript types from Zod schemas
 export type Pagination = z.infer<typeof PaginationSchema>;

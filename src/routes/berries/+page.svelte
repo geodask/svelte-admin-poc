@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { ResourceTable } from '$lib/resource';
+	import { ResourceProvider, ResourceTable } from '$lib/resource';
 	import { useResource } from '../../resources';
 
 	const berries = useResource('berries');
 </script>
 
-<ResourceTable resource={berries} showActions />
+<ResourceProvider resource={berries}>
+	<ResourceTable showActions />
+</ResourceProvider>

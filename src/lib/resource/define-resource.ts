@@ -33,6 +33,8 @@ export type Resource<TSchema extends z.ZodObject> = {
 		label: string;
 		icon?: typeof Icon;
 		menu?: MenuConfig;
+		searchable: boolean;
+		exportable: boolean;
 		columns?: ColumnDef<z.infer<TSchema>>[];
 		schema: TSchema;
 	};
@@ -52,9 +54,20 @@ export function defineResource(name: string) {
 		label: string;
 		icon?: typeof Icon;
 		menu?: MenuConfig;
+		searchable?: boolean;
+		exportable?: boolean;
 		columns?: ColumnDef<z.infer<TSchema>>[];
 	}) => {
-		const { provider: providerOption, label, columns, schema, icon, menu = true } = options;
+		const {
+			provider: providerOption,
+			label,
+			columns,
+			schema,
+			icon,
+			menu = true,
+			searchable = true,
+			exportable = true
+		} = options;
 
 		// Support both direct provider object and factory function
 		const provider = typeof providerOption === 'function' ? providerOption(schema) : providerOption;
@@ -68,6 +81,8 @@ export function defineResource(name: string) {
 			columns,
 			icon,
 			menu,
+			searchable,
+			exportable,
 			schema
 		};
 

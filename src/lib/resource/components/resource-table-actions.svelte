@@ -1,19 +1,33 @@
 <script lang="ts" generics="TData extends { id: string | number}">
-	import { Button } from '$lib/components/ui/button/index.js';
+	import { Button, buttonVariants } from '$lib/components/ui/button/index.js';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import { Ellipsis, EyeIcon, SquarePenIcon, Trash2Icon } from '@lucide/svelte';
-	import type { ResourceLike } from './types';
+	import * as AlertDialog from '$lib/components/ui/alert-dialog/index.js';
+	import { Spinner } from '$lib/components/ui/spinner';
+	import { toast } from 'svelte-sonner';
+	import { getResourceContext } from './resource-provider.svelte';
 
 	type Props = {
-		resource: ResourceLike<TData>;
 		row: TData;
 	};
 
-	const { resource, row }: Props = $props();
+	const { row }: Props = $props();
 
-	const {
-		metadata: { name }
-	} = $derived(resource);
+	const ctx = getResourceContext();
+	const resource = $derived(ctx.resource);
+
+	let deleteDialogOpen = $state(false);
+	let deleteLoading = $state(false);
+
+	async function onDelete() {
+		deleteLoading = true;
+		const result = resource.remotes.deleteOne(row.id);
+		const queriesToUpdate = [ctx.queries.getMany, ctx.queries.getOne].filter((q) => q != null);
+		await result.updates(...queriesToUpdate);
+		deleteLoading = false;
+		deleteDialogOpen = false;
+		toast.success('Deleted successfully');
+	}
 </script>
 
 <DropdownMenu.Root>
@@ -28,7 +42,7 @@
 	<DropdownMenu.Content align="end">
 		<DropdownMenu.Item>
 			{#snippet child({ props })}
-				<a href="{name}/{row.id}" {...props}>
+				<a href="{resource.metadata.name}/{row.id}" {...props}>
 					<EyeIcon class="mr-2 size-4" />
 					View
 				</a>
@@ -39,9 +53,36 @@
 			Edit
 		</DropdownMenu.Item>
 		<DropdownMenu.Separator />
-		<DropdownMenu.Item variant="destructive" onclick={() => alert('Delete ' + row.id)}>
+		<DropdownMenu.Item variant="destructive" onclick={() => (deleteDialogOpen = true)}>
 			<Trash2Icon class="mr-2 size-4" />
 			Delete
 		</DropdownMenu.Item>
 	</DropdownMenu.Content>
 </DropdownMenu.Root>
+
+<AlertDialog.Root bind:open={deleteDialogOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Are you absolutely sure?</AlertDialog.Title>
+			<AlertDialog.Description>
+				This action cannot be undone. This will permanently delete your account and remove your data
+				from our servers.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action
+				disabled={deleteLoading}
+				onclick={() => onDelete()}
+				class={buttonVariants({ variant: 'destructive' })}
+			>
+				{#if deleteLoading}
+					<Spinner />
+				{:else}
+					<Trash2Icon />
+				{/if}
+				Delete
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>

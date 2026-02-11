@@ -8,7 +8,6 @@
 	import ChevronsRightIcon from '@tabler/icons-svelte/icons/chevrons-right';
 
 	const { table } = $props();
-
 </script>
 
 <div class="flex items-center justify-between">
@@ -21,7 +20,10 @@
 			<Select.Root
 				type="single"
 				value={`${table.getState().pagination.pageSize}`}
-				onValueChange={(v) => table.setPageSize(Number(v))}
+				onValueChange={(v) => {
+					table.setPageSize(Number(v));
+					table.resetPageIndex();
+				}}
 			>
 				<Select.Trigger size="sm" class="w-20" id="rows-per-page">
 					{table.getState().pagination.pageSize}

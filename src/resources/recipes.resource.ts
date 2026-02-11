@@ -1,6 +1,9 @@
 import { getRequestEvent } from '$app/server';
+import { renderSnippet } from '$lib/components/ui/data-table';
+import { badgeVariants } from '$lib/components/ui/badge';
 import { defineResource } from '$lib/resource';
 import { CookingPotIcon } from '@lucide/svelte';
+import { createRawSnippet } from 'svelte';
 import { z } from 'zod';
 
 const recipesSchema = z.object({
@@ -23,10 +26,12 @@ const recipesSchema = z.object({
 	mealType: z.array(z.string())
 });
 
+
 export const resource = defineResource('recipes')({
 	schema: recipesSchema,
 	label: 'Recipes',
 	icon: CookingPotIcon,
+	// searchable: false,
 	provider: (schema) => ({
 		getMany: async ({ pagination, search }) => {
 			const { fetch } = getRequestEvent();
@@ -75,7 +80,7 @@ export const resource = defineResource('recipes')({
 		},
 		update: async ({ id, payload }) => {
 			const { fetch } = getRequestEvent();
-			
+
 			const response = await fetch(`https://dummyjson.com/recipes/${id}`, {
 				method: 'PUT',
 				headers: {
@@ -90,7 +95,7 @@ export const resource = defineResource('recipes')({
 		},
 		deleteOne: async (id) => {
 			const { fetch } = getRequestEvent();
-			
+
 			const response = await fetch(`https://dummyjson.com/recipes/${id}`, {
 				method: 'DELETE'
 			});
@@ -128,7 +133,16 @@ export const resource = defineResource('recipes')({
 		},
 		{
 			accessorKey: 'mealType',
-			header: 'Meal Type'
+			header: 'Meal Type',
+			cell: ({ getValue }) => {
+				const types = getValue() as string[];
+				return renderSnippet(
+					createRawSnippet(() => ({
+						render: () =>
+							`<div class="flex gap-1">${types.map((t) => `<span class="${badgeVariants({ variant: 'outline' })}">${t}</span>`).join('')}</div>`
+					}))
+				);
+			}
 		}
 	]
 });

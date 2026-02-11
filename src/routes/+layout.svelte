@@ -6,6 +6,7 @@
 	import SiteHeader from '$lib/components/site-header.svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar/index.js';
 	import { useResources } from '../resources';
+	import { Toaster } from '$lib/components/ui/sonner/index.js';
 
 	const resources = useResources();
 
@@ -13,6 +14,8 @@
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
+
+<Toaster position="bottom-right" richColors theme="light"/>
 
 <Sidebar.Provider
 	style="--sidebar-width: calc(var(--spacing) * 72); --header-height: calc(var(--spacing) * 12);"

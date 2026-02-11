@@ -5,27 +5,25 @@
 		renderComponent
 	} from '$lib/components/ui/data-table/index.js';
 	import * as Table from '$lib/components/ui/table/index.js';
-	import {
-		getCoreRowModel,
-		getSortedRowModel,
-		type SortingState,
-		type VisibilityState
-	} from '@tanstack/table-core';
+	import type { ColumnDef } from '@tanstack/table-core';
+	import { getCoreRowModel, type SortingState, type VisibilityState } from '@tanstack/table-core';
 	import { Debounced } from 'runed';
 	import { useSearchParams } from 'runed/kit';
 	import z from 'zod';
 	import ResourceTableActions from './resource-table-actions.svelte';
 	import ResourceTablePagination from './resource-table-pagination.svelte';
 	import ResourceTableToolbar from './resource-table-toolbar.svelte';
-	import type { ColumnDef, ResourceLike } from './types';
+	import type { ResourceLike } from './types';
+	import { getResourceContext } from './resource-provider.svelte';
 
 	interface Props {
-		resource: ResourceLike<TData>;
 		showActions?: boolean;
-		searchable?: boolean;
 	}
 
-	let { resource, showActions = true, searchable = true }: Props = $props();
+	let { showActions = true }: Props = $props();
+
+	const ctx = getResourceContext();
+	const resource = ctx.resource as ResourceLike<TData>;
 
 	const params = useSearchParams(
 		z.object({
@@ -40,8 +38,8 @@
 
 	const debouncedSearch = new Debounced(() => params.q, 200);
 
-	let data = $derived(
-		await resource.remotes.getMany({
+	const getMany = $derived(
+		resource.remotes.getMany({
 			search: debouncedSearch.current,
 			pagination: {
 				pageIndex: $state.eager(pageIndex),
@@ -50,14 +48,21 @@
 		})
 	);
 
+	// Register the active getMany query in context for invalidation
+	$effect.pre(() => {
+		ctx.queries.getMany = getMany;
+	});
+
+	const data = $derived(await getMany);
+
 	const columns = $derived.by(() => {
 		const baseColumns = (resource.metadata.columns ??
-			Object.keys((resource.metadata.schema as { shape: Record<string, unknown> }).shape).map(
-				(key) => ({
-					accessorKey: key,
-					header: key.charAt(0).toUpperCase() + key.slice(1)
-				})
-			)) as ColumnDef<TData>[];
+			Object.keys(
+				(resource.metadata.schema as unknown as { shape: Record<string, unknown> }).shape
+			).map((key) => ({
+				accessorKey: key,
+				header: key.charAt(0).toUpperCase() + key.slice(1)
+			}))) as ColumnDef<TData>[];
 
 		// Add actions column if showActions is true
 		if (showActions) {
@@ -67,7 +72,9 @@
 					id: 'actions',
 					header: '',
 					cell: ({ row }: { row: { original: TData } }) => {
-						return renderComponent(ResourceTableActions, { resource, row: row.original });
+						return renderComponent(ResourceTableActions, {
+							row: row.original
+						});
 					}
 				}
 			];
@@ -108,25 +115,12 @@
 			get globalFilter() {
 				return params.q;
 			}
-			// get columnFilters() {
-			// 	if (!searchColumn) {
-			// 		return [];
-			// 	}
-
-			// 	return [
-			// 		{
-			// 			id: searchColumn,
-			// 			value: params.q
-			// 		}
-			// 	];
-			// }
 		},
 		manualPagination: true,
 		manualFiltering: true,
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		getRowId: (row, index) => ((row as any).id ?? index).toString(),
 		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel(),
 		onPaginationChange: (updater) => {
 			if (typeof updater === 'function') {
 				const oldState = {
@@ -138,6 +132,10 @@
 					limit: newPagination.pageSize,
 					skip: newPagination.pageIndex * newPagination.pageSize
 				});
+
+				if (newPagination.pageSize !== oldState.pageSize) {
+					table.resetPageIndex();
+				}
 			} else {
 				params.update({
 					limit: updater.pageSize,
@@ -152,23 +150,6 @@
 				sorting = updater;
 			}
 		},
-		// onColumnFiltersChange: (updater) => {
-		// 	if (!searchColumn) {
-		// 		return;
-		// 	}
-		// 	const newFilters =
-		// 		typeof updater === 'function'
-		// 			? updater([
-		// 					{
-		// 						id: searchColumn,
-		// 						value: q
-		// 					}
-		// 				])
-		// 			: updater;
-		// 	params.update({
-		// 		q: (newFilters.find((f) => f.id === searchColumn)?.value as string) ?? ''
-		// 	});
-		// },
 		onColumnVisibilityChange: (updater) => {
 			if (typeof updater === 'function') {
 				columnVisibility = updater(columnVisibility);
@@ -179,15 +160,14 @@
 		onGlobalFilterChange: (updater) => {
 			const newFilter = typeof updater === 'function' ? updater(params.q) : updater;
 			params.update({ q: newFilter });
+			table.resetPageIndex();
 		}
 	});
-
-	let v = $state('');
 </script>
 
 <div class="flex flex-col gap-4">
 	<!-- Toolbar -->
-	<ResourceTableToolbar {table} {searchable} />
+	<ResourceTableToolbar {table} />
 
 	<!-- Table -->
 	<div class="overflow-hidden rounded-lg border">

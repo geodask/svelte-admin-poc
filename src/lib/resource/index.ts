@@ -35,4 +35,7 @@ export { defineResource, type Resource } from './define-resource';
 export { simpleRestProvider } from './providers';
 
 // Components
-export { ResourceTable } from './components';
+export { ResourceTable, ResourceProvider } from './components';
+
+// Export utilities
+export { exportData, type ExportFormat, type ExportColumn } from './export';
