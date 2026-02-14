@@ -8,7 +8,7 @@ export function simpleRestProvider<T extends z.ZodType>(url: string) {
 			const { fetch } = getRequestEvent();
 			const params = new URLSearchParams();
 
-			if (pagination?.current) params.set('page', String(pagination.current));
+			if (pagination?.pageIndex != null) params.set('page', String(pagination.pageIndex + 1));
 			if (pagination?.pageSize) params.set('limit', String(pagination.pageSize));
 
 			sorters?.forEach((sorter, i) => {

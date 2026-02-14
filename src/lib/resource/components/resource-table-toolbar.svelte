@@ -6,22 +6,28 @@
 		ChevronDownIcon,
 		Columns2Icon,
 		DownloadIcon,
+		EllipsisVerticalIcon,
 		FileBracesIcon,
 		FileSpreadsheetIcon,
-		PlusIcon
+		PlusIcon,
+		RotateCwIcon,
+		Trash2Icon
 	} from '@lucide/svelte';
 	import type { Table } from '@tanstack/table-core';
 	import { toast } from 'svelte-sonner';
 	import { exportData, type ExportColumn, type ExportFormat } from '../export';
 	import { getResourceContext } from './resource-provider.svelte';
+	import { getTableContext } from './resource-table-provider.svelte';
 
 	type Props = {
 		table: Table<TData>;
 	};
 
-	let { table }: Props = $props();
-
 	const ctx = getResourceContext();
+	const tableCtx = getTableContext();
+	const table = $derived(tableCtx.table);
+	const rowSelection = $derived(tableCtx.rowSelection);
+
 	const searchable = $derived(ctx.resource.metadata.searchable);
 	const exportable = $derived(ctx.resource.metadata.exportable);
 
@@ -100,48 +106,72 @@
 	</div>
 
 	<div class="flex items-center gap-1">
-		{#if exportable}
-			<DropdownMenu.Root>
-				<DropdownMenu.Trigger>
-					{#snippet child({ props })}
-						<Button size="sm" variant="outline" disabled={exporting} {...props}>
-							<DownloadIcon />
-							{exporting ? 'Exporting...' : 'Export'}
-							<ChevronDownIcon />
-						</Button>
-					{/snippet}
-				</DropdownMenu.Trigger>
-				<DropdownMenu.Content align="end" class="w-56">
-					<DropdownMenu.Label>Current Page</DropdownMenu.Label>
-					<DropdownMenu.Item onclick={() => handleExportCurrentView('csv')}>
-						<FileSpreadsheetIcon />
-						Export as CSV
-					</DropdownMenu.Item>
-					<DropdownMenu.Item onclick={() => handleExportCurrentView('json')}>
-						<FileBracesIcon />
-						Export as JSON
-					</DropdownMenu.Item>
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button size="sm" variant="outline" {...props}>
+						<EllipsisVerticalIcon class="size-4" />
+						Actions
+						<ChevronDownIcon />
+					</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="end">
+				<DropdownMenu.Item
+					disabled={Object.keys(rowSelection).length === 0}
+					onclick={() => {
+						tableCtx.rowSelection = {};
+					}}
+				>
+					<RotateCwIcon class="mr-2 size-4" />
+					Clear selection
+					<span class="ml-auto">({Object.keys(rowSelection).length})</span>
+				</DropdownMenu.Item>
+				<DropdownMenu.Item variant="destructive" disabled={Object.keys(rowSelection).length === 0}>
+					<Trash2Icon class="mr-2 size-4" />
+					Delete selected
+					<span class="ml-auto">({Object.keys(rowSelection).length})</span>
+				</DropdownMenu.Item>
+
+				{#if exportable}
 					<DropdownMenu.Separator />
-					<DropdownMenu.Label>All Data</DropdownMenu.Label>
-					<DropdownMenu.Item disabled={exporting} onclick={() => handleExportAll('csv')}>
-						<FileSpreadsheetIcon />
-						Export All as CSV
-					</DropdownMenu.Item>
-					<DropdownMenu.Item disabled={exporting} onclick={() => handleExportAll('json')}>
-						<FileBracesIcon />
-						Export All as JSON
-					</DropdownMenu.Item>
-				</DropdownMenu.Content>
-			</DropdownMenu.Root>
-		{/if}
+					<DropdownMenu.Sub>
+						<DropdownMenu.SubTrigger>
+							<DownloadIcon class="mr-2 size-4" />
+							Export
+						</DropdownMenu.SubTrigger>
+						<DropdownMenu.SubContent>
+							<DropdownMenu.Label>Current Page</DropdownMenu.Label>
+							<DropdownMenu.Item onclick={() => handleExportCurrentView('csv')}>
+								<FileSpreadsheetIcon class="mr-2 size-4" />
+								CSV
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => handleExportCurrentView('json')}>
+								<FileBracesIcon class="mr-2 size-4" />
+								JSON
+							</DropdownMenu.Item>
+							<DropdownMenu.Separator />
+							<DropdownMenu.Label>All Data</DropdownMenu.Label>
+							<DropdownMenu.Item disabled={exporting} onclick={() => handleExportAll('csv')}>
+								<FileSpreadsheetIcon class="mr-2 size-4" />
+								CSV
+							</DropdownMenu.Item>
+							<DropdownMenu.Item disabled={exporting} onclick={() => handleExportAll('json')}>
+								<FileBracesIcon class="mr-2 size-4" />
+								JSON
+							</DropdownMenu.Item>
+						</DropdownMenu.SubContent>
+					</DropdownMenu.Sub>
+				{/if}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
 
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
 					<Button variant="outline" size="sm" {...props}>
 						<Columns2Icon />
-						<span class="hidden lg:inline">Customize Columns</span>
-						<span class="lg:hidden">Columns</span>
+						<span>Columns</span>
 						<ChevronDownIcon />
 					</Button>
 				{/snippet}

@@ -1,12 +1,12 @@
 import { getRequestEvent } from '$app/server';
-import { defineResource } from '$lib/resource';
+import { defineResource, defineField } from '$lib/resource';
 import { CherryIcon } from '@lucide/svelte';
 import { z } from 'zod';
 
 const berrySchema = z.object({
-	id: z.number(),
-	name: z.string(),
-	size: z.number().optional()
+	id: defineField(z.number(), { hidden: true, description: 'Unique identifier for the berry' }),
+	name: defineField(z.string(), { label: 'Berry Name' }),
+	size: defineField(z.number().optional(), { label: 'Size' })
 });
 
 export const resource = defineResource('berries')({
@@ -62,18 +62,5 @@ export const resource = defineResource('berries')({
 			return {};
 		}
 	}),
-	label: 'Berries',
-	columns: [
-		{ accessorKey: 'name', header: 'Name' },
-		{ accessorKey: 'size', header: 'Size' }
-		// {
-		// 	id: 'action',
-		// 	cell: ({ row }) => {
-		// 		const snippet = createRawSnippet(() => ({
-		// 			render: () => `<div class="text-end">View ${row.original.name}</div>`
-		// 		}));
-		// 		return renderSnippet(snippet);
-		// 	}
-		// }
-	]
+	label: 'Berries'
 });

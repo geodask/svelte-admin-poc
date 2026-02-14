@@ -1,6 +1,4 @@
-// Schemas and Types
 export {
-	// Zod schemas
 	PaginationSchema,
 	SorterSchema,
 	FilterSchema,
@@ -9,7 +7,6 @@ export {
 	GetManyInputSchema,
 	GetOneInputSchema,
 	DeleteOneInputSchema,
-	// Types (inferred from schemas)
 	type Pagination,
 	type Sorter,
 	type Filter,
@@ -28,14 +25,27 @@ export {
 	type Provider
 } from './schemas';
 
-// Define resource
 export { defineResource, type Resource } from './define-resource';
 
-// Providers
 export { simpleRestProvider } from './providers';
 
-// Components
 export { ResourceTable, ResourceProvider } from './components';
 
-// Export utilities
 export { exportData, type ExportFormat, type ExportColumn } from './export';
+
+export {
+	fieldRegistry,
+	defineField,
+	resolveField,
+	resolveFields,
+	fieldsForView,
+	humanize,
+	type FieldMeta,
+	type ResolvedField,
+	type FieldRenderContext,
+	type FieldRenderer,
+	type ViewName,
+	type FieldViewConfig,
+	type FieldViews,
+	type ViewVisibility
+} from './field-registry/index.js';

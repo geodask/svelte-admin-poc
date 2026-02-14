@@ -80,7 +80,7 @@ export type DeleteOneParams = z.infer<typeof DeleteOneInputSchema>;
 export type CreateParams<T> = Partial<T>;
 
 export type UpdateParams<T> = {
-	id: string;
+	id: string | number;
 	payload: Partial<T>;
 };
 

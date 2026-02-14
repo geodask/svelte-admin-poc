@@ -6,8 +6,10 @@
 	import ChevronRightIcon from '@tabler/icons-svelte/icons/chevron-right';
 	import ChevronsLeftIcon from '@tabler/icons-svelte/icons/chevrons-left';
 	import ChevronsRightIcon from '@tabler/icons-svelte/icons/chevrons-right';
+	import { getTableContext } from './resource-table-provider.svelte';
 
-	const { table } = $props();
+	const tableCtx = getTableContext();
+	const table = $derived(tableCtx.table);
 </script>
 
 <div class="flex items-center justify-between">

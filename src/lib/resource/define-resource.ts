@@ -1,6 +1,5 @@
 import { query, command } from '$app/server';
 import { z } from 'zod';
-import type { ColumnDef } from '@tanstack/table-core';
 import {
 	GetManyInputSchema,
 	GetOneInputSchema,
@@ -35,7 +34,6 @@ export type Resource<TSchema extends z.ZodObject> = {
 		menu?: MenuConfig;
 		searchable: boolean;
 		exportable: boolean;
-		columns?: ColumnDef<z.infer<TSchema>>[];
 		schema: TSchema;
 	};
 	getMany: ReturnType<typeof query<typeof GetManyInputSchema, GetManyResponse<z.infer<TSchema>>>>;
@@ -55,17 +53,17 @@ export function defineResource(name: string) {
 		icon?: typeof Icon;
 		menu?: MenuConfig;
 		searchable?: boolean;
+		selectable?: boolean;
 		exportable?: boolean;
-		columns?: ColumnDef<z.infer<TSchema>>[];
 	}) => {
 		const {
 			provider: providerOption,
 			label,
-			columns,
 			schema,
 			icon,
 			menu = true,
 			searchable = true,
+			selectable = false,
 			exportable = true
 		} = options;
 
@@ -78,10 +76,10 @@ export function defineResource(name: string) {
 		const metadata = {
 			name,
 			label: label ?? name,
-			columns,
 			icon,
 			menu,
 			searchable,
+			selectable,
 			exportable,
 			schema
 		};
@@ -90,7 +88,7 @@ export function defineResource(name: string) {
 		const createInputSchema = schema.partial();
 
 		const updateInputSchema = z.object({
-			id: z.string(),
+			id: z.union([z.string(), z.number()]),
 			payload: schema.partial()
 		});
 
