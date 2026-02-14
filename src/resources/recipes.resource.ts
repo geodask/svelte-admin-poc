@@ -135,7 +135,8 @@ export const resource = defineResource('recipes')({
 			accessorKey: 'mealType',
 			header: 'Meal Type',
 			cell: ({ getValue }) => {
-				const types = getValue() as string[];
+				const value = getValue();
+				const types = Array.isArray(value) ? value : [];
 				return renderSnippet(
 					createRawSnippet(() => ({
 						render: () =>

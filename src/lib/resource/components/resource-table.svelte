@@ -23,7 +23,7 @@
 	let { showActions = true }: Props = $props();
 
 	const ctx = getResourceContext();
-	const resource = ctx.resource as ResourceLike<TData>;
+	const resource = $derived(ctx.resource as ResourceLike<TData>);
 
 	const params = useSearchParams(
 		z.object({
