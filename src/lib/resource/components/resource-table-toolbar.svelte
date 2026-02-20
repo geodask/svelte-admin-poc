@@ -118,10 +118,8 @@
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="end">
 				<DropdownMenu.Item
+					onSelect={() => (tableCtx.rowSelection = {})}
 					disabled={Object.keys(rowSelection).length === 0}
-					onclick={() => {
-						tableCtx.rowSelection = {};
-					}}
 				>
 					<RotateCwIcon class="mr-2 size-4" />
 					Clear selection
