@@ -77,6 +77,13 @@ describe('Kind detection through wrappers', () => {
 		expect(detectKind(z.iso.datetime().optional().default('2024-01-01T00:00:00Z'))).toEqual({
 			kind: 'date'
 		});
+		expect(detectKind(z.date().nullable())).toEqual({ kind: 'date' });
+		expect(detectKind(z.email().optional())).toEqual({ kind: 'text' });
+		expect(detectKind(z.url().nullable().optional())).toEqual({ kind: 'text' });
+		expect(detectKind(z.object({ a: z.number() }).optional())).toEqual({ kind: 'object' });
+		expect(detectKind(z.array(z.object({ a: z.number() })).default([]))).toEqual({
+			kind: 'object'
+		});
 	});
 });
 
@@ -102,6 +109,10 @@ describe('default labels', () => {
 	it('splits digits from letters', () => {
 		expect(defaultLabel('address2')).toBe('Address 2');
 	});
+
+	it('keeps letters outside ASCII', () => {
+		expect(defaultLabel('naïveÉtude')).toBe('Naïve étude');
+	});
 });
 
 /** The Fields of a Resource with this shape plus a number id, without the id. */
@@ -114,7 +125,7 @@ function fieldsOf(shape: z.ZodRawShape) {
 	return resource.fields.filter((f) => f.key !== 'id');
 }
 
-const only = (shape: z.ZodRawShape) => fieldsOf(shape)[0];
+const firstField = (shape: z.ZodRawShape) => fieldsOf(shape)[0];
 
 describe("a Resource's Fields", () => {
 	it('lists every Field in schema key order, with a default label and its Kind', () => {
@@ -140,7 +151,7 @@ describe("a Resource's Fields", () => {
 
 	it('uses the label and description set with field()', () => {
 		expect(
-			only({ servings: field(z.number(), { label: 'Serves', description: 'People' }) })
+			firstField({ servings: field(z.number(), { label: 'Serves', description: 'People' }) })
 		).toMatchObject({
 			label: 'Serves',
 			description: 'People'
@@ -148,54 +159,54 @@ describe("a Resource's Fields", () => {
 	});
 
 	it('keeps metadata set inside a wrapper: field(z.number(), { label }).optional()', () => {
-		expect(only({ calories: field(z.number(), { label: 'X' }).optional() }).label).toBe('X');
-		expect(only({ calories: field(z.number(), { label: 'X' }).nullable() }).label).toBe('X');
-		expect(only({ calories: field(z.number(), { label: 'X' }).default(0) }).label).toBe('X');
-		expect(only({ calories: field(z.number(), { label: 'X' }).optional().nullable() }).label).toBe(
-			'X'
-		);
+		expect(firstField({ calories: field(z.number(), { label: 'X' }).optional() }).label).toBe('X');
+		expect(firstField({ calories: field(z.number(), { label: 'X' }).nullable() }).label).toBe('X');
+		expect(firstField({ calories: field(z.number(), { label: 'X' }).default(0) }).label).toBe('X');
+		expect(
+			firstField({ calories: field(z.number(), { label: 'X' }).optional().nullable() }).label
+		).toBe('X');
 	});
 
 	it('finds metadata set outside a wrapper too', () => {
-		expect(only({ calories: field(z.number().optional(), { label: 'X' }) }).label).toBe('X');
-		expect(only({ calories: field(z.number().optional(), { label: 'X' }).nullable() }).label).toBe(
-			'X'
-		);
+		expect(firstField({ calories: field(z.number().optional(), { label: 'X' }) }).label).toBe('X');
+		expect(
+			firstField({ calories: field(z.number().optional(), { label: 'X' }).nullable() }).label
+		).toBe('X');
 	});
 
 	it('lets metadata set outside a wrapper win over metadata set inside it, key by key', () => {
 		const inner = field(z.string(), { label: 'Inner', description: 'From inside' });
 
-		expect(only({ notes: field(inner.optional(), { label: 'Outer' }) })).toMatchObject({
+		expect(firstField({ notes: field(inner.optional(), { label: 'Outer' }) })).toMatchObject({
 			label: 'Outer',
 			description: 'From inside'
 		});
 	});
 
 	it('shows a Field on the list and detail Views by default', () => {
-		expect(only({ name: z.string() })).toMatchObject({ list: true, detail: true });
+		expect(firstField({ name: z.string() })).toMatchObject({ list: true, detail: true });
 	});
 
 	it('leaves a hidden Field out of every View', () => {
-		expect(only({ secret: field(z.string(), { hidden: true }) })).toMatchObject({
+		expect(firstField({ secret: field(z.string(), { hidden: true }) })).toMatchObject({
 			list: false,
 			detail: false
 		});
-		expect(only({ secret: field(z.string(), { hidden: true }).optional() })).toMatchObject({
+		expect(firstField({ secret: field(z.string(), { hidden: true }).optional() })).toMatchObject({
 			list: false,
 			detail: false
 		});
 	});
 
 	it('leaves a `list: false` Field off the list View only', () => {
-		expect(only({ instructions: field(z.string(), { list: false }) })).toMatchObject({
+		expect(firstField({ instructions: field(z.string(), { list: false }) })).toMatchObject({
 			list: false,
 			detail: true
 		});
 	});
 
 	it('leaves an object Field off the list View by default', () => {
-		expect(only({ nutrition: z.object({ calories: z.number() }) })).toMatchObject({
+		expect(firstField({ nutrition: z.object({ calories: z.number() }) })).toMatchObject({
 			kind: 'object',
 			list: false,
 			detail: true
@@ -203,13 +214,13 @@ describe("a Resource's Fields", () => {
 	});
 
 	it('reads requiredness from the whole wrapper chain', () => {
-		const required = (schema: z.ZodType) => only({ value: schema }).required;
+		const required = (schema: z.ZodType) => firstField({ value: schema }).required;
 
 		expect(required(z.string())).toBe(true);
 		expect(required(z.string().optional())).toBe(false);
 		expect(required(z.string().nullable())).toBe(false);
 		expect(required(z.string().default('x'))).toBe(false);
-		// Only the inner wrapper makes it optional; the outer one alone would not.
+		// A wrapper counts wherever it sits in the chain, not only when it is the outer one.
 		expect(required(z.string().optional().nullable())).toBe(false);
 		expect(required(z.string().nullable().default(null))).toBe(false);
 	});

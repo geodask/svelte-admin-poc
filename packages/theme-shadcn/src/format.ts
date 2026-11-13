@@ -4,7 +4,7 @@
 const numberFormat = new Intl.NumberFormat('en');
 const dateFormat = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' });
 
-export function formatNumber(value: number | bigint): string {
+export function formatNumber(value: number): string {
 	return numberFormat.format(value);
 }
 
@@ -25,7 +25,7 @@ export function formatDate(value: unknown): string | undefined {
 
 /** One item of a list, or any scalar, by its runtime type. */
 export function formatScalar(value: unknown): string {
-	if (typeof value === 'number' || typeof value === 'bigint') return formatNumber(value);
+	if (typeof value === 'number') return formatNumber(value);
 	if (typeof value === 'boolean') return formatBoolean(value);
 	if (value instanceof Date) return formatDate(value) ?? '';
 	return value === null || value === undefined ? '' : String(value);

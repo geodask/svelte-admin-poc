@@ -2,7 +2,7 @@
 // deterministic. There are more recipes than one default page (25) holds.
 //
 // Recipes carry a Field of every Kind, so the e2e tests can check how each one is shown.
-// The values beyond the first few columns are derived from the row's position.
+// The values of the later Fields are derived from the row's position.
 export type Recipe = {
 	id: number;
 	name: string;

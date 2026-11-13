@@ -59,6 +59,11 @@ function unwrap(schema: z.ZodType): z.ZodType {
 	return wrapperChain(schema).at(-1)!;
 }
 
+/**
+ * The built-in Kind of a Field's Zod type, seen through `optional`, `nullable` and `default`.
+ * Pure: it reads only the schema. ISO date and datetime strings are dates, since JSON carries
+ * dates as strings.
+ */
 export function detectKind(schema: z.ZodType): DetectedKind {
 	const type = unwrap(schema);
 
@@ -70,6 +75,8 @@ export function detectKind(schema: z.ZodType): DetectedKind {
 		return SCALAR_KINDS.has(detectKind(element).kind) ? { kind: 'list' } : { kind: 'unknown' };
 	}
 
+	// The def's type, not `instanceof`, so string and number formats (`z.email()`, `z.int()`)
+	// count as their base type. `_zod.def` is Zod's API for libraries that read schemas.
 	switch (type._zod.def.type) {
 		case 'string':
 			return { kind: 'text' };
@@ -92,7 +99,7 @@ export function detectKind(schema: z.ZodType): DetectedKind {
  * their capitals, and an `id` word reads "ID".
  */
 export function defaultLabel(key: string): string {
-	const words = (key.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+/g) ?? [key]).map((word) => {
+	const words = (key.match(/\p{Lu}+(?!\p{Ll})|\p{Lu}?\p{Ll}+|\d+/gu) ?? [key]).map((word) => {
 		if (word.toLowerCase() === 'id') return 'ID';
 		return word.length > 1 && word === word.toUpperCase() ? word : word.toLowerCase();
 	});
