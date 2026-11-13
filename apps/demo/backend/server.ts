@@ -6,9 +6,9 @@
 import { BACKEND_PORT } from './config.ts';
 import * as seed from './seed.ts';
 
-type Collection = { id: number | string }[];
+type Records = { id: number | string }[];
 
-function fresh(): Record<string, Collection> {
+function fresh(): Record<string, Records> {
 	return { recipes: structuredClone(seed.recipes) };
 }
 

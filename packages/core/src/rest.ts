@@ -18,8 +18,8 @@ const listResponse = z.union([
  * parses each one with the Resource schema.
  *
  * @example
- * const api = restProvider('https://api.example.com');
- * export const { getList } = serveResource(recipes, api.for(recipes));
+ * const backend = restProvider('https://api.example.com');
+ * export const { getList } = serveResource(recipes, backend.for(recipes));
  */
 export function restProvider(baseUrl: string) {
 	const base = baseUrl.replace(/\/+$/, '');
@@ -27,12 +27,12 @@ export function restProvider(baseUrl: string) {
 	return {
 		/** The Provider for one Resource, at `{base}/{resource.name}`. */
 		for<R extends Resource>(resource: R): Provider<RecordOf<R>> {
-			const collection = `${base}/${encodeURIComponent(resource.name)}`;
+			const resourceUrl = `${base}/${encodeURIComponent(resource.name)}`;
 
 			return {
 				async getList({ fetch }, { page, perPage }) {
 					const search = new URLSearchParams({ page: String(page), perPage: String(perPage) });
-					const url = `${collection}?${search}`;
+					const url = `${resourceUrl}?${search}`;
 					const parsed = listResponse.safeParse(await getJson(fetch, url));
 					if (!parsed.success) {
 						throw new Error(

@@ -47,8 +47,8 @@ export default ts.config(
 		}
 	},
 	{
-		// The core's shared entry is browser-safe: it never imports `$app/server` (types aside,
-		// which are erased) or the server-only modules behind `./server` and `./rest`.
+		// The core's shared entry is browser-safe: it never imports `$app/server` or the
+		// server-only modules behind `./server` and `./rest`.
 		files: ['packages/core/src/**/*.ts'],
 		ignores: [
 			'packages/core/src/server.ts',
@@ -63,7 +63,6 @@ export default ts.config(
 					paths: [
 						{
 							name: '$app/server',
-							allowTypeImports: true,
 							message: 'Only the server-only entry (src/server.ts) may import $app/server.'
 						}
 					],

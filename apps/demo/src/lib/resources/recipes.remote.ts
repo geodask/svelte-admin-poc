@@ -1,5 +1,5 @@
 import { serveResource } from '@svelte-admin/core/server';
-import { api } from '#lib/server/api.ts';
+import { backend } from '#lib/server/backend.ts';
 import { recipes } from './recipes.ts';
 
-export const { getList } = serveResource(recipes, api.for(recipes));
+export const { getList } = serveResource(recipes, backend.for(recipes));

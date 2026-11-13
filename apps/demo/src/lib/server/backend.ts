@@ -3,4 +3,4 @@
 import { restProvider } from '@svelte-admin/core/rest';
 import { BACKEND_URL } from '../../../backend/config.ts';
 
-export const api = restProvider(BACKEND_URL);
+export const backend = restProvider(BACKEND_URL);

@@ -11,7 +11,7 @@ import type { RecordOf, Resource } from './resource.ts';
  * them in one line and exports nothing else:
  *
  * @example
- * export const { getList } = serveResource(recipes, api.for(recipes));
+ * export const { getList } = serveResource(recipes, backend.for(recipes));
  */
 export function serveResource<R extends Resource>(resource: R, provider: Provider<RecordOf<R>>) {
 	const records = z.array(resource.schema);
@@ -25,9 +25,6 @@ export function serveResource<R extends Resource>(resource: R, provider: Provide
 
 	return { getList };
 }
-
-/** The remote functions `serveResource` returns for a Resource. */
-export type ResourceRemote<R extends Resource = Resource> = ReturnType<typeof serveResource<R>>;
 
 function providerContext(): ProviderContext {
 	const { fetch, locals } = getRequestEvent();

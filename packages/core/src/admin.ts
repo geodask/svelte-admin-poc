@@ -73,8 +73,5 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 	};
 }
 
-/** The admin `defineAdmin` returns. */
-export type Admin = ReturnType<typeof defineAdmin>;
-
 /** The names of an admin's Resources, e.g. `'recipes' | 'users'`. */
 export type ResourceNameOf<A extends { resources: object }> = keyof A['resources'] & string;

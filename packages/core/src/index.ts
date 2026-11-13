@@ -6,12 +6,11 @@ export {
 	field,
 	fieldRegistry,
 	type FieldMeta,
-	type IdOf,
 	type RecordOf,
 	type Resource,
 	type ResourceSchema
 } from './resource.ts';
 export type { ListParams, ListResult, Provider, ProviderContext } from './provider.ts';
 export { DEFAULT_PER_PAGE, MAX_PER_PAGE, listParamsSchema } from './list-params.ts';
-export { defineAdmin, type Admin, type AdminEntry, type ResourceNameOf } from './admin.ts';
+export { defineAdmin, type AdminEntry, type ResourceNameOf } from './admin.ts';
 export type { ResourceRemote } from './remote.ts';

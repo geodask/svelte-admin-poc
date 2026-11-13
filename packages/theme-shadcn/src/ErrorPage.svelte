@@ -57,16 +57,36 @@
 
 	<div class="flex max-w-md flex-col items-center text-center">
 		<h1 class="text-2xl font-semibold tracking-tight text-foreground">{info.title}</h1>
-		<p class="mt-2 text-sm text-muted-foreground">{info.description}</p>
+		{#if status === 404}
+			<p class="mt-2 text-sm text-muted-foreground">
+				Nothing found at
+				<code
+					class="rounded-md border border-border bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground"
+				>
+					{path}
+				</code>
+			</p>
+		{:else}
+			<p class="mt-2 text-sm text-muted-foreground">{info.description}</p>
+		{/if}
 
 		<div class="my-6 h-px w-16 bg-border"></div>
 
-		<a
-			href={homeHref}
-			class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-		>
-			Back to the admin
-		</a>
+		<div class="flex items-center gap-3">
+			<a
+				href={homeHref}
+				class="inline-flex h-8 items-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+			>
+				Back to the admin
+			</a>
+			<button
+				type="button"
+				class="inline-flex h-8 items-center rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted"
+				onclick={() => history.back()}
+			>
+				Go back
+			</button>
+		</div>
 
 		<p class="mt-8 font-mono text-xs text-muted-foreground/60">{path}</p>
 	</div>

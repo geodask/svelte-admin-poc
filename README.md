@@ -44,7 +44,7 @@ CI (`.github/workflows/ci.yml`) runs check, lint, unit, the client bundle check 
 Each Resource costs about 4 lines of wiring in the demo:
 
 1. A shared module with its schema: `src/lib/resources/recipes.ts` calls `defineResource`.
-2. A one-line remote module: `src/lib/resources/recipes.remote.ts` exports `serveResource(recipes, api.for(recipes))`.
+2. A one-line remote module: `src/lib/resources/recipes.remote.ts` exports `serveResource(recipes, backend.for(recipes))`.
 3. One entry in `src/lib/admin.ts`, which `src/params.ts` also reads for the Resource param matcher.
 
 `@svelte-admin/core` is the browser-safe entry. `serveResource` lives in `@svelte-admin/core/server` and the bundled REST Provider in `@svelte-admin/core/rest`; import those only from `.remote.ts` files and server-only modules.
