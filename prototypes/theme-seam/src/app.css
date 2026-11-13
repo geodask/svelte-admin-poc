@@ -1,0 +1,35 @@
+/* PROTOTYPE (PER-18). Tailwind v4 with shadcn-style tokens, used only by the Tailwind Themes.
+   The plain-CSS Themes style themselves with scoped <style> blocks. */
+@import 'tailwindcss';
+
+:root {
+	--background: oklch(1 0 0);
+	--foreground: oklch(0.145 0 0);
+	--muted: oklch(0.97 0 0);
+	--muted-foreground: oklch(0.556 0 0);
+	--border: oklch(0.922 0 0);
+	--primary: oklch(0.205 0 0);
+	--primary-foreground: oklch(0.985 0 0);
+	--destructive: oklch(0.577 0.245 27.325);
+	--accent: oklch(0.97 0 0);
+	--radius: 0.625rem;
+}
+
+@theme inline {
+	--color-background: var(--background);
+	--color-foreground: var(--foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-border: var(--border);
+	--color-primary: var(--primary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-destructive: var(--destructive);
+	--color-accent: var(--accent);
+	--radius-md: calc(var(--radius) - 2px);
+	--radius-lg: var(--radius);
+}
+
+@layer base {
+	* { border-color: var(--border); }
+	body { background: var(--background); color: var(--foreground); }
+}
