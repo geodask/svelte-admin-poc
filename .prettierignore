@@ -1,0 +1,5 @@
+# Prettier also skips everything in .gitignore.
+bun.lock
+
+# The PoC-era agent skill is kept as is
+.agent

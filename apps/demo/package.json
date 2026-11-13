@@ -1,0 +1,33 @@
+{
+	"name": "@svelte-admin/demo",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"imports": {
+		"#lib/*": "./src/lib/*"
+	},
+	"scripts": {
+		"prepare": "svelte-kit sync || echo ''",
+		"dev": "vite dev",
+		"build": "vite build",
+		"preview": "vite preview",
+		"start": "node build",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+		"test:e2e": "playwright test"
+	},
+	"dependencies": {
+		"@svelte-admin/core": "workspace:*",
+		"@svelte-admin/theme-shadcn": "workspace:*"
+	},
+	"devDependencies": {
+		"@playwright/test": "catalog:",
+		"@sveltejs/adapter-node": "catalog:",
+		"@sveltejs/kit": "catalog:",
+		"@sveltejs/vite-plugin-svelte": "catalog:",
+		"@types/node": "catalog:",
+		"svelte": "catalog:",
+		"svelte-check": "catalog:",
+		"typescript": "catalog:",
+		"vite": "catalog:"
+	}
+}

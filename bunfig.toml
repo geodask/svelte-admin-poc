@@ -1,0 +1,3 @@
+[install]
+# Every dependency is pinned to an exact version (ADR 0001). `bun add` writes exact versions too.
+exact = true
