@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { BACKEND_PORT } from './backend/config.ts';
 
 const port = 4173;
 
@@ -23,11 +24,20 @@ export default defineConfig({
 			use: { ...devices['Desktop Chrome'], javaScriptEnabled: false }
 		}
 	],
-	webServer: {
-		// A production build served by adapter-node, not the dev server.
-		command: 'bun run build && bun run start',
-		port,
-		env: { PORT: String(port) },
-		reuseExistingServer: !process.env.CI
-	}
+	webServer: [
+		{
+			// The demo backend the app's REST Provider talks to. Tests reset it before each test.
+			command: 'bun backend/server.ts',
+			port: BACKEND_PORT,
+			reuseExistingServer: !process.env.CI
+		},
+		{
+			// A production build served by adapter-node, not the dev server. CI builds in an
+			// earlier step (to check the client bundle) and sets SKIP_BUILD, so it isn't built twice.
+			command: process.env.SKIP_BUILD ? 'bun run start' : 'bun run build && bun run start',
+			port,
+			env: { PORT: String(port) },
+			reuseExistingServer: !process.env.CI
+		}
+	]
 });

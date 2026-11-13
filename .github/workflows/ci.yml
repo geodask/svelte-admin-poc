@@ -36,9 +36,19 @@ jobs:
       - name: Unit
         run: bun run test:unit
 
+      - name: Build the demo
+        run: bun run build
+
+      # Kit's own client/server guard has a known gap (PER-9), so grep the client output.
+      - name: Check the client build for server-only code
+        run: bun run check:client-bundle
+
       - name: Install Playwright's Chromium
         working-directory: apps/demo
         run: bunx playwright install --with-deps chromium
 
       - name: E2E
         run: bun run test:e2e
+        env:
+          # The demo was built above; Playwright serves that build.
+          SKIP_BUILD: '1'

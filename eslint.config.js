@@ -45,5 +45,36 @@ export default ts.config(
 		rules: {
 			'svelte/no-navigation-without-resolve': 'error'
 		}
+	},
+	{
+		// The core's shared entry is browser-safe: it never imports `$app/server` (types aside,
+		// which are erased) or the server-only modules behind `./server` and `./rest`.
+		files: ['packages/core/src/**/*.ts'],
+		ignores: [
+			'packages/core/src/server.ts',
+			'packages/core/src/rest.ts',
+			'packages/core/src/**/*.test.ts',
+			'packages/core/src/**/*.test-d.ts'
+		],
+		rules: {
+			'@typescript-eslint/no-restricted-imports': [
+				'error',
+				{
+					paths: [
+						{
+							name: '$app/server',
+							allowTypeImports: true,
+							message: 'Only the server-only entry (src/server.ts) may import $app/server.'
+						}
+					],
+					patterns: [
+						{
+							group: ['./server', './server.ts', './rest', './rest.ts'],
+							message: 'Server-only modules must not reach the shared entry.'
+						}
+					]
+				}
+			]
+		}
 	}
 );

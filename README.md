@@ -22,15 +22,29 @@ You need Node 22 (see `.node-version`) and Bun (see `packageManager` in `package
 
 ```sh
 bun install
-bun run dev        # the demo app; open http://localhost:5173/admin
+bun run --filter @svelte-admin/demo backend   # the demo backend on http://localhost:4100
+bun run dev                                    # the demo app; open http://localhost:5173/admin/recipes
 ```
 
-| Script              | What it runs                                                                  |
-| ------------------- | ----------------------------------------------------------------------------- |
-| `bun run check`     | Type checks every workspace member (svelte-check, or `tsc` in the core)       |
-| `bun run lint`      | ESLint and Prettier                                                           |
-| `bun run format`    | Prettier, writing fixes                                                       |
-| `bun run test:unit` | Vitest in the core                                                            |
-| `bun run test:e2e`  | Playwright against a production build of the demo, with JavaScript on and off |
+The demo backend (`apps/demo/backend`) is a small Bun server that serves seed data from memory. Restart it, or `POST /reset`, to restore the seed data.
 
-CI (`.github/workflows/ci.yml`) runs check, lint, unit and e2e on every push and pull request.
+| Script                        | What it runs                                                                     |
+| ----------------------------- | -------------------------------------------------------------------------------- |
+| `bun run check`               | Type checks every workspace member (svelte-check, or `tsc` in the core)          |
+| `bun run lint`                | ESLint and Prettier                                                              |
+| `bun run format`              | Prettier, writing fixes                                                          |
+| `bun run test:unit`           | Vitest in the core                                                               |
+| `bun run test:e2e`            | Playwright against a production build of the demo, with JavaScript on and off    |
+| `bun run check:client-bundle` | After `bun run build`: fails if server-only code reached the demo's client build |
+
+CI (`.github/workflows/ci.yml`) runs check, lint, unit, the client bundle check and e2e on every push and pull request.
+
+## Wiring a Resource
+
+Each Resource costs about 4 lines of wiring in the demo:
+
+1. A shared module with its schema: `src/lib/resources/recipes.ts` calls `defineResource`.
+2. A one-line remote module: `src/lib/resources/recipes.remote.ts` exports `serveResource(recipes, api.for(recipes))`.
+3. One entry in `src/lib/admin.ts`, which `src/params.ts` also reads for the Resource param matcher.
+
+`@svelte-admin/core` is the browser-safe entry. `serveResource` lives in `@svelte-admin/core/server` and the bundled REST Provider in `@svelte-admin/core/rest`; import those only from `.remote.ts` files and server-only modules.
