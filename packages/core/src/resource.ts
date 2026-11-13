@@ -1,27 +1,5 @@
-import { z } from 'zod';
-
-/**
- * The metadata a Field can carry, attached with `field()`. M1 knows `label`, `description`,
- * `hidden` (in no View) and `list: false` (left off the list View only).
- */
-export type FieldMeta = {
-	label?: string;
-	description?: string;
-	hidden?: boolean;
-	list?: false;
-};
-
-/** The Zod registry that holds each Field's metadata. */
-export const fieldRegistry = z.registry<FieldMeta>();
-
-/**
- * Attach metadata to a Field's schema and return the same schema, so it can sit inline in
- * `z.object({...})`.
- */
-export function field<T extends z.ZodType>(schema: T, meta: FieldMeta): T {
-	(schema as z.ZodType).register(fieldRegistry, meta);
-	return schema;
-}
+import type { z } from 'zod';
+import { describeFields, type Field } from './fields.ts';
 
 /** Any Zod object schema. `defineResource` checks that it has a usable `id` Field. */
 export type ResourceSchema = z.ZodObject;
@@ -35,6 +13,8 @@ export type Resource<N extends string = string, S extends ResourceSchema = Resou
 	readonly name: N;
 	readonly label: string;
 	readonly schema: S;
+	/** Its Fields in schema key order, with labels, Kinds and where each one shows. */
+	readonly fields: readonly Field[];
 };
 
 /** The type of one record of a Resource. */
@@ -63,5 +43,5 @@ export function defineResource<const N extends string, S extends ResourceSchema>
 	schema: S & (HasValidId<S> extends true ? unknown : IdRequired);
 }): Resource<N, S> {
 	const { name, label, schema } = definition;
-	return { name, label, schema };
+	return { name, label, schema, fields: describeFields(schema) };
 }

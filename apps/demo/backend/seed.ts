@@ -1,5 +1,8 @@
 // The demo backend's seed data. Each reset restores exactly these records, so tests are
 // deterministic. There are more recipes than one default page (25) holds.
+//
+// Recipes carry a Field of every Kind, so the e2e tests can check how each one is shown.
+// The values beyond the first few columns are derived from the row's position.
 export type Recipe = {
 	id: number;
 	name: string;
@@ -7,12 +10,27 @@ export type Recipe = {
 	difficulty: 'Easy' | 'Medium' | 'Hard';
 	prepTimeMinutes: number;
 	servings: number;
+	caloriesPerServing?: number;
+	vegetarian: boolean;
 	tags: string[];
+	reviewCount: number;
+	publishedAt: string;
+	sourceId: string | number;
+	nutrition: { proteinGrams: number; carbsGrams: number };
+	instructions: string;
+	internalNotes: string;
 };
 
 const rows: [string, string, Recipe['difficulty'], number, number, string[]][] = [
 	['Classic Margherita Pizza', 'Italian', 'Easy', 20, 4, ['Pizza', 'Vegetarian']],
-	['Vegetarian Stir-Fry', 'Asian', 'Medium', 15, 3, ['Vegetarian', 'Quick']],
+	[
+		'Vegetarian Stir-Fry',
+		'Asian',
+		'Medium',
+		15,
+		3,
+		['Vegetarian', 'Quick', 'Vegan', 'Healthy', 'Weeknight']
+	],
 	['Chocolate Chip Cookies', 'American', 'Easy', 15, 24, ['Dessert', 'Baking']],
 	['Chicken Alfredo Pasta', 'Italian', 'Medium', 15, 4, ['Pasta', 'Chicken']],
 	['Mango Salsa Chicken', 'Mexican', 'Easy', 15, 3, ['Chicken', 'Salsa']],
@@ -51,6 +69,17 @@ export const recipes: Recipe[] = rows.map(
 		difficulty,
 		prepTimeMinutes,
 		servings,
-		tags
+		// Every third recipe has no calorie count, so the optional Field is sometimes empty.
+		...(index % 3 === 2 ? {} : { caloriesPerServing: 250 + index * 15 }),
+		vegetarian: tags.includes('Vegetarian'),
+		tags,
+		reviewCount: 1250 + index * 37,
+		// Late in the UTC day, so formatting it in any other time zone would show another date.
+		publishedAt: new Date(Date.UTC(2024, 0, 1 + index * 7, 23, 30)).toISOString(),
+		// Imported recipes keep their source's id, which is a number or a slug.
+		sourceId: index % 2 === 0 ? `dj-${index + 1}` : 9000 + index,
+		nutrition: { proteinGrams: 10 + index, carbsGrams: 40 + index * 2 },
+		instructions: `Prepare the ingredients for ${name}, then cook and serve.`,
+		internalNotes: `Imported batch ${Math.floor(index / 10) + 1}`
 	})
 );
