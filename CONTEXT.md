@@ -20,6 +20,10 @@ _Avoid_: Column, property, attribute
 The adapter that carries out a Resource's data operations against a particular backend.
 _Avoid_: Data source, adapter, backend, API client
 
+**View**:
+One of a Resource's four standard screens: list, detail, create or edit. The admin provides each one, and an app can replace a single View for a single Resource.
+_Avoid_: Screen, page (a SvelteKit page is a route file)
+
 **Dashboard**:
 A summary page of charts and key figures. A possible later feature of the admin, not its core.
 _Avoid_: Using it to mean the admin panel as a whole
