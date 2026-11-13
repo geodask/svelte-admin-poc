@@ -17,7 +17,10 @@
 		"svelte": "catalog:"
 	},
 	"dependencies": {
-		"@svelte-admin/core": "workspace:*"
+		"@svelte-admin/core": "workspace:*",
+		"@tanstack/table-core": "catalog:",
+		"clsx": "catalog:",
+		"tailwind-merge": "catalog:"
 	},
 	"devDependencies": {
 		"svelte": "catalog:",

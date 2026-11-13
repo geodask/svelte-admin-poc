@@ -12,21 +12,27 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"start": "node build",
-		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
-		"test:e2e": "playwright test"
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc --project tsconfig.bun.json",
+		"test:e2e": "playwright test",
+		"backend": "bun backend/server.ts",
+		"check:client-bundle": "bun scripts/check-client-bundle.ts"
 	},
 	"dependencies": {
 		"@svelte-admin/core": "workspace:*",
-		"@svelte-admin/theme-shadcn": "workspace:*"
+		"@svelte-admin/theme-shadcn": "workspace:*",
+		"zod": "catalog:"
 	},
 	"devDependencies": {
 		"@playwright/test": "catalog:",
 		"@sveltejs/adapter-node": "catalog:",
 		"@sveltejs/kit": "catalog:",
 		"@sveltejs/vite-plugin-svelte": "catalog:",
+		"@tailwindcss/vite": "catalog:",
+		"@types/bun": "catalog:",
 		"@types/node": "catalog:",
 		"svelte": "catalog:",
 		"svelte-check": "catalog:",
+		"tailwindcss": "catalog:",
 		"typescript": "catalog:",
 		"vite": "catalog:"
 	}
