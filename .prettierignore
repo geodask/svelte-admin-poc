@@ -1,0 +1,11 @@
+# Package managers
+bun.lock
+
+# Generated
+.svelte-kit
+build
+test-results
+playwright-report
+
+# The PoC-era agent skill is vendored as is
+.agent

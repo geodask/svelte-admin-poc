@@ -1,0 +1,35 @@
+{
+	"name": "svelte-admin",
+	"private": true,
+	"type": "module",
+	"packageManager": "bun@1.4.4",
+	"workspaces": [
+		"packages/*",
+		"apps/*"
+	],
+	"engines": {
+		"node": ">=22.17.0 <23"
+	},
+	"scripts": {
+		"dev": "bun run --filter @svelte-admin/demo dev",
+		"build": "bun run --filter @svelte-admin/demo build",
+		"check": "bun run --filter '*' check",
+		"lint": "eslint . && prettier --check .",
+		"format": "prettier --write .",
+		"test:unit": "bun run --filter @svelte-admin/core test",
+		"test:e2e": "bun run --filter @svelte-admin/demo test:e2e"
+	},
+	"devDependencies": {
+		"@eslint/js": "10.0.1",
+		"@types/node": "22.20.5",
+		"eslint": "10.14.0",
+		"eslint-config-prettier": "10.1.8",
+		"eslint-plugin-svelte": "3.24.1",
+		"globals": "17.14.0",
+		"prettier": "3.10.1",
+		"prettier-plugin-svelte": "4.1.1",
+		"svelte": "5.57.3",
+		"typescript": "6.0.3",
+		"typescript-eslint": "8.72.2"
+	}
+}
