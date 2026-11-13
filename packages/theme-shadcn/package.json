@@ -14,14 +14,14 @@
 		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
 	},
 	"peerDependencies": {
-		"svelte": "5.57.3"
+		"svelte": "catalog:"
 	},
 	"dependencies": {
 		"@svelte-admin/core": "workspace:*"
 	},
 	"devDependencies": {
-		"svelte": "5.57.3",
-		"svelte-check": "4.7.8",
-		"typescript": "6.0.3"
+		"svelte": "catalog:",
+		"svelte-check": "catalog:",
+		"typescript": "catalog:"
 	}
 }

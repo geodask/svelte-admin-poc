@@ -14,7 +14,7 @@ The original proof of concept is preserved at the `poc-final` tag. The rebuild c
 | `@svelte-admin/theme-shadcn` | `packages/theme-shadcn` | The shadcn Theme. Depends on the core.                                                     |
 | `@svelte-admin/demo`         | `apps/demo`             | The demo app (`adapter-node`). The admin lives under `/admin`.                             |
 
-Package names are provisional. Every dependency is pinned to an exact version, so each upgrade is a deliberate change.
+Package names are provisional. Every dependency is pinned to an exact version in the `catalog` of the root `package.json`, and members refer to it with `catalog:`, so each upgrade is one deliberate change in one place.
 
 ## Getting started
 

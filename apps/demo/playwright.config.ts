@@ -5,7 +5,6 @@ const port = 4173;
 export default defineConfig({
 	testDir: 'e2e',
 	forbidOnly: !!process.env.CI,
-	retries: process.env.CI ? 1 : 0,
 	reporter: process.env.CI ? [['github'], ['list']] : 'list',
 	use: {
 		baseURL: `http://localhost:${port}`,
@@ -26,7 +25,7 @@ export default defineConfig({
 	],
 	webServer: {
 		// A production build served by adapter-node, not the dev server.
-		command: 'bun run build && node build',
+		command: 'bun run build && bun run start',
 		port,
 		env: { PORT: String(port) },
 		reuseExistingServer: !process.env.CI
