@@ -33,8 +33,13 @@ export function serveResource<R extends Resource>(
 	const idSchema = resource.schema.shape.id as z.ZodType<IdOf<R>, IdOf<R>>;
 
 	const getOne = query(idSchema, async (id): Promise<RecordOf<R>> => {
-		const record = await provider.getOne(providerContext(), id);
-		return resource.schema.parse(record) as RecordOf<R>;
+		const record = resource.schema.parse(await provider.getOne(providerContext(), id));
+		// Never serve a different record than the one asked for, whatever the backend did with
+		// the id: like a record that doesn't match the schema, that is an unexpected error.
+		if (record.id !== id) {
+			throw new Error(`The Provider for ${resource.name} returned another record for an id`);
+		}
+		return record as RecordOf<R>;
 	});
 
 	return { getList, getOne };

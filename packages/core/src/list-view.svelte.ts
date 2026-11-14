@@ -4,6 +4,7 @@ import { untrack } from 'svelte';
 import { hasPathSegment, idPathSegment } from './ids.ts';
 import type { ListParams } from './provider.ts';
 import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
+import { TITLE_KEYS } from './record-title.ts';
 import type { ResourceRemote } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -13,14 +14,11 @@ const PER_PAGE_OPTIONS: readonly number[] = [10, 25, 50, 100];
 /** How long typing must pause before a search is written to the URL. */
 const SEARCH_DEBOUNCE_MS = 300;
 
-/** The Fields that name a record, in the order a list row's link prefers them. */
-const LINK_KEYS = ['name', 'title', 'id'];
-
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
- * the hrefs that change page and page size, each record's href, and the search box's state. The Theme's list View
- * is built on it, and so can a replaced View. It takes the Resource as an argument, not from
- * context.
+ * the hrefs that change page and page size, each record's href, and the search box's state.
+ * The Theme's list View is built on it, and so can a replaced View. It takes the Resource as an
+ * argument, not from context.
  *
  * The URL holds the list params. A bad value or an unknown param in it is dropped, and with
  * JavaScript the URL is rewritten in place (`replace`, so no history entry is added). On a
@@ -44,8 +42,10 @@ export function createListView<R extends Resource>(
 	const url = $derived(new URL(page.url.href));
 	const params = $derived(readListParams(url, resource));
 	const fields = resource.fields.filter((field) => field.list);
+	// The Fields that name a record (as the Record title's rule tries them), then the id.
 	const linkField =
-		LINK_KEYS.map((key) => fields.find((field) => field.key === key)).find(Boolean) ?? fields[0];
+		[...TITLE_KEYS, 'id'].map((key) => fields.find((field) => field.key === key)).find(Boolean) ??
+		fields[0];
 
 	$effect(() => {
 		const rewrite = listUrlRewrite(url, resource);

@@ -2,16 +2,13 @@ import type { z } from 'zod';
 import type { IdOf, Resource } from './resource.ts';
 
 /**
- * Ids that a URL never keeps as one path segment: an empty one collapses into its parent's
- * path, and URL parsers resolve `.` and `..` (escaped or not) as dot segments.
+ * Whether `idPathSegment` can write this id, i.e. whether a record with it can have a URL. No
+ * URL keeps an empty id as one segment (it collapses into its parent's path), nor `.` or `..`,
+ * which URL parsers resolve as dot segments, escaped or not.
  */
-function isDotOrEmpty(id: string): boolean {
-	return id === '' || id === '.' || id === '..';
-}
-
-/** Whether `idPathSegment` can write this id, i.e. whether a record with it can have a URL. */
 export function hasPathSegment(id: string | number): boolean {
-	return !isDotOrEmpty(String(id));
+	const text = String(id);
+	return text !== '' && text !== '.' && text !== '..';
 }
 
 /**
@@ -21,11 +18,10 @@ export function hasPathSegment(id: string | number): boolean {
  * different record. An id that no URL keeps as one segment (empty, `.` or `..`) is an error.
  */
 export function idPathSegment(id: string | number): string {
-	const text = String(id);
-	if (!hasPathSegment(text)) {
-		throw new Error(`The id ${JSON.stringify(text)} cannot be one URL path segment`);
+	if (!hasPathSegment(id)) {
+		throw new Error(`The id ${JSON.stringify(String(id))} cannot be one URL path segment`);
 	}
-	return encodeURIComponent(text);
+	return encodeURIComponent(String(id));
 }
 
 /**
@@ -35,7 +31,7 @@ export function idPathSegment(id: string | number): string {
  * not `01`, `1.0` or `1e0`), so each id has exactly one URL.
  */
 export function idFromParam<R extends Resource>(resource: R, param: string): IdOf<R> | undefined {
-	if (isDotOrEmpty(param)) return undefined;
+	if (!hasPathSegment(param)) return undefined;
 	const schema = resource.schema.shape.id as z.ZodType;
 
 	const asString = schema.safeParse(param);

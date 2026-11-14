@@ -1,7 +1,7 @@
 import type { RecordOf, Resource } from './resource.ts';
 
-/** The Fields that name a record, in the order the default rule tries them. */
-const TITLE_KEYS = ['name', 'title'] as const;
+/** The Fields that name a record, in the order the default rule tries them before the id. */
+export const TITLE_KEYS: readonly string[] = ['name', 'title'];
 
 /**
  * The Record title: the text that names one record, e.g. as the detail View's heading. The

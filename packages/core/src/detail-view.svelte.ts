@@ -23,11 +23,10 @@ export function createDetailView<R extends Resource>(
 	id: IdOf<R>
 ) {
 	// The detail View sits one segment under its list, so the list's path carries the base path.
-	const listHref = $derived(page.url.pathname.replace(/\/[^/]*$/, ''));
+	const listViewHref = $derived(page.url.pathname.replace(/\/[^/]*$/, ''));
 
 	return {
 		resource,
-		id,
 		/** The Fields the detail View shows: every Field that isn't hidden, in schema order. */
 		fields: resource.fields.filter((field) => field.detail),
 		/** The record. Await it: `$derived(await view.query)`. */
@@ -39,8 +38,8 @@ export function createDetailView<R extends Resource>(
 			return recordTitle(resource, record);
 		},
 		/** The href of the Resource's list View. */
-		get listHref(): string {
-			return listHref;
+		get listViewHref(): string {
+			return listViewHref;
 		}
 	};
 }

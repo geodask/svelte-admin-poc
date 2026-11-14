@@ -27,7 +27,7 @@
 
 <div class="flex flex-col gap-6">
 	<div class="flex flex-col gap-1">
-		<a href={view.listHref} class="w-fit text-sm text-muted-foreground hover:text-foreground">
+		<a href={view.listViewHref} class="w-fit text-sm text-muted-foreground hover:text-foreground">
 			<span aria-hidden="true">←</span>
 			{resource.label}
 		</a>

@@ -1,24 +1,17 @@
 <!--
 	A Field's value on the detail View, shown by the Field's Kind. Scalars look as they do in a
-	list View cell (FieldCell), but a list shows every item and an object shows as nested
-	label-value pairs, one group per object for an array of objects. It is a Theme part: a
-	replaced detail View will render it to match the rest of the admin (exported in M1.10).
+	list View cell, but a list shows every item, an object shows as nested label-value pairs (one
+	group per object for an array of objects), and an empty value shows as a dash. It is a Theme
+	part: a replaced detail View will render it to match the rest of the admin (exported in M1.10).
 -->
 <script lang="ts">
 	import type { Field } from '@svelte-admin/core';
 	import FieldValue from './FieldValue.svelte';
-	import { Badge } from './components/ui/badge/index.ts';
-	import {
-		formatBoolean,
-		formatDate,
-		formatNumber,
-		formatScalar,
-		formatUnknown
-	} from './format.ts';
+	import ScalarValue from './ScalarValue.svelte';
+	import { formatScalar } from './format.ts';
 
 	let { field, value }: { field: Field; value: unknown } = $props();
 
-	const date = $derived(field.kind === 'date' ? formatDate(value) : undefined);
 	const nested = $derived(field.fields?.filter((f) => f.detail));
 	const isObject = (v: unknown): v is Record<string, unknown> =>
 		typeof v === 'object' && v !== null && !Array.isArray(v) && !(v instanceof Date);
@@ -35,16 +28,6 @@
 
 {#if value === null || value === undefined || (Array.isArray(value) && value.length === 0)}
 	<span class="text-muted-foreground">—</span>
-{:else if field.kind === 'text' && typeof value === 'string'}
-	<span class="whitespace-pre-line">{value}</span>
-{:else if field.kind === 'number' && typeof value === 'number'}
-	<span class="tabular-nums">{formatNumber(value)}</span>
-{:else if field.kind === 'boolean' && typeof value === 'boolean'}
-	{formatBoolean(value)}
-{:else if date !== undefined}
-	<time datetime={value instanceof Date ? value.toISOString() : String(value)}>{date}</time>
-{:else if field.kind === 'enum'}
-	<Badge>{formatScalar(value)}</Badge>
 {:else if field.kind === 'list' && Array.isArray(value)}
 	{value.map(formatScalar).join(', ')}
 {:else if nested && isObject(value)}
@@ -56,6 +39,5 @@
 		{/each}
 	</ol>
 {:else}
-	<!-- Unknown, or a value that doesn't fit its Kind: shown as is, muted. -->
-	<span class="text-muted-foreground">{formatUnknown(value)}</span>
+	<ScalarValue {field} {value} />
 {/if}
