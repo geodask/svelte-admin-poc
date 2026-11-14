@@ -4,16 +4,19 @@ import { getRequestEvent, query } from '$app/server';
 import { z } from 'zod';
 import { listParamsSchema } from './list-params.ts';
 import type { ListResult, Provider, ProviderContext } from './provider.ts';
-import type { RecordOf, Resource } from './resource.ts';
+import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /**
  * Build a Resource's remote functions from its Provider. The app's `.remote.ts` re-exports
  * them in one line and exports nothing else:
  *
  * @example
- * export const { getList } = serveResource(recipes, backend.for(recipes));
+ * export const { getList, getOne } = serveResource(recipes, backend.for(recipes));
  */
-export function serveResource<R extends Resource>(resource: R, provider: Provider<RecordOf<R>>) {
+export function serveResource<R extends Resource>(
+	resource: R,
+	provider: Provider<RecordOf<R>, IdOf<R>>
+) {
 	const records = z.array(resource.schema);
 
 	const getList = query(
@@ -26,7 +29,15 @@ export function serveResource<R extends Resource>(resource: R, provider: Provide
 		}
 	);
 
-	return { getList };
+	// The id schema never coerces, so `getOne('1')` is invalid input for a number id, not record 1.
+	const idSchema = resource.schema.shape.id as z.ZodType<IdOf<R>, IdOf<R>>;
+
+	const getOne = query(idSchema, async (id): Promise<RecordOf<R>> => {
+		const record = await provider.getOne(providerContext(), id);
+		return resource.schema.parse(record) as RecordOf<R>;
+	});
+
+	return { getList, getOne };
 }
 
 function providerContext(): ProviderContext {

@@ -6,6 +6,8 @@
 //                                     posts, which stand in for a backend that can't count. q
 //                                     searches recipes by their text Fields; posts can't be
 //                                     searched, and q for them is a 400
+//   GET  /{resource}/{id}             one record, or a 404. The id is one path segment, decoded,
+//                                     and matched against each record's id written as text
 //   POST /reset                       restore the seed data (e2e tests call it first)
 //   GET  /requests                    every resource request since the server started, so a test
 //                                     can check that the Provider was or wasn't called. Reset
@@ -55,6 +57,15 @@ function positiveInt(url: URL, key: string, fallback: number): number | null {
 	return Number.isInteger(value) && value >= 1 ? value : null;
 }
 
+/** A path segment, decoded (`..%2Fusers%2F1` is the id `../users/1`), or `undefined` if malformed. */
+function decodeSegment(segment: string): string | undefined {
+	try {
+		return decodeURIComponent(segment);
+	} catch {
+		return undefined;
+	}
+}
+
 const server = Bun.serve({
 	port: Number(process.env.PORT ?? BACKEND_PORT),
 	fetch(request) {
@@ -91,6 +102,12 @@ const server = Bun.serve({
 			const data = records.slice(start, start + perPage);
 			if (uncounted.has(name)) return json({ data, hasNextPage: start + perPage < records.length });
 			return json({ data, total: records.length });
+		}
+
+		if (request.method === 'GET' && segments.length === 2 && Object.hasOwn(db, segments[0])) {
+			const id = decodeSegment(segments[1]);
+			const record = db[segments[0]].find((r) => String(r.id) === id);
+			if (record) return json(record);
 		}
 
 		return json({ message: 'Not found' }, 404);

@@ -1,7 +1,8 @@
 <!--
 	The list View: one page of a Resource's records in a table, with a pager. It takes the
 	Resource and its remote functions as props, so a route passes them from admin.ts. It shows
-	each Field the Resource puts on the list, in schema order, by its Kind. The page, page size
+	each Field the Resource puts on the list, in schema order, by its Kind, and each row links to
+	its record's detail View. The page, page size
 	and search live in the URL, through the core's headless `createListView`.
 -->
 <script lang="ts">
@@ -37,7 +38,13 @@
 			id: field.key,
 			accessorFn: (row) => row[field.key],
 			header: field.label,
-			cell: ({ getValue }) => renderComponent(FieldCell, { field, value: getValue() })
+			cell: ({ getValue, row }) =>
+				renderComponent(FieldCell, {
+					field,
+					value: getValue(),
+					// One cell per row links to the record's detail View.
+					href: field === view.linkField ? view.recordHref(row.original) : undefined
+				})
 		}))
 	);
 
