@@ -1,5 +1,5 @@
 // The demo backend's seed data. Each reset restores exactly these records, so tests are
-// deterministic. There are more recipes than one default page (25) holds.
+// deterministic. Recipes and posts each fill several default pages (25 records each).
 //
 // Recipes carry a Field of every Kind, so the e2e tests can check how each one is shown.
 // The values of the later Fields are derived from the row's position.
@@ -58,7 +58,32 @@ const rows: [string, string, Recipe['difficulty'], number, number, string[]][] =
 	['Spanish Paella', 'Spanish', 'Hard', 30, 6, ['Rice', 'Seafood']],
 	['Turkish Kebabs', 'Turkish', 'Medium', 20, 4, ['Kebab', 'Lamb']],
 	['Hawaiian Poke Bowl', 'Hawaiian', 'Easy', 15, 2, ['Bowl', 'Seafood']],
-	['Vietnamese Pho', 'Vietnamese', 'Hard', 30, 4, ['Soup', 'Noodles']]
+	['Vietnamese Pho', 'Vietnamese', 'Hard', 30, 4, ['Soup', 'Noodles']],
+	['French Onion Soup', 'French', 'Medium', 25, 4, ['Soup', 'Vegetarian']],
+	['Coq au Vin', 'French', 'Hard', 30, 6, ['Stew', 'Chicken']],
+	['Ratatouille', 'French', 'Medium', 25, 4, ['Stew', 'Vegetarian']],
+	['Fish and Chips', 'British', 'Medium', 20, 4, ['Fried', 'Seafood']],
+	["Shepherd's Pie", 'British', 'Medium', 30, 6, ['Casserole', 'Lamb']],
+	['Pierogi', 'Polish', 'Hard', 45, 6, ['Dumplings', 'Vegetarian']],
+	['Hungarian Goulash', 'Hungarian', 'Medium', 25, 6, ['Stew', 'Beef']],
+	['Swedish Meatballs', 'Swedish', 'Medium', 25, 4, ['Meatballs', 'Beef']],
+	['German Schnitzel', 'German', 'Medium', 20, 4, ['Fried', 'Pork']],
+	['Portuguese Custard Tarts', 'Portuguese', 'Hard', 40, 12, ['Dessert', 'Baking']],
+	['Greek Salad', 'Greek', 'Easy', 10, 4, ['Salad', 'Vegetarian']],
+	['Shakshuka', 'Israeli', 'Easy', 15, 4, ['Breakfast', 'Vegetarian']],
+	['Hummus', 'Lebanese', 'Easy', 10, 6, ['Dip', 'Vegan']],
+	['Ethiopian Doro Wat', 'Ethiopian', 'Hard', 40, 6, ['Stew', 'Chicken']],
+	['Jollof Rice', 'Nigerian', 'Medium', 20, 6, ['Rice', 'Vegetarian']],
+	['Bobotie', 'South African', 'Medium', 25, 6, ['Casserole', 'Beef']],
+	['Peruvian Ceviche', 'Peruvian', 'Easy', 20, 4, ['Seafood', 'Raw']],
+	['Argentinian Empanadas', 'Argentinian', 'Medium', 40, 12, ['Pastry', 'Beef']],
+	['Chicken Tacos', 'Mexican', 'Easy', 15, 4, ['Tacos', 'Chicken']],
+	['Guacamole', 'Mexican', 'Easy', 10, 4, ['Dip', 'Vegan']],
+	['Clam Chowder', 'American', 'Medium', 20, 6, ['Soup', 'Seafood']],
+	['Pancakes', 'American', 'Easy', 10, 4, ['Breakfast', 'Vegetarian']],
+	['Pad Thai', 'Thai', 'Medium', 20, 2, ['Noodles', 'Shrimp']],
+	['Kung Pao Chicken', 'Chinese', 'Medium', 15, 4, ['Stir-fry', 'Chicken']],
+	['Mapo Tofu', 'Chinese', 'Medium', 15, 4, ['Tofu', 'Spicy']]
 ];
 
 export const recipes: Recipe[] = rows.map(
@@ -83,3 +108,45 @@ export const recipes: Recipe[] = rows.map(
 		internalNotes: `Imported batch ${Math.floor(index / 10) + 1}`
 	})
 );
+
+// Posts: the backend can't count them, so it answers with `hasNextPage` instead of `total`.
+export type Post = {
+	id: number;
+	title: string;
+	userId: number;
+	status: 'draft' | 'published';
+	tags: string[];
+	body: string;
+};
+
+const topics = [
+	'Weeknight dinners',
+	'Baking bread',
+	'Knife skills',
+	'Seasonal vegetables',
+	'Spice blends',
+	'Meal prep',
+	'Fermentation',
+	'Grilling'
+];
+const angles = [
+	'A beginner guide to',
+	'Ten tips for',
+	'What I learned from',
+	'The science of',
+	'Myths about',
+	'A week of'
+];
+
+export const posts: Post[] = Array.from({ length: 60 }, (_, index) => {
+	const topic = topics[index % topics.length];
+	const angle = angles[index % angles.length];
+	return {
+		id: index + 1,
+		title: `${angle} ${topic.toLowerCase()} (part ${Math.floor(index / topics.length) + 1})`,
+		userId: (index % 5) + 1,
+		status: index % 4 === 3 ? 'draft' : 'published',
+		tags: [topic, index % 2 === 0 ? 'Guide' : 'Story'],
+		body: `Notes on ${topic.toLowerCase()}.`
+	};
+});

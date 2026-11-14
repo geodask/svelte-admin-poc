@@ -8,6 +8,11 @@
 			"types": "./src/index.ts",
 			"default": "./src/index.ts"
 		},
+		"./views": {
+			"types": "./src/views.ts",
+			"svelte": "./src/views.ts",
+			"default": "./src/views.ts"
+		},
 		"./server": {
 			"types": "./src/server.ts",
 			"default": "./src/server.ts"
