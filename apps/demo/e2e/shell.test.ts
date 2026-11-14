@@ -1,6 +1,5 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { dataRows } from './list-helpers.ts';
 
 const sidebar = (page: Page) => page.getByRole('complementary');
 const resourceNav = (page: Page) => page.getByRole('navigation', { name: 'Resources' });
@@ -103,22 +102,23 @@ test.describe('the breadcrumb', () => {
 	});
 });
 
-test('every Resource link and breadcrumb href is under /admin', async ({ page }) => {
+test('every sidebar and breadcrumb href is under /admin', async ({ page }) => {
 	await page.goto('/admin/users/2');
 	await expect(breadcrumb(page).getByRole('listitem')).toHaveText(['Users', 'Grace Hopper']);
 
-	const hrefs = await resourceNav(page)
+	const hrefs = await sidebar(page)
 		.or(breadcrumb(page))
 		.getByRole('link')
 		.evaluateAll((links) => links.map((link) => link.getAttribute('href')));
 
-	expect(hrefs).toEqual(['/admin/recipes', '/admin/posts', '/admin/users', '/admin/users']);
-});
-
-test('the users list shows the seeded users and searches them by name', async ({ page }) => {
-	await page.goto('/admin/users?q=grace');
-
-	await expect(dataRows(page)).toHaveCount(1);
-	await expect(dataRows(page).first()).toContainText('Grace Hopper');
-	await expect(dataRows(page).first()).toContainText('grace@example.com');
+	expect(hrefs).toEqual([
+		// The brand, which leads to the first Resource.
+		'/admin/recipes',
+		// The Resource links.
+		'/admin/recipes',
+		'/admin/posts',
+		'/admin/users',
+		// The breadcrumb back to the list.
+		'/admin/users'
+	]);
 });

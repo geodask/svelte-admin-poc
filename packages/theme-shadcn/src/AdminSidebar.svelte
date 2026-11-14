@@ -1,5 +1,5 @@
 <!--
-	The shell's sidebar: the app's brand, a link to each Resource's list View under its group with
+	The shell's sidebar: the app's brand, linking to the admin's first Resource, a link to each Resource's list View under its group with
 	its icon, and the app's user menu. The current Resource's link stays active on its detail View.
 -->
 <script lang="ts">
@@ -16,7 +16,14 @@
 
 <Sidebar.Root>
 	{#if brand}
-		<Sidebar.Header>{@render brand()}</Sidebar.Header>
+		<Sidebar.Header>
+			<a
+				href={shell.homeHref}
+				class="flex items-center gap-2 rounded-md p-1.5 text-base font-semibold hover:bg-sidebar-accent"
+			>
+				{@render brand()}
+			</a>
+		</Sidebar.Header>
 	{/if}
 
 	<Sidebar.Content>

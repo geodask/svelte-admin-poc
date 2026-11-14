@@ -18,6 +18,7 @@ export { listHref, listUrlRewrite, readListParams } from './list-url.ts';
 export {
 	defineAdmin,
 	type AdminEntry,
+	type AdminLocation,
 	type ResourceNameOf,
 	type SidebarGroup,
 	type SidebarItem

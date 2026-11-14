@@ -77,8 +77,6 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 	return {
 		basePath,
 		resources,
-		/** The href of a Resource's list View, under the base path. */
-		listHref,
 		/**
 		 * The sidebar: the Resources grouped by their group. Groups appear in the order their
 		 * first Resource appears in admin.ts, and keep admin.ts order inside. Resources without a
@@ -105,7 +103,7 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 		 * read as the Resource's id, or `undefined` when there is none or it names no id. A path
 		 * outside the admin's Resources finds nothing.
 		 */
-		locate(pathname: string): Location<M> | undefined {
+		locate(pathname: string): AdminLocation<M> | undefined {
 			if (!pathname.startsWith(`${basePath}/`)) return undefined;
 			const [name, param] = pathname.slice(basePath.length + 1).split('/');
 			if (!isName(name)) return undefined;
@@ -117,13 +115,13 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 				remote: entry.remote,
 				listHref: listHref(name),
 				id: decoded === undefined ? undefined : idFromParam(entry.resource, decoded)
-			} as Location<M>;
+			} as AdminLocation<M>;
 		}
 	};
 }
 
 /** Where a path is in the admin: see `locate`. One member per Resource, so `id` stays typed. */
-export type Location<M> = {
+export type AdminLocation<M> = {
 	[K in keyof M & string]: M[K] extends AdminEntry<infer R>
 		? {
 				name: K;

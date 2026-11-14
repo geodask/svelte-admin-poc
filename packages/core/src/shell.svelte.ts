@@ -1,18 +1,13 @@
 import { page } from '$app/state';
-import type { AdminEntry, SidebarGroup, SidebarItem } from './admin.ts';
-import type { Resource } from './resource.ts';
+import type { AdminEntry, AdminLocation, SidebarGroup, SidebarItem } from './admin.ts';
 
-/** Where the current page is in the admin: what `admin.locate` finds for its path. */
-export type ShellLocation = {
-	name: string;
-	resource: Resource;
-	remote: AdminEntry['remote'];
-	listHref: string;
-	id: string | number | undefined;
-};
+/** Where the current page is in the admin, for any admin: what `admin.locate` finds. */
+export type ShellLocation = AdminLocation<Record<string, AdminEntry>>;
 
 /** What the shell needs from `admin.ts`: the admin `defineAdmin` returns. */
 export type ShellAdmin = {
+	basePath: string;
+	homeHref: string | undefined;
 	sidebar: readonly SidebarGroup[];
 	locate(pathname: string): ShellLocation | undefined;
 };
@@ -40,6 +35,8 @@ export function createShell(admin: ShellAdmin) {
 	);
 
 	return {
+		/** Where the brand links to: the admin's index target, the first Resource's list. */
+		homeHref: admin.homeHref ?? admin.basePath,
 		/** The sidebar's groups, in order, each link marked active or not. */
 		get groups() {
 			return groups;

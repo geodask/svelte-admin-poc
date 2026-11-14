@@ -19,7 +19,7 @@
 	}: {
 		/** The admin from admin.ts. */
 		admin: ShellAdmin;
-		/** The app's brand, at the top of the sidebar. */
+		/** The app's brand, at the top of the sidebar, inside a link to the admin's first Resource. */
 		brand?: Snippet;
 		/** The app's user menu, at the foot of the sidebar. */
 		userMenu?: Snippet;

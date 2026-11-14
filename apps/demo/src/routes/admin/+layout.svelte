@@ -1,6 +1,5 @@
 <script lang="ts">
-	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
-	import { resolve } from '$app/paths';
+	import PanelsTopLeftIcon from '@lucide/svelte/icons/panels-top-left';
 	import { AdminShell } from '@svelte-admin/theme-shadcn';
 	import { admin } from '#lib/admin.ts';
 
@@ -8,21 +7,20 @@
 
 	// The demo has no sign-in, so its user menu shows a fixed demo user.
 	const user = { name: 'Ada Lovelace', email: 'ada@example.com' };
+	const initials = user.name
+		.split(' ')
+		.map((word) => word[0])
+		.join('');
 </script>
 
 <AdminShell {admin}>
 	{#snippet brand()}
-		<a
-			href={resolve('/admin')}
-			class="flex items-center gap-2 rounded-md p-1.5 text-base font-semibold hover:bg-sidebar-accent"
+		<span
+			class="flex size-7 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground"
 		>
-			<span
-				class="flex size-7 items-center justify-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground"
-			>
-				<LayoutDashboardIcon class="size-4" />
-			</span>
-			Svelte Admin Demo
-		</a>
+			<PanelsTopLeftIcon class="size-4" />
+		</span>
+		Svelte Admin Demo
 	{/snippet}
 
 	{#snippet userMenu()}
@@ -35,7 +33,7 @@
 					aria-hidden="true"
 					class="flex size-8 items-center justify-center rounded-lg bg-sidebar-accent font-medium"
 				>
-					AL
+					{initials}
 				</span>
 				<span class="grid flex-1 leading-tight">
 					<span class="truncate font-medium">{user.name}</span>

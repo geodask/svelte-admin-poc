@@ -49,6 +49,6 @@ Each Resource costs about 4 lines of wiring in the demo:
 
 `defineResource` also takes an optional sidebar `group` and `icon`. The icon is a lazy import of a Lucide icon, such as `icon: () => import('@lucide/svelte/icons/chef-hat')`: SvelteKit loads `src/params.ts`, and so every Resource module, in plain Node at build time, where a `.svelte` file can't load.
 
-The admin layout renders the Theme's `AdminShell` with the admin from `admin.ts` and the app's own `brand` and `userMenu` snippets. The `/admin` index redirects to the first Resource's list.
+The admin layout renders the Theme's `AdminShell` with the admin from `admin.ts` and the app's own `brand` and `userMenu` snippets (the shell wraps the brand in a link to the first Resource). The `/admin` index redirects to the first Resource's list.
 
 `@svelte-admin/core` is the browser-safe entry. `serveResource` lives in `@svelte-admin/core/server` and the bundled REST Provider in `@svelte-admin/core/rest`; import those only from `.remote.ts` files and server-only modules.
