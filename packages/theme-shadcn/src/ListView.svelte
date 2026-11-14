@@ -1,12 +1,15 @@
 <!--
-	The list View: the first page of a Resource's records in a table. It takes the Resource and
-	its remote functions as props, so a route (or a replaced View) passes them from admin.ts.
-	It shows each Field the Resource puts on the list, in schema order, by its Kind.
+	The list View: one page of a Resource's records in a table, with a pager. It takes the
+	Resource and its remote functions as props, so a route passes them from admin.ts. It shows
+	each Field the Resource puts on the list, in schema order, by its Kind. The page and page
+	size live in the URL, through the core's headless `createListView`.
 -->
 <script lang="ts">
-	import { DEFAULT_PER_PAGE, type Resource, type ResourceRemote } from '@svelte-admin/core';
+	import type { Resource, ResourceRemote } from '@svelte-admin/core';
+	import { createListView } from '@svelte-admin/core/views';
 	import { getCoreRowModel, type ColumnDef } from '@tanstack/table-core';
 	import FieldCell from './FieldCell.svelte';
+	import Pager from './Pager.svelte';
 	import {
 		createSvelteTable,
 		FlexRender,
@@ -18,18 +21,18 @@
 
 	let { resource, remote }: { resource: Resource; remote: ResourceRemote } = $props();
 
-	const result = $derived(await remote.getList({ page: 1, perPage: DEFAULT_PER_PAGE }));
+	// Derived, so the list View follows the Resource when the route switches to another one.
+	const view = $derived(createListView(resource, remote));
+	const result = $derived(await view.query);
 
 	const columns = $derived<ColumnDef<Row>[]>(
-		resource.fields
-			.filter((field) => field.list)
-			.map((field) => ({
-				// An accessor function, not `accessorKey`, which would read a dotted key as a path.
-				id: field.key,
-				accessorFn: (row) => row[field.key],
-				header: field.label,
-				cell: ({ getValue }) => renderComponent(FieldCell, { field, value: getValue() })
-			}))
+		view.fields.map((field) => ({
+			// An accessor function, not `accessorKey`, which would read a dotted key as a path.
+			id: field.key,
+			accessorFn: (row) => row[field.key],
+			header: field.label,
+			cell: ({ getValue }) => renderComponent(FieldCell, { field, value: getValue() })
+		}))
 	);
 
 	const table = createSvelteTable<Row>({
@@ -89,4 +92,6 @@
 			</Table.Body>
 		</Table.Root>
 	</div>
+
+	<Pager {view} {result} />
 </div>

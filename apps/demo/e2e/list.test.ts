@@ -14,7 +14,7 @@ test.describe('the recipes list View', () => {
 		await expect(page.getByRole('heading', { level: 1, name: 'Recipes' })).toBeVisible();
 
 		const rows = page.getByRole('table').getByRole('row');
-		// One header row, then the first page: recipes 1 to 25 of 30.
+		// One header row, then the first page: recipes 1 to 25 of 55.
 		await expect(rows).toHaveCount(1 + 25);
 		await expect(rows.nth(1)).toContainText('Classic Margherita Pizza');
 		await expect(rows.nth(1)).toContainText('Pizza, Vegetarian');
