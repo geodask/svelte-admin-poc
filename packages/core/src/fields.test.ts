@@ -224,4 +224,33 @@ describe("a Resource's Fields", () => {
 		expect(required(z.string().optional().nullable())).toBe(false);
 		expect(required(z.string().nullable().default(null))).toBe(false);
 	});
+
+	it("describes an object Field's own Fields, for the detail View's nested label-value pairs", () => {
+		const nutrition = firstField({
+			nutrition: z
+				.object({
+					proteinGrams: field(z.number(), { label: 'Protein (g)' }),
+					measuredAt: z.iso.date(),
+					source: field(z.string(), { hidden: true })
+				})
+				.optional()
+		});
+
+		expect(nutrition.fields?.map((f) => [f.key, f.label, f.kind, f.detail])).toEqual([
+			['proteinGrams', 'Protein (g)', 'number', true],
+			['measuredAt', 'Measured at', 'date', true],
+			['source', 'Source', 'text', false]
+		]);
+	});
+
+	it('describes the Fields of each object in an array of objects', () => {
+		const steps = firstField({ steps: z.array(z.object({ order: z.number(), text: z.string() })) });
+
+		expect(steps.fields?.map((f) => f.key)).toEqual(['order', 'text']);
+	});
+
+	it('gives no nested Fields to a Field that is not an object', () => {
+		expect(firstField({ name: z.string() }).fields).toBeUndefined();
+		expect(firstField({ tags: z.array(z.string()) }).fields).toBeUndefined();
+	});
 });

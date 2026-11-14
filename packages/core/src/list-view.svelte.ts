@@ -1,10 +1,12 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { untrack } from 'svelte';
+import { hasPathSegment, idPathSegment } from './ids.ts';
 import type { ListParams } from './provider.ts';
 import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
+import { TITLE_KEYS } from './record-title.ts';
 import type { ResourceRemote } from './remote.ts';
-import type { RecordOf, Resource } from './resource.ts';
+import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /** The page sizes a list View offers. Any size from 1 to the cap still works from the URL. */
 const PER_PAGE_OPTIONS: readonly number[] = [10, 25, 50, 100];
@@ -14,9 +16,9 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
- * the hrefs that change page and page size, and the search box's state. The Theme's list View
- * is built on it, and so can a replaced View. It takes the Resource as an argument, not from
- * context.
+ * the hrefs that change page and page size, each record's href, and the search box's state.
+ * The Theme's list View is built on it, and so can a replaced View. It takes the Resource as an
+ * argument, not from context.
  *
  * The URL holds the list params. A bad value or an unknown param in it is dropped, and with
  * JavaScript the URL is rewritten in place (`replace`, so no history entry is added). On a
@@ -32,7 +34,7 @@ const SEARCH_DEBOUNCE_MS = 300;
  */
 export function createListView<R extends Resource>(
 	resource: R,
-	remote: ResourceRemote<RecordOf<R>>
+	remote: ResourceRemote<RecordOf<R>, IdOf<R>>
 ) {
 	// Kit 3 types `page.url` as a read-only URL, so the helpers take a plain copy. Nothing mutates
 	// it: a new copy is derived whenever `page.url` changes.
@@ -40,6 +42,10 @@ export function createListView<R extends Resource>(
 	const url = $derived(new URL(page.url.href));
 	const params = $derived(readListParams(url, resource));
 	const fields = resource.fields.filter((field) => field.list);
+	// The Fields that name a record (as the Record title's rule tries them), then the id.
+	const linkField =
+		[...TITLE_KEYS, 'id'].map((key) => fields.find((field) => field.key === key)).find(Boolean) ??
+		fields[0];
 
 	$effect(() => {
 		const rewrite = listUrlRewrite(url, resource);
@@ -100,6 +106,20 @@ export function createListView<R extends Resource>(
 		/** The current page of records. Await it: `$derived(await view.query)`. */
 		get query() {
 			return remote.getList(params);
+		},
+		/**
+		 * The Field whose cell links each row to its record's detail View: `name`, else `title`,
+		 * else the id, else the first Field shown, whichever the list shows first.
+		 */
+		linkField,
+		/**
+		 * The href of a record's detail View, under the list's own path, so it carries the admin's
+		 * base path. The id is one path segment. `undefined` for the rare id no URL can hold as one
+		 * segment (empty, `.` or `..`): that record has no detail View link.
+		 */
+		recordHref(record: RecordOf<R>): string | undefined {
+			const id = (record as { id: IdOf<R> }).id;
+			return hasPathSegment(id) ? `${url.pathname}/${idPathSegment(id)}` : undefined;
 		},
 		/** The page sizes to offer, as plain links. */
 		perPageOptions: PER_PAGE_OPTIONS,

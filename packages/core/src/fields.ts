@@ -118,7 +118,19 @@ export type Field = DetectedKind & {
 	list: boolean;
 	/** Whether the detail View shows it: every Field that isn't hidden. */
 	detail: boolean;
+	/**
+	 * For an object Field, the Fields of the object (or of each object in an array of objects),
+	 * so the detail View can show it as nested label-value pairs.
+	 */
+	fields?: readonly Field[];
 };
+
+/** The object schema an object Field holds, directly or as the element of an array. */
+function nestedObject(schema: z.ZodType): z.ZodObject | undefined {
+	const type = unwrap(schema);
+	const object = type instanceof z.ZodArray ? unwrap(type.element as z.ZodType) : type;
+	return object instanceof z.ZodObject ? object : undefined;
+}
 
 /**
  * Describe one Field from its key and schema. Metadata is looked up on the schema and every
@@ -130,6 +142,7 @@ function describeField(key: string, schema: z.ZodType): Field {
 	const meta: FieldMeta = Object.assign({}, ...chain.map((s) => fieldRegistry.get(s)).reverse());
 	const kind = detectKind(schema);
 	const hidden = meta.hidden ?? false;
+	const object = kind.kind === 'object' ? nestedObject(schema) : undefined;
 
 	return {
 		...kind,
@@ -138,7 +151,8 @@ function describeField(key: string, schema: z.ZodType): Field {
 		...(meta.description === undefined ? {} : { description: meta.description }),
 		required: !chain.some(isWrapper),
 		list: !hidden && meta.list !== false && kind.kind !== 'object',
-		detail: !hidden
+		detail: !hidden,
+		...(object === undefined ? {} : { fields: describeFields(object) })
 	};
 }
 

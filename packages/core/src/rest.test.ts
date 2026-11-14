@@ -9,6 +9,12 @@ const recipes = defineResource({
 	schema: z.object({ id: z.number(), name: z.string() })
 });
 
+const users = defineResource({
+	name: 'users',
+	label: 'Users',
+	schema: z.object({ id: z.string(), email: z.string() })
+});
+
 /** A fake `fetch` that records each request and answers with `body`. */
 function fakeFetch(body: unknown, init: ResponseInit = { status: 200 }) {
 	const requests: string[] = [];
@@ -107,6 +113,64 @@ describe('the bundled REST Provider', () => {
 					.for(recipes)
 					.getList(context(fetch), { page: 1, perPage: 25 })
 			).rejects.toThrow(/500/);
+		});
+	});
+
+	describe('getOne', () => {
+		it('requests GET {base}/{resource}/{id} with the context fetch', async () => {
+			const { fetch, requests } = fakeFetch({ id: 7, name: 'Caprese Salad' });
+			const provider = restProvider('http://api.test/v1/').for(recipes);
+
+			await provider.getOne(context(fetch), 7);
+
+			expect(requests).toEqual(['http://api.test/v1/recipes/7']);
+		});
+
+		it('returns the record as the backend sent it', async () => {
+			const record = { id: 7, name: 'Caprese Salad' };
+			const { fetch } = fakeFetch(record);
+
+			const result = await restProvider('http://api.test').for(recipes).getOne(context(fetch), 7);
+
+			expect(result).toEqual(record);
+		});
+
+		it.each([
+			['../users/1', 'http://api.test/users/..%2Fusers%2F1'],
+			['..%2Fposts%2F1', 'http://api.test/users/..%252Fposts%252F1'],
+			['a/b', 'http://api.test/users/a%2Fb'],
+			['a..b', 'http://api.test/users/a..b'],
+			['what?admin=1', 'http://api.test/users/what%3Fadmin%3D1'],
+			['#top', 'http://api.test/users/%23top'],
+			['two words', 'http://api.test/users/two%20words']
+		])('encodes the id %j as one path segment', async (id, url) => {
+			const { fetch, requests } = fakeFetch({ id, email: 'ada@example.com' });
+
+			await restProvider('http://api.test').for(users).getOne(context(fetch), id);
+
+			expect(requests).toEqual([url]);
+			// However the id is written, the request stays at {base}/{resource}/{one segment}.
+			const path = new URL(requests[0]).pathname.split('/');
+			expect(path).toHaveLength(3);
+			expect(path[1]).toBe('users');
+			expect(decodeURIComponent(path[2])).toBe(id);
+		});
+
+		it.each(['', '.', '..'])('requests nothing for the id %j', async (id) => {
+			const { fetch, requests } = fakeFetch({ id, email: 'ada@example.com' });
+
+			await expect(
+				restProvider('http://api.test').for(users).getOne(context(fetch), id)
+			).rejects.toThrow(/path segment/);
+			expect(requests).toEqual([]);
+		});
+
+		it('rejects when the backend answers with an error status', async () => {
+			const { fetch } = fakeFetch({ message: 'Not found' }, { status: 404 });
+
+			await expect(
+				restProvider('http://api.test').for(recipes).getOne(context(fetch), 404)
+			).rejects.toThrow(/404/);
 		});
 	});
 });

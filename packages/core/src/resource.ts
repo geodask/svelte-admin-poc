@@ -22,6 +22,12 @@ export type Resource<N extends string = string, S extends ResourceSchema = Resou
 /** The type of one record of a Resource. */
 export type RecordOf<R extends Resource> = z.output<R['schema']>;
 
+/**
+ * The type of a Resource's ids: its `id` Field's type, a string or a number. (The intersection
+ * only tells TypeScript so for a Resource it can't see yet; it changes no Resource's id type.)
+ */
+export type IdOf<R extends Resource> = RecordOf<R>['id'] & (string | number);
+
 // The id schema must give a string or a number, and must take that same type as input, so a
 // route param or a query argument can never be coerced into an id ('1' and 1 are not the same).
 type IdField = z.ZodType<string, string> | z.ZodType<number, number>;

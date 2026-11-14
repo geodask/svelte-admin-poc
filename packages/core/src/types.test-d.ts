@@ -13,11 +13,24 @@ const recipes = defineResource({
 type Recipe = { id: number; name: string };
 
 const recipeProvider: Provider<Recipe> = {
-	getList: async () => ({ data: [{ id: 1, name: 'Classic Margherita Pizza' }], total: 1 })
+	getList: async () => ({ data: [{ id: 1, name: 'Classic Margherita Pizza' }], total: 1 }),
+	getOne: async (_ctx, id) => ({ id, name: 'Classic Margherita Pizza' })
 };
 
 const userProvider: Provider<{ id: number; email: string }> = {
-	getList: async () => ({ data: [], hasNextPage: false })
+	getList: async () => ({ data: [], hasNextPage: false }),
+	getOne: async (_ctx, id) => ({ id, email: 'ada@example.com' })
+};
+
+// @ts-expect-error a Provider must be able to read one record
+const listOnlyProvider: Provider<Recipe> = {
+	getList: async () => ({ data: [], total: 0 })
+};
+
+// A Provider's ids have the schema's id type, never coerced.
+const stringIdProvider: Provider<Recipe, string> = {
+	getList: async () => ({ data: [], total: 0 }),
+	getOne: async (_ctx, id) => ({ id: Number(id), name: 'Coerced' })
 };
 
 // A Provider whose records match the schema is accepted, and what it serves fits admin.ts.
@@ -32,6 +45,16 @@ serveResource(recipes);
 
 // @ts-expect-error the Provider's records must match the Resource schema
 serveResource(recipes, userProvider);
+
+// @ts-expect-error the Provider must take the schema's id type: a number for recipes
+serveResource(recipes, stringIdProvider);
+
+// The remote getOne takes the canonical id type and gives a record of the schema's type.
+const recipe: Promise<Recipe> = recipesRemote.getOne(1);
+// @ts-expect-error a recipe id is a number, so '1' is not one
+void recipesRemote.getOne('1');
+void recipe;
+void listOnlyProvider;
 
 // A string id is fine too.
 defineResource({ name: 'posts', label: 'Posts', schema: z.object({ id: z.string() }) });
