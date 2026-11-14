@@ -21,7 +21,7 @@ const listUrlSchema = z.object({
  * A search worth sending, or `undefined`. A blank one is no search. A real one is kept as
  * typed, spaces included, so a search box that writes the URL never has its text rewritten.
  */
-function searchOf(value: string | null | undefined): string | undefined {
+function nonBlank(value: string | null | undefined): string | undefined {
 	return value?.trim() ? value : undefined;
 }
 
@@ -35,7 +35,7 @@ export function readListParams(url: URL, resource: Pick<Resource, 'searchable'>)
 		page: searchParams.get('page') ?? undefined,
 		perPage: searchParams.get('perPage') ?? undefined
 	});
-	const search = resource.searchable ? searchOf(searchParams.get('q')) : undefined;
+	const search = resource.searchable ? nonBlank(searchParams.get('q')) : undefined;
 	return search === undefined ? params : { ...params, search };
 }
 
@@ -49,7 +49,7 @@ export function listHref(url: URL, params: ListParams): string {
 	const search = new URLSearchParams();
 	if (params.page !== 1) search.set('page', String(params.page));
 	if (params.perPage !== DEFAULT_PER_PAGE) search.set('perPage', String(params.perPage));
-	const q = searchOf(params.search);
+	const q = nonBlank(params.search);
 	if (q !== undefined) search.set('q', q);
 	const query = search.toString();
 	return query ? `${url.pathname}?${query}` : url.pathname;

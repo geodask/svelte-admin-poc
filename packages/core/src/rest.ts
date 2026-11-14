@@ -31,10 +31,10 @@ export function restProvider(baseUrl: string) {
 			const resourceUrl = `${base}/${encodeURIComponent(resource.name)}`;
 
 			return {
-				async getList({ fetch }, { page, perPage, search: q }) {
-					const search = new URLSearchParams({ page: String(page), perPage: String(perPage) });
-					if (q !== undefined) search.set('q', q);
-					const url = `${resourceUrl}?${search}`;
+				async getList({ fetch }, { page, perPage, search }) {
+					const query = new URLSearchParams({ page: String(page), perPage: String(perPage) });
+					if (search !== undefined) query.set('q', search);
+					const url = `${resourceUrl}?${query}`;
 					const parsed = listResponse.safeParse(await getJson(fetch, url));
 					if (!parsed.success) {
 						throw new Error(

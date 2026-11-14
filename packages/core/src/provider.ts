@@ -9,8 +9,8 @@
 export type ProviderContext = { fetch: typeof fetch; locals: App.Locals };
 
 /**
- * The validated params `getList` receives. A search, never empty, comes only for a searchable
- * Resource. Sort and filters come later.
+ * The validated params `getList` receives. A search comes only for a searchable Resource, never
+ * blank and without the spaces around it. Sort and filters come later.
  */
 export type ListParams = { page: number; perPage: number; search?: string };
 

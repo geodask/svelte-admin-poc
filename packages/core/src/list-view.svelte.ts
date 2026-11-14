@@ -1,5 +1,6 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
+import { untrack } from 'svelte';
 import type { ListParams } from './provider.ts';
 import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
 import type { ResourceRemote } from './remote.ts';
@@ -13,13 +14,14 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
- * and the hrefs that change page and page size. The Theme's list View is built on it, and so
- * can a replaced View. It takes the Resource as an argument, not from context.
+ * the hrefs that change page and page size, and the search box's state. The Theme's list View
+ * is built on it, and so can a replaced View. It takes the Resource as an argument, not from
+ * context.
  *
- * The URL is the only state. A bad value or an unknown param in it is dropped, and with
+ * The URL holds the list params. A bad value or an unknown param in it is dropped, and with
  * JavaScript the URL is rewritten in place (`replace`, so no history entry is added). On a
  * searchable Resource, typing a search writes it to the URL after a short pause, also in place,
- * and starts again at page 1.
+ * and starts again at page 1. Until then the typed text is the only state outside the URL.
  *
  * Call it during component setup. In a component whose Resource can change, wrap the call in
  * `$derived`, so the list View follows the Resource.
@@ -51,8 +53,26 @@ export function createListView<R extends Resource>(
 	// rewinds the text.
 	let draft = $state<string | undefined>();
 	let debounce: ReturnType<typeof setTimeout> | undefined;
+	// The list href a search last navigated to, and the one the URL held when last checked.
+	// Untracked, so the caller's `$derived` doesn't follow the URL.
+	let searchHref: string | undefined;
+	let currentHref = untrack(() => listHref(url, params));
+
+	$effect(() => {
+		const href = listHref(url, params);
+		if (href === currentHref) return;
+		currentHref = href;
+		// Any other navigation (a pager or page-size link, Back) drops a search still waiting to be
+		// written, so it can't undo that navigation, and the search box shows the URL's search.
+		if (href !== searchHref) {
+			clearTimeout(debounce);
+			draft = undefined;
+		}
+	});
 	// Leaving the list (or switching Resource) drops a search that was still waiting.
 	$effect(() => () => clearTimeout(debounce));
+
+	const searchText = () => draft ?? params.search ?? '';
 
 	/** Write a search to the URL now, in place, at page 1 of the current page size. */
 	function writeSearch(text: string) {
@@ -62,6 +82,7 @@ export function createListView<R extends Resource>(
 			draft = undefined;
 			return;
 		}
+		searchHref = href;
 		// Keep focus in the search box and the scroll where it is.
 		void goto(href, { replace: true, reset: false }).finally(() => {
 			if (draft === text) draft = undefined;
@@ -94,7 +115,7 @@ export function createListView<R extends Resource>(
 		searchable: resource.searchable,
 		/** The text for the search box: what is being typed, else the search in the URL. */
 		get search(): string {
-			return draft ?? params.search ?? '';
+			return searchText();
 		},
 		/** Take what was typed in the search box. It reaches the URL once typing pauses. */
 		setSearch(text: string) {
@@ -104,7 +125,7 @@ export function createListView<R extends Resource>(
 		},
 		/** Write the search box's text to the URL now, e.g. when its form is submitted. */
 		submitSearch() {
-			writeSearch(draft ?? params.search ?? '');
+			writeSearch(searchText());
 		},
 		/**
 		 * The GET form the search box sits in, so search works without JavaScript too: where it

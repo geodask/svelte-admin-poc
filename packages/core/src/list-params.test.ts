@@ -63,8 +63,19 @@ describe('the getList input schema', () => {
 			expect(schema.parse({ page: 1, perPage: 25 })).toEqual({ page: 1, perPage: 25 });
 		});
 
-		it('rejects an empty search, which the list View leaves out instead', () => {
-			expect(schema.safeParse({ page: 1, perPage: 25, search: '' }).success).toBe(false);
+		it.each(['', '   '])(
+			'rejects the blank search %j, which the list View leaves out instead',
+			(search) => {
+				expect(schema.safeParse({ page: 1, perPage: 25, search }).success).toBe(false);
+			}
+		);
+
+		it('gives the Provider a search without the spaces around it', () => {
+			expect(schema.parse({ page: 1, perPage: 25, search: '  chicken tacos ' })).toEqual({
+				page: 1,
+				perPage: 25,
+				search: 'chicken tacos'
+			});
 		});
 
 		it('rejects a search that is not a string', () => {

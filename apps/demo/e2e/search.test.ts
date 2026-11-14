@@ -4,7 +4,7 @@ import { backendRequestsFor, captureGetList, dataRows, pager, uniquePage } from 
 
 const searchBox = (page: Page) => page.getByRole('searchbox', { name: 'Search recipes' });
 
-/** The Name cell of each data row. Recipes show their name in the second column. */
+/** The Name cell of each data row: the second cell, after the ID. */
 const names = (page: Page) => dataRows(page).locator('td:nth-child(2)');
 
 test.describe('searching recipes, which are searchable', () => {
@@ -94,6 +94,23 @@ test.describe('searching recipes, which are searchable', () => {
 
 		await expect(page).toHaveURL('/admin/recipes?perPage=5&q=chicken');
 		await expect(pager(page)).toContainText('Page 1 of 2');
+	});
+
+	test('a pager link clicked while a search waits to be written is not undone @js', async ({
+		page
+	}) => {
+		await page.goto('/admin/recipes');
+		await hydrated(page);
+
+		await searchBox(page).pressSequentially('chicken');
+		await pager(page).getByRole('link', { name: 'Next' }).click();
+		await expect(page).toHaveURL('/admin/recipes?page=2');
+		// Wait out the search's pause: the waiting search was dropped, so the URL stays put.
+		await page.waitForTimeout(600);
+
+		await expect(page).toHaveURL('/admin/recipes?page=2');
+		await expect(searchBox(page)).toHaveValue('');
+		await expect(dataRows(page).first()).toContainText('Brazilian Feijoada');
 	});
 
 	test('clearing the search box takes q out of the URL @js', async ({ page }) => {

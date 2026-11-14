@@ -13,8 +13,11 @@ const pageParams = z.strictObject({
 	perPage: z.int().min(1).max(MAX_PER_PAGE)
 });
 
-/** A list View leaves an empty search out, so `getList` never receives one. */
-const searchParams = pageParams.extend({ search: z.string().min(1).optional() });
+/**
+ * A list View leaves a blank search out, so `getList` never receives one. The URL keeps the
+ * search as typed, and the Provider gets it without the spaces around it.
+ */
+const searchableListParams = pageParams.extend({ search: z.string().trim().min(1).optional() });
 
 /**
  * The input schema of a Resource's `getList` query: a page and a page size, plus a search only
@@ -23,7 +26,7 @@ const searchParams = pageParams.extend({ search: z.string().min(1).optional() })
  * coerced.
  */
 export function listParamsSchema(resource: Pick<Resource, 'searchable'>): z.ZodType<ListParams> {
-	return resource.searchable ? searchParams : pageParams;
+	return resource.searchable ? searchableListParams : pageParams;
 }
 
 /** The schemas of the page and the page size, for reading them from a URL. */
