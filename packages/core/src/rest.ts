@@ -1,6 +1,7 @@
 // The bundled REST Provider. It is server code: import it only from server-only modules and
 // `.remote.ts` files, never from a module the browser loads.
 import { z } from 'zod';
+import { ConflictError, InvalidInputError, NotFoundError } from './errors.ts';
 import { idPathSegment } from './ids.ts';
 import type { ListResult, Provider } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
@@ -17,6 +18,10 @@ const listResponse = z.union([
  *   `{ data, hasNextPage }`. `q` is the search, sent only when there is one.
  * - `GET {base}/{resource}/{id}` returns the record. The id is always one path segment
  *   (`idPathSegment`), so `../users/1` is asked for as `..%2Fusers%2F1`.
+ *
+ * - A failing status becomes a framework error: 404 is `NotFoundError`, 400 and 422 are
+ *   `InvalidInputError`, 409 is `ConflictError`. Any other is an unexpected error, whose message
+ *   names the request, the status and the start of the body, for the server log.
  *
  * It uses only the `fetch` from its context. Records are not checked here: `serveResource`
  * parses each one with the Resource schema.
@@ -55,10 +60,28 @@ export function restProvider(baseUrl: string) {
 	};
 }
 
+/** The framework error each upstream status means. Any other failing status is unexpected. */
+const statusErrors: Record<number, new () => Error> = {
+	400: InvalidInputError,
+	404: NotFoundError,
+	409: ConflictError,
+	422: InvalidInputError
+};
+
+/** How much of a failing response's body an unexpected error keeps, for the server log. */
+const MAX_BODY_IN_LOG = 500;
+
 async function getJson(fetch: typeof globalThis.fetch, url: string): Promise<unknown> {
 	const response = await fetch(url, { headers: { accept: 'application/json' } });
 	if (!response.ok) {
-		throw new Error(`REST Provider: GET ${url} failed with ${response.status}`);
+		// A framework error's message reaches the user, so it keeps its safe default.
+		const FrameworkError = statusErrors[response.status];
+		if (FrameworkError) throw new FrameworkError();
+		// An unexpected error is only logged, so it says what happened upstream.
+		const body = (await response.text().catch(() => '')).slice(0, MAX_BODY_IN_LOG);
+		throw new Error(
+			`REST Provider: GET ${url} failed with ${response.status}${body ? `: ${body}` : ''}`
+		);
 	}
 	return response.json();
 }

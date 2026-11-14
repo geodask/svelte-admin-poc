@@ -33,6 +33,13 @@ export function createDetailView<R extends Resource>(
 		get query() {
 			return remote.getOne(id);
 		},
+		/**
+		 * Load the record again, from the server. A Retry after a failure calls it before
+		 * rendering the record again, since a failed read otherwise stays failed.
+		 */
+		refresh(): Promise<void> {
+			return remote.getOne(id).refresh();
+		},
 		/** The text that names the record, e.g. for the heading. */
 		title(record: RecordOf<R>): string {
 			return recordTitle(resource, record);

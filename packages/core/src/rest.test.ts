@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { defineResource, type ProviderContext } from '@svelte-admin/core';
+import {
+	ConflictError,
+	defineResource,
+	InvalidInputError,
+	NotFoundError,
+	type ProviderContext
+} from '@svelte-admin/core';
 import { restProvider } from '@svelte-admin/core/rest';
 
 const recipes = defineResource({
@@ -104,16 +110,6 @@ describe('the bundled REST Provider', () => {
 					.getList(context(fetch), { page: 1, perPage: 25 })
 			).rejects.toThrow(/REST Provider/);
 		});
-
-		it('rejects when the backend answers with an error status', async () => {
-			const { fetch } = fakeFetch({ message: 'boom' }, { status: 500 });
-
-			await expect(
-				restProvider('http://api.test')
-					.for(recipes)
-					.getList(context(fetch), { page: 1, perPage: 25 })
-			).rejects.toThrow(/500/);
-		});
 	});
 
 	describe('getOne', () => {
@@ -164,13 +160,53 @@ describe('the bundled REST Provider', () => {
 			).rejects.toThrow(/path segment/);
 			expect(requests).toEqual([]);
 		});
+	});
+});
 
-		it('rejects when the backend answers with an error status', async () => {
-			const { fetch } = fakeFetch({ message: 'Not found' }, { status: 404 });
+describe('the bundled REST Provider, when the backend answers with an error status', () => {
+	const calls = {
+		getList: (fetch: typeof globalThis.fetch) =>
+			restProvider('http://api.test')
+				.for(recipes)
+				.getList(context(fetch), { page: 1, perPage: 25 }),
+		getOne: (fetch: typeof globalThis.fetch) =>
+			restProvider('http://api.test').for(recipes).getOne(context(fetch), 7)
+	};
 
-			await expect(
-				restProvider('http://api.test').for(recipes).getOne(context(fetch), 404)
-			).rejects.toThrow(/404/);
+	describe.each(Object.entries(calls))('%s', (_, call) => {
+		it.each([
+			[404, NotFoundError],
+			[400, InvalidInputError],
+			[422, InvalidInputError],
+			[409, ConflictError]
+		])('maps %i to the matching framework error', async (status, expected) => {
+			const { fetch } = fakeFetch({ message: 'Upstream says no' }, { status });
+
+			await expect(call(fetch)).rejects.toBeInstanceOf(expected);
+		});
+
+		it.each([500, 401, 403, 503])('maps %i to an unexpected error', async (status) => {
+			const { fetch } = fakeFetch({ message: 'Upstream exploded' }, { status });
+
+			const failure = await call(fetch).catch((error: unknown) => error);
+
+			expect(failure).toBeInstanceOf(Error);
+			for (const known of [NotFoundError, InvalidInputError, ConflictError]) {
+				expect(failure).not.toBeInstanceOf(known);
+			}
+			// For the server log only: the request, the status and what the backend said.
+			expect((failure as Error).message).toContain('GET http://api.test/recipes');
+			expect((failure as Error).message).toContain(`failed with ${status}`);
+			expect((failure as Error).message).toContain('Upstream exploded');
+		});
+
+		it("keeps the upstream URL and text out of a framework error's message", async () => {
+			const { fetch } = fakeFetch({ message: 'Row 7 missing in shard 3' }, { status: 404 });
+
+			const failure = (await call(fetch).catch((error: unknown) => error)) as Error;
+
+			expect(failure.message).not.toContain('api.test');
+			expect(failure.message).not.toContain('shard 3');
 		});
 	});
 });

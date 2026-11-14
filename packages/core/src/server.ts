@@ -1,14 +1,20 @@
 // The core's server-only entry point. It imports `$app/server`, so only `.remote.ts` files and
 // server-only modules may import it. The shared entry (`@svelte-admin/core`) never re-exports it.
 import { getRequestEvent, query } from '$app/server';
+import { error } from '@sveltejs/kit';
 import { z } from 'zod';
+import { ConflictError, InvalidInputError, NotFoundError } from './errors.ts';
 import { listParamsSchema } from './list-params.ts';
 import type { ListResult, Provider, ProviderContext } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /**
  * Build a Resource's remote functions from its Provider. The app's `.remote.ts` re-exports
- * them in one line and exports nothing else:
+ * them in one line and exports nothing else.
+ *
+ * A Provider's framework errors become HTTP errors with their message: `NotFoundError` a 404,
+ * `InvalidInputError` a 400 and `ConflictError` a 409. Anything else it throws is an unexpected
+ * error, which Kit masks as a 500 (and the core's `handleError` logs).
  *
  * @example
  * export const { getList, getOne } = serveResource(recipes, backend.for(recipes));
@@ -22,7 +28,7 @@ export function serveResource<R extends Resource>(
 	const getList = query(
 		listParamsSchema(resource),
 		async (params): Promise<ListResult<RecordOf<R>>> => {
-			const result = await provider.getList(providerContext(), params);
+			const result = await served(() => provider.getList(providerContext(), params));
 			// A record that doesn't match the schema is an unexpected error, masked as a 500.
 			// Parsing also drops any key the schema doesn't declare before it reaches the browser.
 			return { ...result, data: records.parse(result.data) as RecordOf<R>[] };
@@ -33,7 +39,9 @@ export function serveResource<R extends Resource>(
 	const idSchema = resource.schema.shape.id as z.ZodType<IdOf<R>, IdOf<R>>;
 
 	const getOne = query(idSchema, async (id): Promise<RecordOf<R>> => {
-		const record = resource.schema.parse(await provider.getOne(providerContext(), id));
+		const record = resource.schema.parse(
+			await served(() => provider.getOne(providerContext(), id))
+		);
 		// Never serve a different record than the one asked for, whatever the backend did with
 		// the id: like a record that doesn't match the schema, that is an unexpected error.
 		if (record.id !== id) {
@@ -43,6 +51,25 @@ export function serveResource<R extends Resource>(
 	});
 
 	return { getList, getOne };
+}
+
+/** The HTTP status each framework error is served with. */
+const statuses = new Map<abstract new (...args: never) => Error, number>([
+	[NotFoundError, 404],
+	[InvalidInputError, 400],
+	[ConflictError, 409]
+]);
+
+/** Run a Provider call, turning a framework error into the matching HTTP error. */
+async function served<T>(call: () => Promise<T>): Promise<T> {
+	try {
+		return await call();
+	} catch (failure) {
+		for (const [type, status] of statuses) {
+			if (failure instanceof type) error(status, failure.message);
+		}
+		throw failure;
+	}
 }
 
 function providerContext(): ProviderContext {

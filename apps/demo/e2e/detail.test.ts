@@ -138,6 +138,45 @@ test.describe('the recipes detail View', () => {
 	});
 });
 
+test.describe('a recipe id that parses but names no recipe', () => {
+	test('shows "not found" and links back to the recipes list, not the error page', async ({
+		page
+	}) => {
+		const response = await page.goto('/admin/recipes/999');
+
+		expect(response?.status()).toBe(404);
+		await expect(page.getByRole('heading', { level: 1, name: 'Not found' })).toBeVisible();
+		await expect(page.getByRole('heading', { name: 'Page not found' })).toHaveCount(0);
+		await expect(page).toHaveTitle('Not found · Recipes');
+
+		await page.getByRole('link', { name: 'Back to Recipes' }).click();
+
+		await expect(page).toHaveURL('/admin/recipes');
+		await expect(page.getByRole('heading', { level: 1, name: 'Recipes' })).toBeVisible();
+	});
+
+	test('shows "not found" when opened from another record @js', async ({ page }) => {
+		await page.goto('/admin/recipes/1');
+		await hydrated(page);
+
+		// A client-side navigation, so the remote getOne fails in the browser, not during SSR.
+		await page.evaluate(() => {
+			const link = document.createElement('a');
+			link.href = '/admin/recipes/999';
+			link.textContent = 'A missing recipe';
+			document.querySelector('main')?.append(link);
+		});
+		await page.getByRole('link', { name: 'A missing recipe' }).click();
+
+		await expect(page).toHaveURL('/admin/recipes/999');
+		await expect(page.getByRole('heading', { level: 1, name: 'Not found' })).toBeVisible();
+		await expect(page.getByRole('link', { name: 'Back to Recipes' })).toHaveAttribute(
+			'href',
+			'/admin/recipes'
+		);
+	});
+});
+
 test.describe('a recipe id that names no recipe', () => {
 	for (const param of ['abc', '01', '1.0', '1e0']) {
 		test(`/admin/recipes/${param} is a 404 page that never asks the backend`, async ({

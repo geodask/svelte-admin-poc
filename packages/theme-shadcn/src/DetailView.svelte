@@ -3,11 +3,16 @@
 	value shown by its Kind, in schema order, under a heading that names the record. It takes the
 	Resource, its remote functions and the record's typed id as props, so a route passes them
 	from admin.ts. It is built on the core's headless `createDetailView`.
+
+	The record loads inside a boundary with a `failed` snippet but no `pending` one, so the server
+	renders the record, or "not found" with a link back to the list for a record that doesn't
+	exist.
 -->
 <script lang="ts">
 	import type { Resource, ResourceRemote } from '@svelte-admin/core';
 	import { createDetailView } from '@svelte-admin/core/views';
-	import FieldValue from './FieldValue.svelte';
+	import DetailBody from './DetailBody.svelte';
+	import LoadError from './LoadError.svelte';
 
 	let {
 		resource,
@@ -17,34 +22,27 @@
 
 	// Derived, so the detail View follows the route to another record or Resource.
 	const view = $derived(createDetailView(resource, remote, id));
-	const record = $derived(await view.query);
-	const title = $derived(view.title(record));
 </script>
 
-<svelte:head>
-	<title>{title} · {resource.label}</title>
-</svelte:head>
+<div class="flex flex-col gap-1">
+	<a href={view.listViewHref} class="w-fit text-sm text-muted-foreground hover:text-foreground">
+		<span aria-hidden="true">←</span>
+		{resource.label}
+	</a>
 
-<div class="flex flex-col gap-6">
-	<div class="flex flex-col gap-1">
-		<a href={view.listViewHref} class="w-fit text-sm text-muted-foreground hover:text-foreground">
-			<span aria-hidden="true">←</span>
-			{resource.label}
-		</a>
-		<h1 class="text-2xl font-semibold tracking-tight">{title}</h1>
-	</div>
+	<svelte:boundary>
+		<DetailBody {view} />
 
-	<dl class="grid gap-x-8 gap-y-4 rounded-lg border p-6 text-sm sm:grid-cols-[max-content_1fr]">
-		{#each view.fields as field (field.key)}
-			<div class="contents">
-				<dt class="font-medium">
-					{field.label}
-					{#if field.description}
-						<p class="text-xs font-normal text-muted-foreground">{field.description}</p>
-					{/if}
-				</dt>
-				<dd><FieldValue {field} value={record[field.key]} /></dd>
+		{#snippet failed(error, reset)}
+			<div class="mt-5">
+				<LoadError
+					{error}
+					{resource}
+					retry={() => view.refresh().then(reset, reset)}
+					listViewHref={view.listViewHref}
+					headingLevel={1}
+				/>
 			</div>
-		{/each}
-	</dl>
+		{/snippet}
+	</svelte:boundary>
 </div>
