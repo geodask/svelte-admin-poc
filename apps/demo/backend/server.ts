@@ -8,13 +8,17 @@
 //                                     searched, and q for them is a 400
 //   GET  /{resource}/{id}             one record, or a 404. The id is one path segment, decoded,
 //                                     and matched against each record's id written as text
-//   POST /reset                       restore the seed data (e2e tests call it first)
+//   POST /reset                       restore the seed data and clear any faults (e2e tests call
+//                                     it first)
+//   POST /faults                      test-only: make the next resource request(s) slow or fail.
+//                                     The JSON body is a Fault (config.ts). Faults queue up, and each
+//                                     one is used by the next resource request that matches it
 //   GET  /requests                    every resource request since the server started, so a test
 //                                     can check that the Provider was or wasn't called. Reset
 //                                     keeps it, since tests run in parallel against one backend:
 //                                     a test finds its own requests by a page no other test asks
 //                                     for
-import { BACKEND_PORT } from './config.ts';
+import { BACKEND_PORT, type Fault } from './config.ts';
 import * as seed from './seed.ts';
 
 type Records = { id: number | string }[];
@@ -43,7 +47,17 @@ function search(records: Records, fields: string[], q: string): Records {
 }
 
 let db = fresh();
+let faults: Fault[] = [];
 const requests: string[] = [];
+
+/** The first queued fault for `pathname`, used up by this request. */
+function takeFault(pathname: string): Fault | undefined {
+	const fault = faults.find((f) => f.path === undefined || f.path === pathname);
+	if (fault === undefined) return undefined;
+	fault.times = (fault.times ?? 1) - 1;
+	if (fault.times <= 0) faults = faults.filter((f) => f !== fault);
+	return fault;
+}
 
 function json(body: unknown, status = 200) {
 	return Response.json(body, { status });
@@ -68,12 +82,18 @@ function decodeSegment(segment: string): string | undefined {
 
 const server = Bun.serve({
 	port: Number(process.env.PORT ?? BACKEND_PORT),
-	fetch(request) {
+	async fetch(request) {
 		const url = new URL(request.url);
 		const segments = url.pathname.split('/').filter(Boolean);
 
 		if (request.method === 'POST' && url.pathname === '/reset') {
 			db = fresh();
+			faults = [];
+			return new Response(null, { status: 204 });
+		}
+
+		if (request.method === 'POST' && url.pathname === '/faults') {
+			faults.push((await request.json()) as Fault);
 			return new Response(null, { status: 204 });
 		}
 
@@ -82,6 +102,12 @@ const server = Bun.serve({
 		}
 
 		requests.push(`${request.method} ${url.pathname}${url.search}`);
+
+		const fault = takeFault(url.pathname);
+		if (fault?.delayMs) await Bun.sleep(fault.delayMs);
+		if (fault?.status) {
+			return json({ message: fault.message ?? 'Injected failure' }, fault.status);
+		}
 
 		if (request.method === 'GET' && segments.length === 1 && Object.hasOwn(db, segments[0])) {
 			const name = segments[0];

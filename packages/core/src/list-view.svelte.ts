@@ -108,6 +108,13 @@ export function createListView<R extends Resource>(
 			return remote.getList(params);
 		},
 		/**
+		 * Load the current page again, from the server. A Retry after a failure calls it before
+		 * rendering the list again, since a failed page otherwise stays failed.
+		 */
+		refresh(): Promise<void> {
+			return remote.getList(params).refresh();
+		},
+		/**
 		 * The Field whose cell links each row to its record's detail View: `name`, else `title`,
 		 * else the id, else the first Field shown, whichever the list shows first.
 		 */

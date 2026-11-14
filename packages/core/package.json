@@ -17,6 +17,10 @@
 			"types": "./src/server.ts",
 			"default": "./src/server.ts"
 		},
+		"./hooks": {
+			"types": "./src/hooks.ts",
+			"default": "./src/hooks.ts"
+		},
 		"./rest": {
 			"types": "./src/rest.ts",
 			"default": "./src/rest.ts"
