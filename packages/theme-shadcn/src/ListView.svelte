@@ -85,7 +85,8 @@
 				{:else}
 					<Table.Row>
 						<Table.Cell colspan={columns.length} class="h-24 text-center text-muted-foreground">
-							No {resource.label.toLowerCase()} yet.
+							No {resource.label.toLowerCase()}
+							{view.params.page > 1 ? 'on this page' : 'yet'}.
 						</Table.Cell>
 					</Table.Row>
 				{/each}

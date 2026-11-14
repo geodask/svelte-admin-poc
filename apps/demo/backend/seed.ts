@@ -138,7 +138,7 @@ const angles = [
 	'A week of'
 ];
 
-export const posts: Post[] = Array.from({ length: 45 }, (_, index) => {
+export const posts: Post[] = Array.from({ length: 60 }, (_, index) => {
 	const topic = topics[index % topics.length];
 	const angle = angles[index % angles.length];
 	return {

@@ -2,4 +2,4 @@
 // `$app/state` and `$app/navigation`: a component may use them, but `admin.ts` and
 // `src/params.ts`, which SvelteKit loads in plain Node, must not. That is why they are not on
 // the shared entry. They import no UI package.
-export { createListView, PER_PAGE_OPTIONS, type ListViewState } from './list-view.svelte.ts';
+export { createListView, type ListViewState } from './list-view.svelte.ts';

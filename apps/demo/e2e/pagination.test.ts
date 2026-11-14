@@ -73,6 +73,20 @@ test.describe('paging through recipes, which the backend counts', () => {
 		await expect(dataRows(page)).toHaveCount(25);
 	});
 
+	test('an old link past the last page still links back to the last page', async ({ page }) => {
+		await page.goto('/admin/recipes?page=10');
+
+		await expect(page.getByRole('table')).toContainText('No recipes on this page.');
+		await expect(pager(page)).toContainText('No rows on this page');
+		await expect(pager(page)).toContainText('Page 10 of 3');
+		await expect(pager(page).getByRole('link', { name: 'Next' })).toHaveCount(0);
+
+		await pager(page).getByRole('link', { name: 'Last' }).click();
+
+		await expect(page).toHaveURL('/admin/recipes?page=3');
+		await expect(dataRows(page)).toHaveCount(5);
+	});
+
 	test('a page size from a shared link opens that page size', async ({ page }) => {
 		await page.goto('/admin/recipes?page=2&perPage=50');
 
@@ -94,8 +108,21 @@ test.describe('paging through posts, which the backend cannot count', () => {
 		await pager(page).getByRole('link', { name: 'Next' }).click();
 
 		await expect(page).toHaveURL('/admin/posts?page=2');
-		await expect(dataRows(page)).toHaveCount(20);
-		await expect(pager(page)).toContainText('Rows 26–45');
+		await expect(pager(page)).toContainText('Rows 26–50');
+		await expect(pager(page).getByRole('link')).toHaveText([
+			'10',
+			'25',
+			'50',
+			'100',
+			'Previous',
+			'Next'
+		]);
+
+		await pager(page).getByRole('link', { name: 'Next' }).click();
+
+		await expect(page).toHaveURL('/admin/posts?page=3');
+		await expect(dataRows(page)).toHaveCount(10);
+		await expect(pager(page)).toContainText('Rows 51–60');
 		await expect(pager(page).getByRole('link')).toHaveText(['10', '25', '50', '100', 'Previous']);
 	});
 });

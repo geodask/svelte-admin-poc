@@ -6,7 +6,7 @@ import type { ResourceRemote } from './remote.ts';
 import type { RecordOf, Resource } from './resource.ts';
 
 /** The page sizes a list View offers. Any size from 1 to the cap still works from the URL. */
-export const PER_PAGE_OPTIONS: readonly number[] = [10, 25, 50, 100];
+const PER_PAGE_OPTIONS: readonly number[] = [10, 25, 50, 100];
 
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
@@ -27,8 +27,8 @@ export function createListView<R extends Resource>(
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>>
 ) {
-	// `page.url` is read-only in Kit 3, so the helpers get a URL of their own. Nothing mutates
-	// it: a new one is derived whenever `page.url` changes.
+	// Kit 3 types `page.url` as a read-only URL, so the helpers take a plain copy. Nothing mutates
+	// it: a new copy is derived whenever `page.url` changes.
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
 	const url = $derived(new URL(page.url.href));
 	const params = $derived(readListParams(url));
@@ -56,8 +56,8 @@ export function createListView<R extends Resource>(
 		/** The page sizes to offer, as plain links. */
 		perPageOptions: PER_PAGE_OPTIONS,
 		/** The href of another page, at the same page size. */
-		pageHref(page: number): string {
-			return listHref(url, { ...params, page });
+		pageHref(target: number): string {
+			return listHref(url, { ...params, page: target });
 		},
 		/** The href of the first page at another page size. */
 		perPageHref(perPage: number): string {
