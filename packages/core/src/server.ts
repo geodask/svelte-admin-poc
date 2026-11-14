@@ -3,7 +3,7 @@
 import { getRequestEvent, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import { z } from 'zod';
-import { ConflictError, InvalidInputError, NotFoundError } from './errors.ts';
+import { ProviderError } from './errors.ts';
 import { listParamsSchema } from './list-params.ts';
 import type { ListResult, Provider, ProviderContext } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
@@ -12,7 +12,7 @@ import type { IdOf, RecordOf, Resource } from './resource.ts';
  * Build a Resource's remote functions from its Provider. The app's `.remote.ts` re-exports
  * them in one line and exports nothing else.
  *
- * A Provider's framework errors become HTTP errors with their message: `NotFoundError` a 404,
+ * A Provider error becomes an HTTP error with its message: `NotFoundError` a 404,
  * `InvalidInputError` a 400 and `ConflictError` a 409. Anything else it throws is an unexpected
  * error, which Kit masks as a 500 (and the core's `handleError` logs).
  *
@@ -53,21 +53,12 @@ export function serveResource<R extends Resource>(
 	return { getList, getOne };
 }
 
-/** The HTTP status each framework error is served with. */
-const statuses = new Map<abstract new (...args: never) => Error, number>([
-	[NotFoundError, 404],
-	[InvalidInputError, 400],
-	[ConflictError, 409]
-]);
-
-/** Run a Provider call, turning a framework error into the matching HTTP error. */
+/** Run a Provider call, turning a Provider error into the HTTP error with its status. */
 async function served<T>(call: () => Promise<T>): Promise<T> {
 	try {
 		return await call();
 	} catch (failure) {
-		for (const [type, status] of statuses) {
-			if (failure instanceof type) error(status, failure.message);
-		}
+		if (failure instanceof ProviderError) error(failure.status, failure.message);
 		throw failure;
 	}
 }

@@ -11,14 +11,14 @@
 //   POST /reset                       restore the seed data and clear any faults (e2e tests call
 //                                     it first)
 //   POST /faults                      test-only: make the next resource request(s) slow or fail.
-//                                     The JSON body is a Fault (below). Faults queue up, and each
+//                                     The JSON body is a Fault (config.ts). Faults queue up, and each
 //                                     one is used by the next resource request that matches it
 //   GET  /requests                    every resource request since the server started, so a test
 //                                     can check that the Provider was or wasn't called. Reset
 //                                     keeps it, since tests run in parallel against one backend:
 //                                     a test finds its own requests by a page no other test asks
 //                                     for
-import { BACKEND_PORT } from './config.ts';
+import { BACKEND_PORT, type Fault } from './config.ts';
 import * as seed from './seed.ts';
 
 type Records = { id: number | string }[];
@@ -45,14 +45,6 @@ function search(records: Records, fields: string[], q: string): Records {
 		})
 	);
 }
-
-/**
- * A test-only fault for the next resource request(s): wait `delayMs` first, then (with a
- * `status`) answer with that status and `{ message }` instead of the records. `path`, when
- * given, limits it to requests for that pathname (e.g. `/recipes`). It is used by `times`
- * requests (default 1).
- */
-type Fault = { status?: number; message?: string; delayMs?: number; path?: string; times?: number };
 
 let db = fresh();
 let faults: Fault[] = [];

@@ -179,7 +179,7 @@ describe('the bundled REST Provider, when the backend answers with an error stat
 			[400, InvalidInputError],
 			[422, InvalidInputError],
 			[409, ConflictError]
-		])('maps %i to the matching framework error', async (status, expected) => {
+		])('maps %i to the matching Provider error', async (status, expected) => {
 			const { fetch } = fakeFetch({ message: 'Upstream says no' }, { status });
 
 			await expect(call(fetch)).rejects.toBeInstanceOf(expected);
@@ -200,7 +200,7 @@ describe('the bundled REST Provider, when the backend answers with an error stat
 			expect((failure as Error).message).toContain('Upstream exploded');
 		});
 
-		it("keeps the upstream URL and text out of a framework error's message", async () => {
+		it("keeps the upstream URL and text out of a Provider error's message", async () => {
 			const { fetch } = fakeFetch({ message: 'Row 7 missing in shard 3' }, { status: 404 });
 
 			const failure = (await call(fetch).catch((error: unknown) => error)) as Error;

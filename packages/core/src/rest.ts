@@ -19,7 +19,7 @@ const listResponse = z.union([
  * - `GET {base}/{resource}/{id}` returns the record. The id is always one path segment
  *   (`idPathSegment`), so `../users/1` is asked for as `..%2Fusers%2F1`.
  *
- * - A failing status becomes a framework error: 404 is `NotFoundError`, 400 and 422 are
+ * - A failing status becomes a Provider error: 404 is `NotFoundError`, 400 and 422 are
  *   `InvalidInputError`, 409 is `ConflictError`. Any other is an unexpected error, whose message
  *   names the request, the status and the start of the body, for the server log.
  *
@@ -60,7 +60,7 @@ export function restProvider(baseUrl: string) {
 	};
 }
 
-/** The framework error each upstream status means. Any other failing status is unexpected. */
+/** The Provider error each upstream status means. Any other failing status is unexpected. */
 const statusErrors: Record<number, new () => Error> = {
 	400: InvalidInputError,
 	404: NotFoundError,
@@ -74,9 +74,9 @@ const MAX_BODY_IN_LOG = 500;
 async function getJson(fetch: typeof globalThis.fetch, url: string): Promise<unknown> {
 	const response = await fetch(url, { headers: { accept: 'application/json' } });
 	if (!response.ok) {
-		// A framework error's message reaches the user, so it keeps its safe default.
-		const FrameworkError = statusErrors[response.status];
-		if (FrameworkError) throw new FrameworkError();
+		// A Provider error's message reaches the user, so it keeps its safe default.
+		const KnownError = statusErrors[response.status];
+		if (KnownError) throw new KnownError();
 		// An unexpected error is only logged, so it says what happened upstream.
 		const body = (await response.text().catch(() => '')).slice(0, MAX_BODY_IN_LOG);
 		throw new Error(

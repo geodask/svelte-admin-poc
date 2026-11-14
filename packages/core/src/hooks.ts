@@ -9,7 +9,7 @@ const UNEXPECTED_MESSAGE = 'An unexpected error occurred.';
  * The server `handleError` hook. It logs unexpected errors (with their causes) and remote
  * function validation failures, and returns a message that is safe to show: an unexpected error
  * becomes a generic 500, whatever it said. An expected error (one thrown with `error()`, which
- * is how `serveResource` serves a Provider's not-found, invalid-input and conflict errors) or
+ * is how `serveResource` serves a Provider error) or
  * one of Kit's own keeps its status and message and isn't logged.
  *
  * @example
@@ -22,13 +22,13 @@ export const handleError: HandleServerError = ({ kind, error, issues, remote }) 
 		return { status: 500, message: UNEXPECTED_MESSAGE };
 	}
 	if (kind === 'validation') {
-		const fn = [remote?.name, remote?.file && `(${remote.file})`].filter(Boolean).join(' ');
+		const remoteName = [remote?.name, remote?.file && `(${remote.file})`].filter(Boolean).join(' ');
 		const lines = issues.map((issue) => {
 			const path = issue.path?.map((key) => (typeof key === 'object' ? key.key : key)).join('.');
 			return `  ${path ? `${path}: ` : ''}${issue.message}`;
 		});
 		console.error(
-			`Remote function ${fn ? `${fn} ` : ''}schema validation failed:\n${lines.join('\n')}`
+			`Remote function ${remoteName ? `${remoteName} ` : ''}schema validation failed:\n${lines.join('\n')}`
 		);
 	}
 	return { status: error.status, message: error.message };

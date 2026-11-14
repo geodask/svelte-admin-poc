@@ -13,6 +13,7 @@
 	import { createListView } from '@svelte-admin/core/views';
 	import ListBody from './ListBody.svelte';
 	import LoadError from './LoadError.svelte';
+	import Toolbar from './Toolbar.svelte';
 
 	let { resource, remote }: { resource: Resource; remote: ResourceRemote } = $props();
 
@@ -27,6 +28,9 @@
 <div class="flex flex-col gap-4">
 	<h1 class="text-2xl font-semibold tracking-tight">{resource.label}</h1>
 
+	<!-- Outside the boundary, so the search can still be changed when a page fails to load. -->
+	<Toolbar {view} />
+
 	<svelte:boundary>
 		<ListBody {view} />
 
@@ -36,6 +40,7 @@
 				{resource}
 				retry={() => view.refresh().then(reset, reset)}
 				listViewHref={view.pageHref(1)}
+				target="list"
 			/>
 		{/snippet}
 	</svelte:boundary>

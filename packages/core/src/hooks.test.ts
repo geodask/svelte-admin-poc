@@ -90,7 +90,7 @@ describe('handleError, for hooks.server.ts', () => {
 			expect(log).not.toHaveBeenCalled();
 		});
 
-		it("keeps a framework error's status and message, and logs nothing", async () => {
+		it("keeps the status and message of one of Kit's own errors, and logs nothing", async () => {
 			const result = await handleError({
 				kind: 'framework',
 				error: { status: 404, message: 'Not Found' },

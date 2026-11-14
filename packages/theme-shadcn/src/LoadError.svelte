@@ -1,9 +1,8 @@
 <!--
-	What a View shows in its boundary's `failed` snippet when a read fails. A 404 (the record, or
-	the Resource upstream, doesn't exist) says "not found" and links back to the list. Any other
-	error shows its message, which the server has already made safe (an unexpected error never
-	reaches the browser with its details), and a Retry button that resets the boundary, so the
-	View loads again without a full page reload.
+	What a View shows in its boundary's `failed` snippet when a read fails. A 404 says "not found"
+	and links back to the list. Any other error shows its message, which the server has already
+	made safe (an unexpected error never reaches the browser with its details), and a Retry button
+	that loads again without a full page reload.
 -->
 <script lang="ts">
 	import type { Resource } from '@svelte-admin/core';
@@ -13,7 +12,7 @@
 		retry,
 		resource,
 		listViewHref,
-		headingLevel = 2
+		target
 	}: {
 		/** What the boundary caught: Kit hands it over as `App.Error`, `{ status, message }`. */
 		error: unknown;
@@ -25,11 +24,16 @@
 		resource: Resource;
 		/** The href of the Resource's list View. */
 		listViewHref: string;
-		/** The heading's level: 1 when the View has no heading of its own above. */
-		headingLevel?: 1 | 2;
+		/**
+		 * What failed to load: one page of the list (under the list View's heading) or one record
+		 * (with no heading of its own, so this one is the page's `h1`).
+		 */
+		target: 'list' | 'record';
 	} = $props();
 
-	const failure = $derived(describe(error));
+	const failure = $derived(readFailure(error));
+	const records = $derived(resource.label.toLowerCase());
+	const heading = $derived(target === 'record' ? 'h1' : 'h2');
 	let retrying = $state(false);
 
 	async function onRetry() {
@@ -40,13 +44,13 @@
 			retrying = false;
 		}
 	}
-	const records = $derived(resource.label.toLowerCase());
 
-	function describe(caught: unknown): { status: number; message: string } {
+	/** The status and message of what was caught, with a 500 for anything else. */
+	function readFailure(caught: unknown): { status: number; message: string } {
 		const { status, message } = (caught ?? {}) as { status?: unknown; message?: unknown };
 		return {
 			status: typeof status === 'number' ? status : 500,
-			message: typeof message === 'string' && message ? message : 'An unexpected error occurred.'
+			message: typeof message === 'string' && message ? message : 'Something went wrong.'
 		};
 	}
 </script>
@@ -57,21 +61,25 @@
 
 <div role="alert" class="flex flex-col items-start gap-3 rounded-lg border p-6 text-sm">
 	{#if failure.status === 404}
-		<svelte:element this={`h${headingLevel}`} class="text-lg font-semibold"
-			>Not found</svelte:element
-		>
+		<svelte:element this={heading} class="text-lg font-semibold">Not found</svelte:element>
 		<p class="text-muted-foreground">
-			This record doesn't exist in {resource.label}. It may have been deleted.
+			{#if target === 'record'}
+				This record doesn't exist in {resource.label}. It may have been deleted.
+			{:else}
+				The backend has no {records} to list.
+			{/if}
 		</p>
-		<a
-			href={listViewHref}
-			class="inline-flex h-8 items-center rounded-md border bg-background px-3 font-medium hover:bg-muted"
-		>
-			Back to {resource.label}
-		</a>
+		{#if target === 'record'}
+			<a
+				href={listViewHref}
+				class="inline-flex h-8 items-center rounded-md border bg-background px-3 font-medium hover:bg-muted"
+			>
+				Back to {resource.label}
+			</a>
+		{/if}
 	{:else}
-		<svelte:element this={`h${headingLevel}`} class="text-lg font-semibold">
-			Couldn't load {records}
+		<svelte:element this={heading} class="text-lg font-semibold">
+			{target === 'record' ? "Couldn't load this record" : `Couldn't load ${records}`}
 		</svelte:element>
 		<p class="text-muted-foreground">{failure.message}</p>
 		<button

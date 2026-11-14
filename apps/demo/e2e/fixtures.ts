@@ -1,5 +1,5 @@
 import { test as base, type APIRequestContext, type Page } from '@playwright/test';
-import { BACKEND_URL } from '../backend/config.ts';
+import { BACKEND_URL, type Fault } from '../backend/config.ts';
 
 /**
  * Every e2e test imports `test` from here, not from `@playwright/test`. It resets the demo
@@ -27,21 +27,12 @@ export async function hydrated(page: Page) {
 	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
 }
 
-/** A test-only fault for the demo backend's next resource request(s). See `backend/server.ts`. */
-export type BackendFault = {
-	status?: number;
-	message?: string;
-	delayMs?: number;
-	path?: string;
-	times?: number;
-};
-
 /**
  * Make the demo backend's next resource request(s) slow or fail. Reset clears it. Faults are
  * shared by every test, so only tests in `faults.test.ts` use them: that file runs on its own,
  * after every other test.
  */
-export async function injectFault(request: APIRequestContext, fault: BackendFault) {
+export async function injectFault(request: APIRequestContext, fault: Fault) {
 	const response = await request.post(`${BACKEND_URL}/faults`, { data: fault });
 	if (!response.ok()) throw new Error(`Injecting a backend fault failed: ${response.status()}`);
 }

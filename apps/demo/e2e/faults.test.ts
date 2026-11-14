@@ -1,22 +1,23 @@
 // Tests that make the demo backend slow or fail. Faults are global to the backend, so this file
 // runs in its own Playwright project, with one worker, after every other test (see
 // playwright.config.ts). Every test here needs JavaScript.
+import type { Page } from '@playwright/test';
 import { expect, hydrated, injectFault, test } from './fixtures.ts';
 import { dataRows, pager } from './list-helpers.ts';
 import { serverLog } from './server-log.ts';
 
-const loadError = (page: import('@playwright/test').Page) => page.getByRole('alert');
+const loadError = (page: Page) => page.getByRole('alert');
 
 /** Mark the window, so a test can tell a full page reload (which loses the mark) from none. */
-async function markWindow(page: import('@playwright/test').Page) {
+async function markWindow(page: Page) {
 	await page.evaluate(() => Object.assign(window, { __noReload: true }));
 }
 
-async function reloaded(page: import('@playwright/test').Page) {
+async function reloaded(page: Page) {
 	return !(await page.evaluate(() => (window as { __noReload?: boolean }).__noReload === true));
 }
 
-test.describe('a passing backend error on the recipes list', () => {
+test.describe('a transient backend error on the recipes list', () => {
 	test('shows the error message, and Retry shows the records without a full reload', async ({
 		page,
 		request
@@ -29,6 +30,8 @@ test.describe('a passing backend error on the recipes list', () => {
 		await expect(loadError(page)).toContainText("Couldn't load recipes");
 		await expect(loadError(page)).toContainText('An unexpected error occurred.');
 		await expect(dataRows(page)).toHaveCount(0);
+		// The search box stays outside the failure, so the search can still be changed.
+		await expect(page.getByRole('searchbox', { name: 'Search recipes' })).toBeVisible();
 
 		await hydrated(page);
 		await markWindow(page);
@@ -81,7 +84,7 @@ test.describe('a passing backend error on the recipes list', () => {
 	});
 });
 
-test.describe('a passing backend error on a recipe', () => {
+test.describe('a transient backend error on a recipe', () => {
 	test('shows the error under the link back to the list, and Retry shows the record', async ({
 		page,
 		request
@@ -91,7 +94,7 @@ test.describe('a passing backend error on a recipe', () => {
 		await page.goto('/admin/recipes/2');
 
 		await expect(
-			page.getByRole('heading', { level: 1, name: "Couldn't load recipes" })
+			page.getByRole('heading', { level: 1, name: "Couldn't load this record" })
 		).toBeVisible();
 		await expect(page.getByRole('link', { name: 'Recipes' })).toHaveAttribute(
 			'href',

@@ -40,7 +40,7 @@
 					{resource}
 					retry={() => view.refresh().then(reset, reset)}
 					listViewHref={view.listViewHref}
-					headingLevel={1}
+					target="record"
 				/>
 			</div>
 		{/snippet}
