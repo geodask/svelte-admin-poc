@@ -1,8 +1,8 @@
 <!--
 	The list View: one page of a Resource's records in a table, with a pager. It takes the
 	Resource and its remote functions as props, so a route passes them from admin.ts. It shows
-	each Field the Resource puts on the list, in schema order, by its Kind. The page and page
-	size live in the URL, through the core's headless `createListView`.
+	each Field the Resource puts on the list, in schema order, by its Kind. The page, page size
+	and search live in the URL, through the core's headless `createListView`.
 -->
 <script lang="ts">
 	import type { Resource, ResourceRemote } from '@svelte-admin/core';
@@ -10,6 +10,7 @@
 	import { getCoreRowModel, type ColumnDef } from '@tanstack/table-core';
 	import FieldCell from './FieldCell.svelte';
 	import Pager from './Pager.svelte';
+	import Toolbar from './Toolbar.svelte';
 	import {
 		createSvelteTable,
 		FlexRender,
@@ -24,6 +25,11 @@
 	// Derived, so the list View follows the Resource when the route switches to another one.
 	const view = $derived(createListView(resource, remote));
 	const result = $derived(await view.query);
+	const emptyMessage = $derived.by(() => {
+		const records = resource.label.toLowerCase();
+		if (view.params.search !== undefined) return `No ${records} match “${view.params.search}”.`;
+		return `No ${records} ${view.params.page > 1 ? 'on this page' : 'yet'}.`;
+	});
 
 	const columns = $derived<ColumnDef<Row>[]>(
 		view.fields.map((field) => ({
@@ -55,6 +61,8 @@
 <div class="flex flex-col gap-4">
 	<h1 class="text-2xl font-semibold tracking-tight">{resource.label}</h1>
 
+	<Toolbar {view} />
+
 	<div class="overflow-hidden rounded-lg border">
 		<Table.Root>
 			<Table.Header class="bg-muted">
@@ -85,8 +93,7 @@
 				{:else}
 					<Table.Row>
 						<Table.Cell colspan={columns.length} class="h-24 text-center text-muted-foreground">
-							No {resource.label.toLowerCase()}
-							{view.params.page > 1 ? 'on this page' : 'yet'}.
+							{emptyMessage}
 						</Table.Cell>
 					</Table.Row>
 				{/each}

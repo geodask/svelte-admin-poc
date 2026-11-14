@@ -16,12 +16,15 @@ import type { RecordOf, Resource } from './resource.ts';
 export function serveResource<R extends Resource>(resource: R, provider: Provider<RecordOf<R>>) {
 	const records = z.array(resource.schema);
 
-	const getList = query(listParamsSchema, async (params): Promise<ListResult<RecordOf<R>>> => {
-		const result = await provider.getList(providerContext(), params);
-		// A record that doesn't match the schema is an unexpected error, masked as a 500.
-		// Parsing also drops any key the schema doesn't declare before it reaches the browser.
-		return { ...result, data: records.parse(result.data) as RecordOf<R>[] };
-	});
+	const getList = query(
+		listParamsSchema(resource),
+		async (params): Promise<ListResult<RecordOf<R>>> => {
+			const result = await provider.getList(providerContext(), params);
+			// A record that doesn't match the schema is an unexpected error, masked as a 500.
+			// Parsing also drops any key the schema doesn't declare before it reaches the browser.
+			return { ...result, data: records.parse(result.data) as RecordOf<R>[] };
+		}
+	);
 
 	return { getList };
 }

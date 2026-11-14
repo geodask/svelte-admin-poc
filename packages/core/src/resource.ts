@@ -13,6 +13,8 @@ export type Resource<N extends string = string, S extends ResourceSchema = Resou
 	readonly name: N;
 	readonly label: string;
 	readonly schema: S;
+	/** Whether the list View offers a search box and `getList` accepts a search. */
+	readonly searchable: boolean;
 	/** Its Fields in schema key order, with labels, Kinds and where each one shows. */
 	readonly fields: readonly Field[];
 };
@@ -41,7 +43,12 @@ export function defineResource<const N extends string, S extends ResourceSchema>
 	label: string;
 	/** One Zod object schema, the single source of truth for the Resource's Fields. */
 	schema: S & (HasValidId<S> extends true ? unknown : IdRequired);
+	/**
+	 * Whether the backend can search this Resource. Only then does the list View show a search
+	 * box, and only then does `getList` accept a search: for any other Resource it is rejected.
+	 */
+	searchable?: boolean;
 }): Resource<N, S> {
-	const { name, label, schema } = definition;
-	return { name, label, schema, fields: describeFields(schema) };
+	const { name, label, schema, searchable = false } = definition;
+	return { name, label, schema, searchable, fields: describeFields(schema) };
 }

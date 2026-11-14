@@ -1,4 +1,4 @@
-import { test as base } from '@playwright/test';
+import { test as base, type Page } from '@playwright/test';
 import { BACKEND_URL } from '../backend/config.ts';
 
 /**
@@ -18,3 +18,11 @@ export const test = base.extend<{ resetBackend: void }>({
 });
 
 export { expect } from '@playwright/test';
+
+/**
+ * Wait until the page is hydrated (the demo's root layout marks it), so a test that types with
+ * JavaScript on doesn't type into server-rendered markup that hydration then replaces.
+ */
+export async function hydrated(page: Page) {
+	await page.locator('html[data-hydrated]').waitFor({ state: 'attached' });
+}

@@ -37,6 +37,24 @@ describe('the bundled REST Provider', () => {
 			expect(requests).toEqual(['http://api.test/recipes?page=2&perPage=10']);
 		});
 
+		it('sends the search as q when there is one', async () => {
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+			const provider = restProvider('http://api.test').for(recipes);
+
+			await provider.getList(context(fetch), { page: 1, perPage: 25, search: 'chicken & rice' });
+
+			expect(requests).toEqual(['http://api.test/recipes?page=1&perPage=25&q=chicken+%26+rice']);
+		});
+
+		it('leaves q out when there is no search', async () => {
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+			const provider = restProvider('http://api.test').for(recipes);
+
+			await provider.getList(context(fetch), { page: 1, perPage: 25, search: undefined });
+
+			expect(requests).toEqual(['http://api.test/recipes?page=1&perPage=25']);
+		});
+
 		it('keeps a path in the base URL and ignores a trailing slash', async () => {
 			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
 			const provider = restProvider('http://api.test/v1/').for(recipes);
