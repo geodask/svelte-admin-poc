@@ -12,7 +12,8 @@ const listResponse = z.union([
 /**
  * A Provider for a backend that speaks this convention:
  *
- * - `GET {base}/{resource}?page=&perPage=` returns `{ data, total }` or `{ data, hasNextPage }`.
+ * - `GET {base}/{resource}?page=&perPage=&q=` returns `{ data, total }` or
+ *   `{ data, hasNextPage }`. `q` is the search, sent only when there is one.
  *
  * It uses only the `fetch` from its context. Records are not checked here: `serveResource`
  * parses each one with the Resource schema.
@@ -30,8 +31,9 @@ export function restProvider(baseUrl: string) {
 			const resourceUrl = `${base}/${encodeURIComponent(resource.name)}`;
 
 			return {
-				async getList({ fetch }, { page, perPage }) {
+				async getList({ fetch }, { page, perPage, search: q }) {
 					const search = new URLSearchParams({ page: String(page), perPage: String(perPage) });
+					if (q !== undefined) search.set('q', q);
 					const url = `${resourceUrl}?${search}`;
 					const parsed = listResponse.safeParse(await getJson(fetch, url));
 					if (!parsed.success) {

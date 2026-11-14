@@ -4,6 +4,8 @@ import { z } from 'zod';
 export const recipes = defineResource({
 	name: 'recipes',
 	label: 'Recipes',
+	// The demo backend searches recipes by their text Fields.
+	searchable: true,
 	// The key order is the display order. Recipes hold a Field of every built-in Kind.
 	schema: z.object({
 		id: z.number(),

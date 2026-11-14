@@ -8,11 +8,11 @@
  */
 export type ProviderContext = { fetch: typeof fetch; locals: App.Locals };
 
-import type { z } from 'zod';
-import type { listParamsSchema } from './list-params.ts';
-
-/** The validated params `getList` receives. Search, sort and filters come later. */
-export type ListParams = z.output<typeof listParamsSchema>;
+/**
+ * The validated params `getList` receives. A search, never empty, comes only for a searchable
+ * Resource. Sort and filters come later.
+ */
+export type ListParams = { page: number; perPage: number; search?: string };
 
 /** One page of records, with a total when the backend can count, or else `hasNextPage`. */
 export type ListResult<T> = { data: T[]; total: number } | { data: T[]; hasNextPage: boolean };

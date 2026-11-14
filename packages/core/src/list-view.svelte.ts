@@ -8,13 +8,18 @@ import type { RecordOf, Resource } from './resource.ts';
 /** The page sizes a list View offers. Any size from 1 to the cap still works from the URL. */
 const PER_PAGE_OPTIONS: readonly number[] = [10, 25, 50, 100];
 
+/** How long typing must pause before a search is written to the URL. */
+const SEARCH_DEBOUNCE_MS = 300;
+
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
  * and the hrefs that change page and page size. The Theme's list View is built on it, and so
  * can a replaced View. It takes the Resource as an argument, not from context.
  *
  * The URL is the only state. A bad value or an unknown param in it is dropped, and with
- * JavaScript the URL is rewritten in place (`replace`, so no history entry is added).
+ * JavaScript the URL is rewritten in place (`replace`, so no history entry is added). On a
+ * searchable Resource, typing a search writes it to the URL after a short pause, also in place,
+ * and starts again at page 1.
  *
  * Call it during component setup. In a component whose Resource can change, wrap the call in
  * `$derived`, so the list View follows the Resource.
@@ -31,21 +36,43 @@ export function createListView<R extends Resource>(
 	// it: a new copy is derived whenever `page.url` changes.
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
 	const url = $derived(new URL(page.url.href));
-	const params = $derived(readListParams(url));
+	const params = $derived(readListParams(url, resource));
 	const fields = resource.fields.filter((field) => field.list);
 
 	$effect(() => {
-		const rewrite = listUrlRewrite(url);
+		const rewrite = listUrlRewrite(url, resource);
 		// The rewrite only cleans the URL the page was opened with, so keep scroll and focus.
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the current list path
 		if (rewrite !== undefined) void goto(rewrite, { replace: true, reset: false });
 	});
 
+	// Search text typed but not yet in the URL, or `undefined` while the URL holds what was typed.
+	// While it is set the search box shows it, so a navigation that lands after more typing never
+	// rewinds the text.
+	let draft = $state<string | undefined>();
+	let debounce: ReturnType<typeof setTimeout> | undefined;
+	// Leaving the list (or switching Resource) drops a search that was still waiting.
+	$effect(() => () => clearTimeout(debounce));
+
+	/** Write a search to the URL now, in place, at page 1 of the current page size. */
+	function writeSearch(text: string) {
+		clearTimeout(debounce);
+		const href = listHref(url, { page: 1, perPage: params.perPage, search: text });
+		if (href === listHref(url, params)) {
+			draft = undefined;
+			return;
+		}
+		// Keep focus in the search box and the scroll where it is.
+		void goto(href, { replace: true, reset: false }).finally(() => {
+			if (draft === text) draft = undefined;
+		});
+	}
+
 	return {
 		resource,
 		/** The Fields the list View shows, in schema order. */
 		fields,
-		/** The page and page size in the URL, with defaults for what it leaves out. */
+		/** The page, page size and search in the URL, with defaults for what it leaves out. */
 		get params(): ListParams {
 			return params;
 		},
@@ -59,9 +86,35 @@ export function createListView<R extends Resource>(
 		pageHref(target: number): string {
 			return listHref(url, { ...params, page: target });
 		},
-		/** The href of the first page at another page size. */
+		/** The href of the first page at another page size, keeping the search. */
 		perPageHref(perPage: number): string {
-			return listHref(url, { page: 1, perPage });
+			return listHref(url, { page: 1, perPage, search: params.search });
+		},
+		/** Whether to offer a search box: only on a searchable Resource. */
+		searchable: resource.searchable,
+		/** The text for the search box: what is being typed, else the search in the URL. */
+		get search(): string {
+			return draft ?? params.search ?? '';
+		},
+		/** Take what was typed in the search box. It reaches the URL once typing pauses. */
+		setSearch(text: string) {
+			draft = text;
+			clearTimeout(debounce);
+			debounce = setTimeout(() => writeSearch(text), SEARCH_DEBOUNCE_MS);
+		},
+		/** Write the search box's text to the URL now, e.g. when its form is submitted. */
+		submitSearch() {
+			writeSearch(draft ?? params.search ?? '');
+		},
+		/**
+		 * The GET form the search box sits in, so search works without JavaScript too: where it
+		 * goes, the name of its search box, and the params it keeps as hidden inputs (a page size
+		 * that isn't the default, never the page). The form names no empty param.
+		 */
+		get searchForm(): { action: string; name: 'q'; hidden: [name: string, value: string][] } {
+			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
+			const kept = new URL(listHref(url, { page: 1, perPage: params.perPage }), url);
+			return { action: kept.pathname, name: 'q', hidden: [...kept.searchParams] };
 		}
 	};
 }

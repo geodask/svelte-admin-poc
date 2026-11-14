@@ -5,6 +5,7 @@ export const posts = defineResource({
 	name: 'posts',
 	label: 'Posts',
 	// The demo backend can't count posts, so their list View pages with previous and next only.
+	// Posts aren't searchable, so their list View shows no search box.
 	schema: z.object({
 		id: z.number(),
 		title: z.string(),

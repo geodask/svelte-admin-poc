@@ -1,15 +1,5 @@
-import type { Page } from '@playwright/test';
-import { BACKEND_URL } from '../backend/config.ts';
 import { expect, test } from './fixtures.ts';
-
-/** The data rows of the list View's table, without its header row. */
-const dataRows = (page: Page) =>
-	page
-		.getByRole('table')
-		.getByRole('row')
-		.filter({ has: page.getByRole('cell') });
-
-const pager = (page: Page) => page.getByRole('navigation', { name: 'Pagination' });
+import { backendRequestsFor, captureGetList, dataRows, pager, uniquePage } from './list-helpers.ts';
 
 test.describe('paging through recipes, which the backend counts', () => {
 	test('the pager opens page 2, and the URL holds it', async ({ page }) => {
@@ -157,54 +147,32 @@ test.describe('an old link with bad or unknown params', () => {
 });
 
 test.describe('the getList remote function', () => {
-	/**
-	 * Re-encode a captured remote query payload with some args changed. A payload is Kit's
-	 * url-safe base64 of a devalue array, where an object maps each key to the index of its value.
-	 */
-	function withArgs(payload: string, changes: Record<string, unknown>): string {
-		const nodes = JSON.parse(Buffer.from(payload, 'base64url').toString()) as unknown[];
-		const args = nodes.find(
-			(node): node is Record<string, number> =>
-				typeof node === 'object' && node !== null && !Array.isArray(node) && 'perPage' in node
-		);
-		if (!args) throw new Error(`No list params in the payload ${JSON.stringify(nodes)}`);
-		for (const [key, value] of Object.entries(changes)) {
-			args[key] = nodes.push(value) - 1;
-		}
-		return Buffer.from(JSON.stringify(nodes)).toString('base64url');
-	}
-
 	test('rejects a page size over the cap or an unknown key with a 400, before the Provider @js', async ({
 		page,
 		request
 	}) => {
-		// Kit names remote functions by a hash, so learn the URL from the browser's own request.
 		await page.goto('/admin/recipes');
-		// Wait for the response, so the browser's own call is done before the backend is reset.
-		const remoteResponse = page.waitForResponse((r) => r.url().includes('/_app/remote/'));
-		await pager(page).getByRole('link', { name: 'Next' }).click();
-		const captured = new URL((await remoteResponse).url());
-		const payload = captured.searchParams.get('payload') ?? '';
-		const call = (changes: Record<string, unknown>) =>
-			request.get(`${captured.pathname}?payload=${withArgs(payload, changes)}`);
+		const call = await captureGetList(page, request, () =>
+			pager(page).getByRole('link', { name: 'Next' }).click()
+		);
 
-		await request.post(`${BACKEND_URL}/reset`);
+		const marker = uniquePage();
 
 		for (const changes of [{ perPage: 101 }, { foo: 1 }, { limit: 100000 }]) {
-			const response = await call(changes);
+			const response = await call({ page: marker, ...changes });
 			// A remote query answers with the error's status in its body.
 			expect(await response.json(), JSON.stringify(changes)).toMatchObject({
 				type: 'error',
 				error: { status: 400 }
 			});
 		}
-		const providerCalls = await request.get(`${BACKEND_URL}/requests`);
-		expect(await providerCalls.json()).toEqual([]);
+		expect(await backendRequestsFor(request, marker)).toEqual([]);
 
 		// A good call does reach the Provider, so the empty log above means something.
-		const good = await call({ perPage: 100 });
+		const good = await call({ page: marker, perPage: 100 });
 		expect(await good.json()).toMatchObject({ type: 'result' });
-		const afterGood = await request.get(`${BACKEND_URL}/requests`);
-		expect(await afterGood.json()).toEqual(['GET /recipes?page=2&perPage=100']);
+		expect(await backendRequestsFor(request, marker)).toEqual([
+			`GET /recipes?page=${marker}&perPage=100`
+		]);
 	});
 });

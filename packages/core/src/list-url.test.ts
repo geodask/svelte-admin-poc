@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { listHref, listUrlRewrite, readListParams } from '@svelte-admin/core';
 
-const read = (search: string) =>
-	readListParams(new URL(`http://admin.test/admin/recipes${search}`));
+// Only whether a Resource is searchable matters to the list URL.
+const searchable = { searchable: true };
+const notSearchable = { searchable: false };
+
+const read = (search: string, resource = notSearchable) =>
+	readListParams(new URL(`http://admin.test/admin/recipes${search}`), resource);
 
 describe('the list URL helper', () => {
 	describe('reading the list params', () => {
@@ -31,6 +35,31 @@ describe('the list URL helper', () => {
 			expect(read('?page=abc&perPage=50')).toEqual({ page: 1, perPage: 50 });
 			expect(read('?page=4&perPage=1000')).toEqual({ page: 4, perPage: 25 });
 		});
+
+		it('reads the search in q for a searchable Resource', () => {
+			expect(read('?q=pasta', searchable)).toEqual({ page: 1, perPage: 25, search: 'pasta' });
+			expect(read('?page=2&perPage=10&q=chicken+tacos', searchable)).toEqual({
+				page: 2,
+				perPage: 10,
+				search: 'chicken tacos'
+			});
+		});
+
+		it('keeps the search as typed, spaces included, so a search box never fights the URL', () => {
+			expect(read('?q=%20pasta%20', searchable)).toEqual({
+				page: 1,
+				perPage: 25,
+				search: ' pasta '
+			});
+		});
+
+		it.each(['', '%20%20'])('reads no search from the empty q %j', (value) => {
+			expect(read(`?q=${value}`, searchable)).toEqual({ page: 1, perPage: 25 });
+		});
+
+		it('ignores q for a Resource that is not searchable', () => {
+			expect(read('?q=pasta')).toEqual({ page: 1, perPage: 25 });
+		});
 	});
 
 	describe('writing a list href', () => {
@@ -51,15 +80,31 @@ describe('the list URL helper', () => {
 			expect(listHref(withJunk, { page: 2, perPage: 25 })).toBe('/admin/recipes?page=2');
 		});
 
+		it('names the search in q, after the page and the page size', () => {
+			expect(listHref(url, { page: 1, perPage: 25, search: 'pasta' })).toBe(
+				'/admin/recipes?q=pasta'
+			);
+			expect(listHref(url, { page: 2, perPage: 10, search: 'chicken tacos' })).toBe(
+				'/admin/recipes?page=2&perPage=10&q=chicken+tacos'
+			);
+		});
+
+		it('leaves an empty search out of the URL', () => {
+			expect(listHref(url, { page: 1, perPage: 10, search: '' })).toBe('/admin/recipes?perPage=10');
+			expect(listHref(url, { page: 1, perPage: 10, search: '  ' })).toBe(
+				'/admin/recipes?perPage=10'
+			);
+		});
+
 		it('reads back as the params it was written from', () => {
-			const params = { page: 7, perPage: 100 };
-			expect(read(listHref(url, params).replace('/admin/recipes', ''))).toEqual(params);
+			const params = { page: 7, perPage: 100, search: 'pasta & co' };
+			expect(read(listHref(url, params).replace('/admin/recipes', ''), searchable)).toEqual(params);
 		});
 	});
 
 	describe('rewriting a list URL', () => {
-		const rewrite = (search: string) =>
-			listUrlRewrite(new URL(`http://admin.test/admin/recipes${search}`));
+		const rewrite = (search: string, resource = notSearchable) =>
+			listUrlRewrite(new URL(`http://admin.test/admin/recipes${search}`), resource);
 
 		it('leaves a URL alone when it names only good values that differ from the defaults', () => {
 			expect(rewrite('')).toBeUndefined();
@@ -92,6 +137,21 @@ describe('the list URL helper', () => {
 
 		it('keeps the hash', () => {
 			expect(rewrite('?foo=1#rows')).toBe('/admin/recipes#rows');
+		});
+
+		it('leaves a search alone on a searchable Resource', () => {
+			expect(rewrite('?q=pasta', searchable)).toBeUndefined();
+			expect(rewrite('?q=pasta&page=2', searchable)).toBeUndefined();
+			expect(rewrite('?q=chicken%20tacos', searchable)).toBeUndefined();
+		});
+
+		it('drops an empty search', () => {
+			expect(rewrite('?q=', searchable)).toBe('/admin/recipes');
+			expect(rewrite('?perPage=10&q=', searchable)).toBe('/admin/recipes?perPage=10');
+		});
+
+		it('drops q on a Resource that is not searchable', () => {
+			expect(rewrite('?q=pasta&page=2')).toBe('/admin/recipes?page=2');
 		});
 	});
 });
