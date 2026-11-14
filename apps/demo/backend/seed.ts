@@ -1,5 +1,6 @@
 // The demo backend's seed data. Each reset restores exactly these records, so tests are
-// deterministic. Recipes and posts each fill several default pages (25 records each).
+// deterministic. Recipes and posts each fill several default pages (25 records each); users
+// fit on one.
 //
 // Recipes carry a Field of every Kind, so the e2e tests can check how each one is shown.
 // The values of the later Fields are derived from the row's position.
@@ -150,3 +151,38 @@ export const posts: Post[] = Array.from({ length: 60 }, (_, index) => {
 		body: `Notes on ${topic.toLowerCase()}.`
 	};
 });
+
+// Users: posts name their author by `userId`, 1 to 5.
+export type User = {
+	id: number;
+	name: string;
+	email: string;
+	role: 'admin' | 'editor' | 'viewer';
+	active: boolean;
+	joinedAt: string;
+};
+
+const people: [string, User['role']][] = [
+	['Ada Lovelace', 'admin'],
+	['Grace Hopper', 'editor'],
+	['Alan Turing', 'editor'],
+	['Katherine Johnson', 'editor'],
+	['Edsger Dijkstra', 'viewer'],
+	['Barbara Liskov', 'viewer'],
+	['Donald Knuth', 'viewer'],
+	['Margaret Hamilton', 'editor'],
+	['Dennis Ritchie', 'viewer'],
+	['Frances Allen', 'viewer'],
+	['John McCarthy', 'viewer'],
+	['Radia Perlman', 'editor']
+];
+
+export const users: User[] = people.map(([name, role], index) => ({
+	id: index + 1,
+	name,
+	email: `${name.split(' ')[0].toLowerCase()}@example.com`,
+	role,
+	// Every fourth user has left.
+	active: index % 4 !== 3,
+	joinedAt: new Date(Date.UTC(2023, index, 15, 9, 0)).toISOString()
+}));

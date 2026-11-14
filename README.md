@@ -23,7 +23,7 @@ You need Node 22 (see `.node-version`) and Bun (see `packageManager` in `package
 ```sh
 bun install
 bun run --filter @svelte-admin/demo backend   # the demo backend on http://localhost:4100
-bun run dev                                    # the demo app; open http://localhost:5173/admin/recipes
+bun run dev                                    # the demo app; open http://localhost:5173/admin
 ```
 
 The demo backend (`apps/demo/backend`) is a small Bun server that serves seed data from memory. Restart it, or `POST /reset`, to restore the seed data.
@@ -45,6 +45,10 @@ Each Resource costs about 4 lines of wiring in the demo:
 
 1. A shared module with its schema: `src/lib/resources/recipes.ts` calls `defineResource`.
 2. A one-line remote module: `src/lib/resources/recipes.remote.ts` exports `serveResource(recipes, backend.for(recipes))`.
-3. One entry in `src/lib/admin.ts`, which `src/params.ts` also reads for the Resource param matcher.
+3. One entry in `src/lib/admin.ts`, which `src/params.ts` also reads for the Resource param matcher, and the shell for its sidebar.
+
+`defineResource` also takes an optional sidebar `group` and `icon`. The icon is a lazy import of a Lucide icon, such as `icon: () => import('@lucide/svelte/icons/chef-hat')`: SvelteKit loads `src/params.ts`, and so every Resource module, in plain Node at build time, where a `.svelte` file can't load.
+
+The admin layout renders the Theme's `AdminShell` with the admin from `admin.ts` and the app's own `brand` and `userMenu` snippets. The `/admin` index redirects to the first Resource's list.
 
 `@svelte-admin/core` is the browser-safe entry. `serveResource` lives in `@svelte-admin/core/server` and the bundled REST Provider in `@svelte-admin/core/rest`; import those only from `.remote.ts` files and server-only modules.

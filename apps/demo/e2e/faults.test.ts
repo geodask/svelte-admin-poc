@@ -85,7 +85,7 @@ test.describe('a transient backend error on the recipes list', () => {
 });
 
 test.describe('a transient backend error on a recipe', () => {
-	test('shows the error under the link back to the list, and Retry shows the record', async ({
+	test('shows the error under the breadcrumb back to the list, and Retry shows the record', async ({
 		page,
 		request
 	}) => {
@@ -96,10 +96,12 @@ test.describe('a transient backend error on a recipe', () => {
 		await expect(
 			page.getByRole('heading', { level: 1, name: "Couldn't load this record" })
 		).toBeVisible();
-		await expect(page.getByRole('link', { name: 'Recipes' })).toHaveAttribute(
+		const breadcrumb = page.getByRole('navigation', { name: 'breadcrumb' });
+		await expect(breadcrumb.getByRole('link', { name: 'Recipes' })).toHaveAttribute(
 			'href',
 			'/admin/recipes'
 		);
+		await expect(breadcrumb.getByRole('listitem')).toHaveText(['Recipes', 'Error']);
 
 		await hydrated(page);
 		await markWindow(page);
@@ -109,6 +111,9 @@ test.describe('a transient backend error on a recipe', () => {
 			page.getByRole('heading', { level: 1, name: 'Vegetarian Stir-Fry' })
 		).toBeVisible();
 		await expect(loadError(page)).toHaveCount(0);
+		await expect(page.getByRole('navigation', { name: 'breadcrumb' })).toContainText(
+			'Vegetarian Stir-Fry'
+		);
 		expect(await reloaded(page)).toBe(false);
 	});
 });

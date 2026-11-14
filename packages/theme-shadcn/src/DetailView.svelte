@@ -24,25 +24,17 @@
 	const view = $derived(createDetailView(resource, remote, id));
 </script>
 
-<div class="flex flex-col gap-1">
-	<a href={view.listViewHref} class="w-fit text-sm text-muted-foreground hover:text-foreground">
-		<span aria-hidden="true">←</span>
-		{resource.label}
-	</a>
+<!-- The shell's breadcrumb leads back to the list, so the View has no link of its own. -->
+<svelte:boundary>
+	<DetailBody {view} />
 
-	<svelte:boundary>
-		<DetailBody {view} />
-
-		{#snippet failed(error, reset)}
-			<div class="mt-5">
-				<LoadError
-					{error}
-					{resource}
-					retry={() => view.refresh().then(reset, reset)}
-					listViewHref={view.listViewHref}
-					target="record"
-				/>
-			</div>
-		{/snippet}
-	</svelte:boundary>
-</div>
+	{#snippet failed(error, reset)}
+		<LoadError
+			{error}
+			{resource}
+			retry={() => view.refresh().then(reset, reset)}
+			listViewHref={view.listViewHref}
+			target="record"
+		/>
+	{/snippet}
+</svelte:boundary>

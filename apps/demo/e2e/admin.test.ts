@@ -1,10 +1,10 @@
 import { expect, test } from './fixtures.ts';
 
-test('opens the admin under /admin', async ({ page }) => {
+test('/admin opens the first Resource list', async ({ page }) => {
 	await page.goto('/admin');
 
-	await expect(page).toHaveTitle('Svelte Admin');
-	await expect(page.getByRole('heading', { level: 1, name: 'Svelte Admin' })).toBeVisible();
+	await expect(page).toHaveURL('/admin/recipes');
+	await expect(page.getByRole('heading', { level: 1, name: 'Recipes' })).toBeVisible();
 });
 
 for (const path of ['/admin/toString', '/admin/constructor', '/admin/nope']) {

@@ -1,8 +1,10 @@
 // Type-level tests, checked by `tsc` (`bun run check`), never run. Each `@ts-expect-error`
 // fails the check if the line below it stops being a type error.
+import type { Component } from 'svelte';
 import { z } from 'zod';
 import { defineAdmin, defineResource, type Provider } from '@svelte-admin/core';
 import { serveResource } from '@svelte-admin/core/server';
+import type { ShellAdmin } from '@svelte-admin/core/views';
 
 const recipes = defineResource({
 	name: 'recipes',
@@ -35,7 +37,7 @@ const stringIdProvider: Provider<Recipe, string> = {
 
 // A Provider whose records match the schema is accepted, and what it serves fits admin.ts.
 const recipesRemote = serveResource(recipes, recipeProvider);
-defineAdmin({
+const admin = defineAdmin({
 	basePath: '/admin',
 	resources: { recipes: { resource: recipes, remote: async () => recipesRemote } }
 });
@@ -86,3 +88,33 @@ defineResource({
 	// @ts-expect-error the `id` Field must not be optional
 	schema: z.object({ id: z.number().optional() })
 });
+
+// An icon is a lazy import of a component that takes a `class`, as a Lucide icon does.
+type IconLike = Component<{ class?: string | null; size?: number | string; title?: string }>;
+defineResource({
+	name: 'chefs',
+	label: 'Chefs',
+	icon: async () => ({ default: {} as IconLike }),
+	schema: z.object({ id: z.number() })
+});
+defineResource({
+	name: 'cooks',
+	label: 'Cooks',
+	// @ts-expect-error an icon is a lazy import, not the component itself
+	icon: {} as IconLike,
+	schema: z.object({ id: z.number() })
+});
+
+// `locate` keeps each Resource's id type.
+const here = admin.locate('/admin/recipes/1');
+if (here?.name === 'recipes') {
+	const id: number | undefined = here.id;
+	// @ts-expect-error a recipe id is a number
+	const text: string | undefined = here.id;
+	void id;
+	void text;
+}
+
+// The admin `defineAdmin` returns is what the shell takes.
+const shellAdmin: ShellAdmin = admin;
+void shellAdmin;

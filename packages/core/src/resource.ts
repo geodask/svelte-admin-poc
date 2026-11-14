@@ -1,8 +1,17 @@
+import type { Component } from 'svelte';
 import type { z } from 'zod';
 import { describeFields, type Field } from './fields.ts';
 
 /** Any Zod object schema. `defineResource` checks that it has a usable `id` Field. */
 export type ResourceSchema = z.ZodObject;
+
+/**
+ * A Resource's icon: a lazy import of an icon component, e.g. a Lucide icon written as
+ * `() => import('@lucide/svelte/icons/chef-hat')`. It is lazy because SvelteKit loads
+ * `src/params.ts`, which reads `admin.ts` and so every Resource module, in plain Node at build
+ * time, where a `.svelte` file can't load. The Theme renders it with a `class`.
+ */
+export type ResourceIcon = () => Promise<{ default: Component<{ class?: string }> }>;
 
 /**
  * A Resource: a named kind of record the admin manages. It holds metadata only, so the
@@ -12,6 +21,10 @@ export type ResourceSchema = z.ZodObject;
 export type Resource<N extends string = string, S extends ResourceSchema = ResourceSchema> = {
 	readonly name: N;
 	readonly label: string;
+	/** The icon the sidebar shows beside the label, if any. */
+	readonly icon?: ResourceIcon;
+	/** The sidebar group the Resource is listed under, e.g. "Content". None: listed ungrouped. */
+	readonly group?: string;
 	readonly schema: S;
 	/** Whether the list View offers a search box and `getList` accepts a search. */
 	readonly searchable: boolean;
@@ -47,6 +60,16 @@ export function defineResource<const N extends string, S extends ResourceSchema>
 	name: N;
 	/** The plural label shown in headings and the sidebar, e.g. "Recipes". */
 	label: string;
+	/**
+	 * The sidebar icon: a lazy import of an icon component, such as
+	 * `() => import('@lucide/svelte/icons/chef-hat')`.
+	 */
+	icon?: ResourceIcon;
+	/**
+	 * The sidebar group to list the Resource under. Groups appear in the order their first
+	 * Resource appears in `admin.ts`; a Resource without one is listed in a group with no label.
+	 */
+	group?: string;
 	/** One Zod object schema, the single source of truth for the Resource's Fields. */
 	schema: S & (HasValidId<S> extends true ? unknown : IdRequired);
 	/**
@@ -55,6 +78,6 @@ export function defineResource<const N extends string, S extends ResourceSchema>
 	 */
 	searchable?: boolean;
 }): Resource<N, S> {
-	const { name, label, schema, searchable = false } = definition;
-	return { name, label, schema, searchable, fields: describeFields(schema) };
+	const { name, label, icon, group, schema, searchable = false } = definition;
+	return { name, label, icon, group, schema, searchable, fields: describeFields(schema) };
 }

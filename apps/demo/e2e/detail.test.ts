@@ -31,7 +31,7 @@ test.describe('the recipes detail View', () => {
 		).toBeVisible();
 		await expect(page).toHaveTitle('Classic Margherita Pizza · Recipes');
 
-		await page.getByRole('link', { name: 'Recipes' }).click();
+		await page.getByRole('navigation', { name: 'breadcrumb' }).getByRole('link').click();
 		await expect(page).toHaveURL('/admin/recipes');
 		await expect(page.getByRole('heading', { level: 1, name: 'Recipes' })).toBeVisible();
 	});

@@ -18,6 +18,7 @@
 		"check:client-bundle": "bun scripts/check-client-bundle.ts"
 	},
 	"dependencies": {
+		"@lucide/svelte": "catalog:",
 		"@svelte-admin/core": "workspace:*",
 		"@svelte-admin/theme-shadcn": "workspace:*",
 		"zod": "catalog:"

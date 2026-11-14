@@ -17,6 +17,7 @@
 		"svelte": "catalog:"
 	},
 	"dependencies": {
+		"@lucide/svelte": "catalog:",
 		"@svelte-admin/core": "workspace:*",
 		"@tanstack/table-core": "catalog:",
 		"clsx": "catalog:",

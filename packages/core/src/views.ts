@@ -4,3 +4,10 @@
 // the shared entry. They import no UI package.
 export { createDetailView, type DetailViewState } from './detail-view.svelte.ts';
 export { createListView, type ListViewState } from './list-view.svelte.ts';
+export {
+	createShell,
+	type ShellAdmin,
+	type ShellItem,
+	type ShellLocation,
+	type ShellState
+} from './shell.svelte.ts';
