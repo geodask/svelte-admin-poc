@@ -29,11 +29,6 @@
 	const selection = $derived(view.selection);
 	/** The ids of the records on this page, for the select-all checkbox. */
 	const pageIds = $derived(result.data.map((record) => idOf(record)));
-	const emptyMessage = $derived.by(() => {
-		const records = view.resource.label.toLowerCase();
-		if (view.params.search !== undefined) return `No ${records} match “${view.params.search}”.`;
-		return `No ${records} ${view.params.page > 1 ? 'on this page' : 'yet'}.`;
-	});
 
 	const columns = $derived<ColumnDef<Row>[]>(
 		view.fields.map((field) => ({
@@ -132,7 +127,7 @@
 				{:else}
 					<Table.Row>
 						<Table.Cell colspan={columns.length + 1} class="h-24 text-center text-muted-foreground">
-							{emptyMessage}
+							{view.emptyMessage}
 						</Table.Cell>
 					</Table.Row>
 				{/each}

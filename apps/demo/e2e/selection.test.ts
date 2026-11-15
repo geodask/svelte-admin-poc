@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, hydrated, test } from './fixtures.ts';
-import { dataRows, pager } from './list-helpers.ts';
+import { dataRows, openInSidebar, pager, selectedCount } from './list-helpers.ts';
 
 /** The checkbox that selects one row, by its record's Record title. */
 const rowCheckbox = (page: Page, title: string) =>
@@ -12,11 +12,6 @@ const headerCheckbox = (page: Page) =>
 /** The rows whose checkbox is ticked. */
 const selectedRows = (page: Page) =>
 	dataRows(page).filter({ has: page.getByRole('checkbox', { checked: true }) });
-
-const selectedCount = (page: Page) => page.getByText(/^\d+ selected$/);
-
-const openInSidebar = (page: Page, label: string) =>
-	page.getByRole('navigation', { name: 'Resources' }).getByRole('link', { name: label }).click();
 
 test.describe('row selection @js', () => {
 	test.beforeEach(async ({ page }) => {
@@ -68,15 +63,16 @@ test.describe('row selection @js', () => {
 	});
 
 	test('carries no selection into another Resource', async ({ page }) => {
-		// Recipes 1 and 2: users 1 and 2 have the same ids.
+		// Recipes 1 and 2: posts 1 and 2 have the same ids. (Posts, since the demo replaces the
+		// users list View with one of its own.)
 		await rowCheckbox(page, 'Classic Margherita Pizza').check();
 		await rowCheckbox(page, 'Vegetarian Stir-Fry').check();
 		await expect(selectedCount(page)).toHaveText('2 selected');
 
-		await openInSidebar(page, 'Users');
+		await openInSidebar(page, 'Posts');
 
-		await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
-		await expect(dataRows(page).first()).toContainText('Ada Lovelace');
+		await expect(page.getByRole('heading', { level: 1, name: 'Posts' })).toBeVisible();
+		await expect(dataRows(page).first()).toContainText('A beginner guide to weeknight dinners');
 		await expect(selectedRows(page)).toHaveCount(0);
 		await expect(headerCheckbox(page)).not.toBeChecked();
 		await expect(selectedCount(page)).toHaveCount(0);
@@ -85,8 +81,8 @@ test.describe('row selection @js', () => {
 	test('brings no stale selection back between Resources', async ({ page }) => {
 		await rowCheckbox(page, 'Classic Margherita Pizza').check();
 		await rowCheckbox(page, 'Vegetarian Stir-Fry').check();
-		await openInSidebar(page, 'Users');
-		await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
+		await openInSidebar(page, 'Posts');
+		await expect(page.getByRole('heading', { level: 1, name: 'Posts' })).toBeVisible();
 
 		await openInSidebar(page, 'Recipes');
 		await expect(page.getByRole('heading', { level: 1, name: 'Recipes' })).toBeVisible();
@@ -100,8 +96,8 @@ test.describe('row selection @js', () => {
 
 		await page.goBack();
 
-		await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
-		await expect(dataRows(page).first()).toContainText('Ada Lovelace');
+		await expect(page.getByRole('heading', { level: 1, name: 'Posts' })).toBeVisible();
+		await expect(dataRows(page).first()).toContainText('A beginner guide to weeknight dinners');
 		await expect(selectedRows(page)).toHaveCount(0);
 		await expect(selectedCount(page)).toHaveCount(0);
 	});

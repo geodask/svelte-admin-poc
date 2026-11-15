@@ -3,14 +3,20 @@
 	without JavaScript, submitting the form opens the search at page 1 and keeps the page size;
 	with JavaScript, the list follows typing and the URL is updated in place, so the browser
 	history doesn't fill up. Beside it, a count of the selected rows, once any are selected. The
-	row is there on every Resource, so the table doesn't move when the count appears. A Theme
-	part, driven by the core's `createListView`, so a replaced list View can render it too once
-	the Theme exports it (M1.10).
+	row is there on every Resource, so the content below doesn't move when the count appears.
+	A Theme part, exported for a replaced list View: give it the core's `createListView` helper.
 -->
-<script lang="ts">
+<script module lang="ts">
 	import type { ListViewState } from '@svelte-admin/core/views';
 
-	let { view }: { view: ListViewState } = $props();
+	export type ToolbarProps = {
+		/** The list View helper from the core's `createListView`. */
+		view: ListViewState;
+	};
+</script>
+
+<script lang="ts">
+	let { view }: ToolbarProps = $props();
 
 	const form = $derived(view.searchForm);
 	const searchId = $props.id();

@@ -47,6 +47,23 @@ export default ts.config(
 		}
 	},
 	{
+		// An app uses the packages through their public entries only, as a replaced View must.
+		files: ['apps/**/*.ts', 'apps/**/*.svelte'],
+		rules: {
+			'@typescript-eslint/no-restricted-imports': [
+				'error',
+				{
+					patterns: [
+						{
+							group: ['@svelte-admin/*/src', '@svelte-admin/*/src/**', '**/packages/**'],
+							message: "Import from the package's public entry, not its internals."
+						}
+					]
+				}
+			]
+		}
+	},
+	{
 		// The core's shared entry is browser-safe: it never imports `$app/server` or the
 		// server-only modules behind `./server` and `./rest`.
 		files: ['packages/core/src/**/*.ts'],

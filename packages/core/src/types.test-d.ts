@@ -4,7 +4,12 @@ import type { Component } from 'svelte';
 import { z } from 'zod';
 import { defineAdmin, defineResource, type Provider } from '@svelte-admin/core';
 import { serveResource } from '@svelte-admin/core/server';
-import type { ListSelection, ListViewState, ShellAdmin } from '@svelte-admin/core/views';
+import {
+	createListView,
+	type ListSelection,
+	type ListViewState,
+	type ShellAdmin
+} from '@svelte-admin/core/views';
 
 const recipes = defineResource({
 	name: 'recipes',
@@ -145,3 +150,11 @@ const pageSelection: ListSelection<string> = pageList.selection;
 pageList.selection.has(1);
 void pageSelection;
 void slugged;
+
+// A list View made for one Resource is what the Theme's parts take (they accept any Resource's
+// list View), so an app's replaced View can hand its own straight to them. (The value from
+// `createListView` itself, not `ListViewState<typeof recipes>`, which TypeScript compares by
+// its type argument alone.)
+const replacedView = createListView(recipes, recipesRemote);
+const anyList: ListViewState = replacedView;
+void anyList;

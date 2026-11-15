@@ -1,26 +1,28 @@
 <!--
 	A Field's value in a list View cell, shown by the Field's Kind, as a link when given an href.
-	It is a Theme part: a replaced list View will render it to match the rest of the admin
-	(exported in M1.10).
+	A Theme part, exported so a replaced list View shows values as the stock one does.
 -->
-<script lang="ts">
+<script module lang="ts">
 	import type { Field } from '@svelte-admin/core';
+
+	export type FieldCellProps = {
+		/** The Field, e.g. one of `view.fields` from the core's `createListView`. */
+		field: Field;
+		/** The record's value for the Field. */
+		value: unknown;
+		/** Where the cell links to, e.g. the record's detail View (`view.recordHref(record)`). */
+		href?: string;
+	};
+</script>
+
+<script lang="ts">
 	import ScalarValue from './ScalarValue.svelte';
 	import { formatScalar } from './format.ts';
 
 	/** How many items of a list the cell shows before "+N". */
 	const LIST_ITEMS_SHOWN = 3;
 
-	let {
-		field,
-		value,
-		href
-	}: {
-		field: Field;
-		value: unknown;
-		/** Where the cell links to, e.g. the record's detail View. */
-		href?: string;
-	} = $props();
+	let { field, value, href }: FieldCellProps = $props();
 </script>
 
 {#snippet content()}
