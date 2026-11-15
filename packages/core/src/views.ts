@@ -3,7 +3,7 @@
 // `src/params.ts`, which SvelteKit loads in plain Node, must not. That is why they are not on
 // the shared entry. They import no UI package.
 export { createDetailView, type DetailViewState } from './detail-view.svelte.ts';
-export { createListView, type ListViewState } from './list-view.svelte.ts';
+export { createListView, type ListSelection, type ListViewState } from './list-view.svelte.ts';
 export {
 	createShell,
 	type ShellAdmin,

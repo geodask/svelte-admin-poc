@@ -2,12 +2,17 @@
 	The list View's content: one page of records in a table, and the pager. It awaits
 	the page, so the list View renders it inside its boundary. While a new page loads (after a
 	page change or a search), the old rows stay and a small indicator shows.
+
+	The first column selects rows: a checkbox per row, and one in the header that selects or
+	clears every row on the page. The selection is the core's, so it belongs to this Resource.
 -->
 <script lang="ts">
+	import { recordTitle } from '@svelte-admin/core';
 	import type { ListViewState } from '@svelte-admin/core/views';
 	import { getCoreRowModel, type ColumnDef } from '@tanstack/table-core';
 	import FieldCell from './FieldCell.svelte';
 	import Pager from './Pager.svelte';
+	import SelectionCheckbox from './SelectionCheckbox.svelte';
 	import {
 		createSvelteTable,
 		FlexRender,
@@ -20,6 +25,9 @@
 	let { view }: { view: ListViewState } = $props();
 
 	const result = $derived(await view.query);
+	const selection = $derived(view.selection);
+	/** The ids of the records on this page, for the select-all checkbox. */
+	const pageIds = $derived(result.data.map((record) => idOf(record)));
 	const emptyMessage = $derived.by(() => {
 		const records = view.resource.label.toLowerCase();
 		if (view.params.search !== undefined) return `No ${records} match “${view.params.search}”.`;
@@ -53,6 +61,10 @@
 		getRowId: (row) => String(row.id),
 		getCoreRowModel: getCoreRowModel()
 	});
+
+	function idOf(record: Row): string | number {
+		return record.id as string | number;
+	}
 </script>
 
 <div class="relative flex flex-col gap-4">
@@ -75,6 +87,15 @@
 			<Table.Header class="bg-muted">
 				{#each table.getHeaderGroups() as headerGroup (headerGroup.id)}
 					<Table.Row>
+						<Table.Head class="w-10">
+							<SelectionCheckbox
+								label="Select all on this page"
+								checked={selection.allSelected(pageIds)}
+								indeterminate={selection.someSelected(pageIds)}
+								disabled={pageIds.length === 0}
+								onchange={(checked) => selection.setAll(pageIds, checked)}
+							/>
+						</Table.Head>
 						{#each headerGroup.headers as header (header.id)}
 							<Table.Head colspan={header.colSpan}>
 								{#if !header.isPlaceholder}
@@ -90,7 +111,16 @@
 			</Table.Header>
 			<Table.Body>
 				{#each table.getRowModel().rows as row (row.id)}
-					<Table.Row>
+					{@const id = idOf(row.original)}
+					{@const selected = selection.has(id)}
+					<Table.Row data-state={selected ? 'selected' : undefined}>
+						<Table.Cell>
+							<SelectionCheckbox
+								label="Select {recordTitle(view.resource, row.original)}"
+								checked={selected}
+								onchange={(checked) => selection.toggle(id, checked)}
+							/>
+						</Table.Cell>
 						{#each row.getVisibleCells() as cell (cell.id)}
 							<Table.Cell>
 								<FlexRender content={cell.column.columnDef.cell} context={cell.getContext()} />
@@ -99,7 +129,7 @@
 					</Table.Row>
 				{:else}
 					<Table.Row>
-						<Table.Cell colspan={columns.length} class="h-24 text-center text-muted-foreground">
+						<Table.Cell colspan={columns.length + 1} class="h-24 text-center text-muted-foreground">
 							{emptyMessage}
 						</Table.Cell>
 					</Table.Row>

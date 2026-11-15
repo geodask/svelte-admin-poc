@@ -4,8 +4,8 @@ import { backendRequestsFor, captureGetList, dataRows, pager, uniquePage } from 
 
 const searchBox = (page: Page) => page.getByRole('searchbox', { name: 'Search recipes' });
 
-/** The Name cell of each data row: the second cell, after the ID. */
-const names = (page: Page) => dataRows(page).locator('td:nth-child(2)');
+/** The Name cell of each data row: the third cell, after the selection checkbox and the ID. */
+const names = (page: Page) => dataRows(page).locator('td:nth-child(3)');
 
 test.describe('searching recipes, which are searchable', () => {
 	test('submitting the search form shows only matching recipes, and the URL holds only q', async ({
