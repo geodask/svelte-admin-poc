@@ -113,11 +113,11 @@ export function createFormView<R extends Resource>(
 			return detailViewHref ?? listViewHref;
 		},
 		/**
-		 * The issues of the form as a whole, to show above its Fields: why the backend refused
+		 * The issues of the form as a whole, to show above its Fields: why the Provider refused
 		 * the last save when no input is to blame (e.g. a conflict, or "This record no longer
 		 * exists" on edit). Empty when there are none.
 		 */
-		get issues(): RemoteFormIssue[] {
+		get formIssues(): RemoteFormIssue[] {
 			return form.fields.issues() ?? [];
 		},
 		/** Whether a submit is in flight, so Save can show progress and be disabled. */
@@ -148,7 +148,7 @@ export type FormView<R extends Resource, M extends FormMode> = {
 	prefill(record: RecordOf<R>): void;
 	readonly listViewHref: string;
 	readonly cancelHref: string;
-	readonly issues: RemoteFormIssue[];
+	readonly formIssues: RemoteFormIssue[];
 	readonly saving: boolean;
 	revalidate(): void;
 };

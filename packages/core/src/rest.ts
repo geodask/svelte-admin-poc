@@ -93,6 +93,7 @@ const statusErrors: Record<number, new () => Error> = {
 	400: InvalidInputError,
 	404: NotFoundError,
 	409: ConflictError,
+	// Without a body of issues, which is a `FieldError`.
 	422: InvalidInputError
 };
 

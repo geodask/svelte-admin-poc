@@ -37,14 +37,14 @@ export class ConflictError extends ProviderError {
 }
 
 /**
- * One rule only the backend can check, broken by one Field: the Field's key path (e.g.
+ * One rule only the backend behind a Provider can check, broken by one Field: the Field's key path (e.g.
  * `['email']`, or `['ingredients', 2, 'name']` for a Field of a row) and the message to show
  * under its input.
  */
 export type FieldIssue = { path: (string | number)[]; message: string };
 
 /**
- * The backend rejected a save because of one or more Fields, e.g. a name that is already taken.
+ * The Provider refused a save because of one or more Fields, e.g. a name that is already taken.
  * Each issue shows under the input its path names, exactly where a schema issue would, and the
  * user keeps what they typed. An issue whose path names no input the form shows (or an empty
  * path) shows at the top of the form instead. Its messages reach the user, so keep them safe to

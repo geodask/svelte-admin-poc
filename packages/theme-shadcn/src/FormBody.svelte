@@ -10,7 +10,7 @@
 	input is checked before it is sent, and issues follow typing once the form has been
 	submitted. Save shows progress and is disabled while a save is in flight.
 
-	When the backend refuses a save for a reason no input is to blame for (a conflict, or a
+	When the Provider refuses a save for a reason no input is to blame for (a conflict, or a
 	record deleted meanwhile), the reason shows above the Fields, and what was typed stays.
 -->
 <script lang="ts">
@@ -36,12 +36,12 @@
 	oninput={() => view.revalidate()}
 	class="flex flex-col gap-5 rounded-lg border p-6"
 >
-	{#if view.issues.length}
+	{#if view.formIssues.length}
 		<div
 			role="alert"
 			class="rounded-md border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive"
 		>
-			{#each view.issues as issue, index (index)}
+			{#each view.formIssues as issue, index (index)}
 				<p>{issue.message}</p>
 			{/each}
 		</div>

@@ -6,10 +6,10 @@ export const BACKEND_URL = `http://localhost:${BACKEND_PORT}`;
 /**
  * A test-only fault for the demo backend's next resource request(s), sent as the body of
  * `POST /faults`: wait `delayMs` first, then (with a `status`) answer with that status and
- * `{ message }` (or `body`, when given) instead of the records. `path`, when given, limits it to requests for that
- * pathname (e.g. `/recipes`), and `method` to requests with that method (e.g. `PUT`, so the
- * edit View's own read of the record isn't the one that fails). It is used by `times` requests
- * (default 1). Reset clears it.
+ * `{ message }` (or `body`, when given) instead of the records. `path`, when given, limits it
+ * to requests for that pathname (e.g. `/recipes`), and `method` to requests with that method
+ * (e.g. `PUT`, so the edit View's own read of the record isn't the one that fails). It is used
+ * by `times` requests (default 1). Reset clears it.
  */
 export type Fault = {
 	status?: number;

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { FieldError, NotFoundError, ProviderError } from './errors.ts';
 import {
 	formSchema,
+	isInputSpec,
 	toFormSpec,
 	type CreateData,
 	type EditData,
@@ -63,9 +64,9 @@ export function serveResource<R extends Resource>(
 	provider: Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>>
 ) {
 	const records = z.array(resource.schema);
-	const savedFrom = {
-		create: formIssuesFrom(resource, 'create', undefined),
-		edit: formIssuesFrom(resource, 'edit', NO_LONGER_EXISTS)
+	const save = {
+		create: formSaver(resource, 'create'),
+		edit: formSaver(resource, 'edit', { notFound: NO_LONGER_EXISTS })
 	};
 
 	const getList = query(
@@ -100,7 +101,7 @@ export function serveResource<R extends Resource>(
 		if (listPath === undefined) {
 			throw new Error(`A create form was submitted from ${pathname}, which is no create View`);
 		}
-		const saved = await savedFrom.create(() => provider.create(providerContext(), data));
+		const saved = await save.create(() => provider.create(providerContext(), data));
 		// Like a read, a record that doesn't match the schema is an unexpected error.
 		const record = resource.schema.parse(saved) as RecordOf<R>;
 		const id = (record as { id: IdOf<R> }).id;
@@ -122,7 +123,7 @@ export function serveResource<R extends Resource>(
 				`An edit form for the id ${String(id)} was submitted from ${pathname}, not its edit View`
 			);
 		}
-		const saved = await savedFrom.edit(() =>
+		const saved = await save.edit(() =>
 			provider.update(providerContext(), { id, data: data as EditData<R> })
 		);
 		// Like a read, a record that doesn't match the schema, or another record than the one
@@ -154,16 +155,16 @@ async function served<T>(call: () => Promise<T>): Promise<T> {
 const NO_LONGER_EXISTS = 'This record no longer exists';
 
 /**
- * For a save in `mode`: run a Provider call, turning a Provider error into form issues, so the
- * user stays on the form with what they typed. A `FieldError`'s issues go under the inputs their
- * paths name; one naming no input the form shows goes to the top of the form, so it is never
- * lost. Any other Provider error is one issue at the top of the form, with its message, or
+ * The runner of a save in `mode`: it runs a Provider call, turning a Provider error into form
+ * issues, so the user stays on the form with what they typed. A `FieldError`'s issues go under
+ * the inputs their paths name; one whose first key names no input the form shows goes to the
+ * top of the form, so it is never lost. Any other Provider error is one issue at the top of the form, with its message, or
  * `notFound` for a `NotFoundError` when given.
  */
-function formIssuesFrom(resource: Resource, mode: FormMode, notFound: string | undefined) {
+function formSaver(resource: Resource, mode: FormMode, { notFound }: { notFound?: string } = {}) {
 	const inputs = new Set(
 		toFormSpec(resource, mode)
-			.filter((spec) => spec.kind !== 'readOnly')
+			.filter(isInputSpec)
 			.map((spec) => spec.key)
 	);
 	return async <T>(call: () => Promise<T>): Promise<T> => {

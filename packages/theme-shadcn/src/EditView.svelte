@@ -44,7 +44,7 @@
 				retry={() => view.refresh().then(reset, reset)}
 				listViewHref={view.listViewHref}
 				target="record"
-				reasons={view.issues.map((issue) => issue.message)}
+				reasons={view.formIssues.map((issue) => issue.message)}
 			/>
 		{/snippet}
 	</svelte:boundary>
