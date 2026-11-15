@@ -2,6 +2,10 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { BACKEND_URL } from '../backend/config.ts';
 import { hydrated } from './fixtures.ts';
 
+/** The value shown beside a top-level Field label on the detail View. */
+export const valueOf = (page: Page, label: string) =>
+	page.locator(`xpath=//dt[normalize-space(text())="${label}"]/following-sibling::dd[1]`).first();
+
 /** The data rows of the list View's table, without its header row. */
 export const dataRows = (page: Page) =>
 	page

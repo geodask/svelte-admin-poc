@@ -8,13 +8,15 @@
 //                                     and email; posts can't be searched, and q for them is a 400
 //   GET  /{resource}/{id}             one record, or a 404. The id is one path segment, decoded,
 //                                     and matched against each record's id written as text
+//   POST /{resource}                  create a record from the JSON body, with the next id (the
+//                                     highest plus one); answers 201 with the created record
 //   POST /reset                       restore the seed data and clear any faults (e2e tests call
 //                                     it first)
 //   POST /faults                      test-only: make the next resource request(s) slow or fail.
 //                                     The JSON body is a Fault (config.ts). Faults queue up, and each
 //                                     one is used by the next resource request that matches it
-//   GET  /requests                    every resource request since the server started, so a test
-//                                     can check that the Provider was or wasn't called. Reset
+//   GET  /requests                    every resource request since the server started, writes too,
+//                                     so a test can check that the Provider was or wasn't called. Reset
 //                                     keeps it, since tests run in parallel against one backend:
 //                                     a test finds its own requests by a page no other test asks
 //                                     for
@@ -133,6 +135,19 @@ const server = Bun.serve({
 			const data = records.slice(start, start + perPage);
 			if (uncounted.has(name)) return json({ data, hasNextPage: start + perPage < records.length });
 			return json({ data, total: records.length });
+		}
+
+		if (request.method === 'POST' && segments.length === 1 && Object.hasOwn(db, segments[0])) {
+			const records = db[segments[0]];
+			const body: unknown = await request.json().catch(() => undefined);
+			if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+				return json({ message: 'The body must be a JSON object' }, 400);
+			}
+			// Every demo Resource has number ids, so the next one is the highest plus one.
+			const id = Math.max(0, ...records.map((record) => Number(record.id))) + 1;
+			const record = { ...body, id };
+			records.push(record);
+			return json(record, 201);
 		}
 
 		if (request.method === 'GET' && segments.length === 2 && Object.hasOwn(db, segments[0])) {

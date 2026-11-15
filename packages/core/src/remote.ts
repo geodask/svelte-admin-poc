@@ -1,4 +1,6 @@
+import type { FormInput } from './form-spec.ts';
 import type { ListParams, ListResult } from './provider.ts';
+import type { StandardSchemaV1 } from './standard-schema.ts';
 
 /**
  * What a remote query returns: a promise of its result that can also load it again. In the
@@ -6,14 +8,55 @@ import type { ListParams, ListResult } from './provider.ts';
  */
 export type RemoteRead<T> = Promise<T> & { refresh(): Promise<void> };
 
+/** An issue a remote form reports: its message, and the path of the input it belongs to. */
+export type RemoteFormIssue = { message: string; path: (string | number)[] };
+
+/**
+ * One input of a remote form, as a Theme renders it: `as(type)` gives the attributes to spread
+ * onto the input (its name, type, value and `aria-invalid`), and `issues()` the issues that
+ * belong to it. (Kit's own type is stricter; this is the part the core relies on.)
+ */
+export type RemoteFormField = {
+	value(): unknown;
+	issues(): RemoteFormIssue[] | undefined;
+	// A method, so Kit's stricter, generic `as` fits it.
+	as(type: RemoteFormInputType): Record<string, unknown>;
+};
+
+/** The input types a Theme renders a form's Fields with. */
+export type RemoteFormInputType =
+	'text' | 'email' | 'url' | 'number' | 'checkbox' | 'select' | 'date' | 'datetime-local';
+
+/**
+ * A remote form, as the core's helpers and a Theme use it: spread it onto a `<form>`, read its
+ * inputs from `fields`, and watch `pending` while a submit is in flight.
+ */
+export type RemoteFormLike = {
+	readonly method: 'POST';
+	readonly action: string;
+	readonly pending: number;
+	/** Whether the form has been submitted at least once. */
+	readonly submitted: boolean;
+	readonly fields: { readonly [key: string]: RemoteFormField } & {
+		allIssues(): RemoteFormIssue[] | undefined;
+	};
+	/** Check the input in the browser with `schema` before it is sent. */
+	preflight(schema: StandardSchemaV1<FormInput, unknown>): RemoteFormLike;
+	/** Check the input again now, e.g. as the user edits after a failed submit. */
+	validate(options?: { preflightOnly?: boolean }): Promise<void>;
+};
+
 /**
  * A Resource's remote functions, as its `.remote.ts` module exports them. `serveResource`
  * builds them on the server; in the browser the same imports are `fetch` wrappers. A remote
- * query is a promise of its result with a `refresh`, which is all the shared entry relies on,
- * so it needs nothing from `$app/server`, not even types.
+ * query is a promise of its result with a `refresh`, and a remote form an object to spread onto
+ * a `<form>`, which is all the shared entry relies on, so it needs nothing from `$app/server`,
+ * not even types.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- any record and id type fit by default
 export type ResourceRemote<T = any, Id = any> = {
 	getList: (params: ListParams) => RemoteRead<ListResult<T>>;
 	getOne: (id: Id) => RemoteRead<T>;
+	/** The create form: it saves a new record and redirects to its detail View. */
+	create: RemoteFormLike;
 };

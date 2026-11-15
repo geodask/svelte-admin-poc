@@ -138,3 +138,23 @@ test.describe('the recipes list refreshing after a page change', () => {
 		await expect(page.getByRole('status')).toHaveCount(0);
 	});
 });
+
+test.describe('a slow save on the create View', () => {
+	test('disables Save and shows progress until the save lands', async ({ page, request }) => {
+		await page.goto('/admin/users/new');
+		await hydrated(page);
+		await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Lin Clark');
+		await page.getByRole('textbox', { name: 'Email', exact: true }).fill('lin@example.com');
+		await page.getByRole('combobox', { name: 'Role' }).selectOption('viewer');
+		await page.getByRole('textbox', { name: 'Joined at (UTC)' }).fill('2024-03-01T09:30');
+		await injectFault(request, { delayMs: 1500, path: '/users' });
+
+		await page.getByRole('button', { name: 'Save' }).click();
+
+		const saving = page.getByRole('button', { name: 'Saving…' });
+		await expect(saving).toBeVisible();
+		await expect(saving).toBeDisabled();
+		await expect(page).toHaveURL('/admin/users/13');
+		await expect(page.getByRole('heading', { level: 1, name: 'Lin Clark' })).toBeVisible();
+	});
+});

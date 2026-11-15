@@ -19,11 +19,19 @@ export {
 	defineAdmin,
 	type AdminEntry,
 	type AdminLocation,
+	type AdminView,
 	type ResourceNameOf,
 	type SidebarGroup,
 	type SidebarItem
 } from './admin.ts';
-export type { RemoteRead, ResourceRemote } from './remote.ts';
+export type {
+	RemoteFormField,
+	RemoteFormInputType,
+	RemoteFormIssue,
+	RemoteFormLike,
+	RemoteRead,
+	ResourceRemote
+} from './remote.ts';
 export {
 	defaultLabel,
 	detectKind,
@@ -34,3 +42,12 @@ export {
 	type FieldMeta,
 	type KindName
 } from './fields.ts';
+export {
+	formSchema,
+	toFormSpec,
+	type CreateData,
+	type FormFieldSpec,
+	type FormInput,
+	type FormMode
+} from './form-spec.ts';
+export type { StandardSchemaV1 } from './standard-schema.ts';

@@ -55,7 +55,7 @@ function wrapperChain(schema: z.ZodType): z.ZodType[] {
 }
 
 /** The schema inside any `optional`, `nullable` and `default` wrappers. */
-function unwrap(schema: z.ZodType): z.ZodType {
+export function unwrap(schema: z.ZodType): z.ZodType {
 	return wrapperChain(schema).at(-1)!;
 }
 

@@ -24,14 +24,31 @@ export function idPathSegment(id: string | number): string {
 	return encodeURIComponent(String(id));
 }
 
+/** The path segment of a Resource's create View, `{list}/new`, which therefore names no id. */
+export const CREATE_SEGMENT = 'new';
+
+/**
+ * The list View's path for a create View's path (`{list}/new`), or `undefined` for any other
+ * path, including one that starts with `//`, which a browser would follow to another host.
+ */
+export function listPathOfCreateView(pathname: string): string | undefined {
+	const suffix = `/${CREATE_SEGMENT}`;
+	if (!pathname.endsWith(suffix) || pathname.startsWith('//')) return undefined;
+	const list = pathname.slice(0, -suffix.length);
+	return list.startsWith('/') ? list : undefined;
+}
+
 /**
  * The typed id a route param names, or `undefined` when it names none, which a route answers
  * with a 404 so the Provider is never asked. The param goes through the Resource's id schema,
  * which never coerces: for a number id, only a number written as `String(id)` writes it (`1`,
  * not `01`, `1.0` or `1e0`), so each id has exactly one URL.
+ *
+ * `new` names no id, even for string ids: `{list}/new` is the create View. So a record whose id
+ * is literally `new` has no detail URL. That is a known limit, not handled.
  */
 export function idFromParam<R extends Resource>(resource: R, param: string): IdOf<R> | undefined {
-	if (!hasPathSegment(param)) return undefined;
+	if (!hasPathSegment(param) || param === CREATE_SEGMENT) return undefined;
 	const schema = resource.schema.shape.id as z.ZodType;
 
 	const asString = schema.safeParse(param);

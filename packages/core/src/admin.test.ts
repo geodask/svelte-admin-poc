@@ -124,12 +124,24 @@ describe('locate, the Resource and record a path is on', () => {
 			resource: recipes,
 			remote,
 			listHref: '/admin/recipes',
+			view: 'list',
 			id: undefined
 		});
 	});
 
 	it('finds the Resource and the typed id on a detail View', () => {
-		expect(admin.locate('/admin/recipes/12')).toMatchObject({ name: 'recipes', id: 12 });
+		expect(admin.locate('/admin/recipes/12')).toMatchObject({
+			name: 'recipes',
+			view: 'detail',
+			id: 12
+		});
+	});
+
+	it.each([
+		['/admin/recipes/new', 'recipes'],
+		['/admin/users/new', 'users']
+	])('finds the Resource and no id on the create View %j', (path, name) => {
+		expect(admin.locate(path)).toMatchObject({ name, view: 'create', id: undefined });
 	});
 
 	it('decodes a string id from its path segment', () => {
@@ -141,7 +153,7 @@ describe('locate, the Resource and record a path is on', () => {
 		['/admin/recipes/01', 'recipes'],
 		['/admin/users/%E0%A4%A', 'users']
 	])('finds the Resource but no id on %j', (path, name) => {
-		expect(admin.locate(path)).toMatchObject({ name, id: undefined });
+		expect(admin.locate(path)).toMatchObject({ name, view: 'detail', id: undefined });
 	});
 
 	it.each([

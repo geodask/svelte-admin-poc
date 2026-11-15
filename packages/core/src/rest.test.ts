@@ -21,17 +21,32 @@ const users = defineResource({
 	schema: z.object({ id: z.string(), email: z.string() })
 });
 
-/** A fake `fetch` that records each request and answers with `body`. */
+/** What a fake `fetch` was sent: the method, the URL, the content type and the body. */
+type Sent = { method: string; url: string; contentType: string | null; body: unknown };
+
+/**
+ * A fake `fetch` that records each request (its URL in `requests`, and all of it in `sent`)
+ * and answers with `body`.
+ */
 function fakeFetch(body: unknown, init: ResponseInit = { status: 200 }) {
 	const requests: string[] = [];
-	const fetch: typeof globalThis.fetch = async (input) => {
-		requests.push(input instanceof Request ? input.url : String(input));
+	const sent: Sent[] = [];
+	const fetch: typeof globalThis.fetch = async (input, requestInit) => {
+		const request = new Request(input, requestInit);
+		requests.push(request.url);
+		const text = await request.text();
+		sent.push({
+			method: request.method,
+			url: request.url,
+			contentType: request.headers.get('content-type'),
+			body: text ? JSON.parse(text) : undefined
+		});
 		return new Response(JSON.stringify(body), {
 			...init,
 			headers: { 'content-type': 'application/json' }
 		});
 	};
-	return { fetch, requests };
+	return { fetch, requests, sent };
 }
 
 function context(fetch: typeof globalThis.fetch): ProviderContext {
@@ -161,6 +176,35 @@ describe('the bundled REST Provider', () => {
 			expect(requests).toEqual([]);
 		});
 	});
+
+	describe('create', () => {
+		it('sends POST {base}/{resource} with the record as JSON', async () => {
+			const { fetch, sent } = fakeFetch({ id: 9, name: 'Pad See Ew' }, { status: 201 });
+			const provider = restProvider('http://api.test/v1/').for(recipes);
+
+			await provider.create(context(fetch), { name: 'Pad See Ew' });
+
+			expect(sent).toEqual([
+				{
+					method: 'POST',
+					url: 'http://api.test/v1/recipes',
+					contentType: 'application/json',
+					body: { name: 'Pad See Ew' }
+				}
+			]);
+		});
+
+		it('returns the created record as the backend sent it', async () => {
+			const record = { id: 9, name: 'Pad See Ew' };
+			const { fetch } = fakeFetch(record, { status: 201 });
+
+			const result = await restProvider('http://api.test')
+				.for(recipes)
+				.create(context(fetch), { name: 'Pad See Ew' });
+
+			expect(result).toEqual(record);
+		});
+	});
 });
 
 describe('the bundled REST Provider, when the backend answers with an error status', () => {
@@ -170,10 +214,19 @@ describe('the bundled REST Provider, when the backend answers with an error stat
 				.for(recipes)
 				.getList(context(fetch), { page: 1, perPage: 25 }),
 		getOne: (fetch: typeof globalThis.fetch) =>
-			restProvider('http://api.test').for(recipes).getOne(context(fetch), 7)
+			restProvider('http://api.test').for(recipes).getOne(context(fetch), 7),
+		create: (fetch: typeof globalThis.fetch) =>
+			restProvider('http://api.test').for(recipes).create(context(fetch), { name: 'Pad See Ew' })
 	};
 
-	describe.each(Object.entries(calls))('%s', (_, call) => {
+	/** The request each call makes, as an unexpected error names it for the server log. */
+	const requestLines: Record<keyof typeof calls, string> = {
+		getList: 'GET http://api.test/recipes',
+		getOne: 'GET http://api.test/recipes/7',
+		create: 'POST http://api.test/recipes'
+	};
+
+	describe.each(Object.entries(calls))('%s', (name, call) => {
 		it.each([
 			[404, NotFoundError],
 			[400, InvalidInputError],
@@ -195,7 +248,7 @@ describe('the bundled REST Provider, when the backend answers with an error stat
 				expect(failure).not.toBeInstanceOf(known);
 			}
 			// For the server log only: the request, the status and what the backend said.
-			expect((failure as Error).message).toContain('GET http://api.test/recipes');
+			expect((failure as Error).message).toContain(requestLines[name as keyof typeof calls]);
 			expect((failure as Error).message).toContain(`failed with ${status}`);
 			expect((failure as Error).message).toContain('Upstream exploded');
 		});

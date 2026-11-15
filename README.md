@@ -52,3 +52,11 @@ Each Resource costs about 4 lines of wiring in the demo:
 The admin layout renders the Theme's `AdminShell` with the admin from `admin.ts` and the app's own `brand` and `userMenu` snippets (the shell wraps the brand in a link to the first Resource). The `/admin` index redirects to the first Resource's list.
 
 `@svelte-admin/core` is the browser-safe entry. `serveResource` lives in `@svelte-admin/core/server` and the bundled REST Provider in `@svelte-admin/core/rest`; import those only from `.remote.ts` files and server-only modules.
+
+## Writes
+
+The remote module re-exports `getList`, `getOne` and `create` from `serveResource`. A Provider implements `create(ctx, data)`: it gets the record without its id, already validated with the Resource's schema, and returns the record the backend saved. The bundled REST Provider sends it as `POST {base}/{resource}`.
+
+The create View lives at `{list}/new` (the demo's `src/routes/admin/[resource=resource]/new/+page.svelte` renders the Theme's `CreateView`). Its form is generated from the schema at runtime, and works with and without JavaScript. After a save, `create` redirects to the new record's detail View. It finds that path from the page the form was submitted from: inside a remote form, `getRequestEvent().url` is the page's URL in Kit 3.2, with JavaScript and without, so `serveResource` never needs the admin's base path. A create form posted from a page whose path doesn't end in `/new` is refused before the Provider is called.
+
+adapter-node checks a form post's origin, so set `ORIGIN` when you run the built app (the e2e suite sets `http://localhost:4173`).

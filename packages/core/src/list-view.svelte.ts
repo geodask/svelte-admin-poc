@@ -2,7 +2,7 @@ import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
-import { hasPathSegment, idPathSegment } from './ids.ts';
+import { CREATE_SEGMENT, hasPathSegment, idPathSegment } from './ids.ts';
 import type { ListParams } from './provider.ts';
 import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
 import { TITLE_KEYS } from './record-title.ts';
@@ -136,6 +136,10 @@ export function createListView<R extends Resource>(
 		recordHref(record: RecordOf<R>): string | undefined {
 			const id = (record as { id: IdOf<R> }).id;
 			return hasPathSegment(id) ? `${url.pathname}/${idPathSegment(id)}` : undefined;
+		},
+		/** The href of the Resource's create View, `{list}/new`, under the list's own path. */
+		get createHref(): string {
+			return `${url.pathname}/${CREATE_SEGMENT}`;
 		},
 		/**
 		 * What to say when the page has no records: that none match the search, that the page is

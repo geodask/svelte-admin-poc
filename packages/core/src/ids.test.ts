@@ -55,6 +55,11 @@ describe('a route param as a typed id', () => {
 	it.each(['', '.', '..'])('is no id for %j, which cannot be one path segment', (param) => {
 		expect(idFromParam(users, param)).toBeUndefined();
 	});
+
+	it('is no id for "new", the create View\'s segment, even for string ids', () => {
+		expect(idFromParam(users, 'new')).toBeUndefined();
+		expect(idFromParam(users, 'news')).toBe('news');
+	});
 });
 
 describe('an id as one URL path segment', () => {
