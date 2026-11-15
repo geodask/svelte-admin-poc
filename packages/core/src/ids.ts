@@ -42,15 +42,37 @@ export function listPathOfCreateView(pathname: string): string | undefined {
 export const EDIT_SEGMENT = 'edit';
 
 /**
- * The list View's path for an edit View's path (`{list}/{id}/edit`), or `undefined` for any
- * other path, including one that starts with `//`, which a browser would follow to another host.
+ * The detail View's path for an edit View's path (`{list}/{id}/edit` gives `{list}/{id}`), or
+ * `undefined` for any other path, including one that starts with `//`, which a browser would
+ * follow to another host.
  */
-export function listPathOfEditView(pathname: string): string | undefined {
+export function detailPathOfEditView(pathname: string): string | undefined {
 	const suffix = `/${EDIT_SEGMENT}`;
 	if (!pathname.endsWith(suffix) || pathname.startsWith('//')) return undefined;
 	const detail = pathname.slice(0, -suffix.length);
-	const list = detail.slice(0, detail.lastIndexOf('/'));
-	return list.startsWith('/') && list.length < detail.length - 1 ? list : undefined;
+	const slash = detail.lastIndexOf('/');
+	// A list path and a non-empty id segment.
+	return slash > 0 && slash < detail.length - 1 ? detail : undefined;
+}
+
+/** The list View's path for an edit View's path (`{list}/{id}/edit`), or `undefined`. */
+export function listPathOfEditView(pathname: string): string | undefined {
+	const detail = detailPathOfEditView(pathname);
+	return detail?.slice(0, detail.lastIndexOf('/'));
+}
+
+/** The path of a record's detail View under its list View's path: `{list}/{id}`. */
+export function recordPath(listPath: string, id: string | number): string {
+	return `${listPath}/${idPathSegment(id)}`;
+}
+
+/** A path segment, decoded, or `undefined` when it is malformed. */
+export function decodeSegment(segment: string): string | undefined {
+	try {
+		return decodeURIComponent(segment);
+	} catch {
+		return undefined;
+	}
 }
 
 /**

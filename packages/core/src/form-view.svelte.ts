@@ -6,7 +6,7 @@ import {
 	type FormFieldSpec,
 	type FormMode
 } from './form-spec.ts';
-import { idPathSegment, listPathOfCreateView, listPathOfEditView } from './ids.ts';
+import { listPathOfCreateView, listPathOfEditView, recordPath } from './ids.ts';
 import { recordTitle } from './record-title.ts';
 import type { RemoteFormLike, RemoteRead, ResourceRemote } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
@@ -60,13 +60,14 @@ export function createFormView<R extends Resource>(
 	mode: FormMode,
 	id?: IdOf<R>
 ): FormView<R, FormMode> {
+	if (mode === 'edit' && id === undefined) throw new Error('An edit View needs the record id');
 	const editing = mode === 'edit' && id !== undefined;
 	// The create View sits at `{list}/new` and the edit View at `{list}/{id}/edit`, so the
 	// list's path carries the base path.
 	const listViewHref = $derived(
 		(editing ? listPathOfEditView : listPathOfCreateView)(page.url.pathname) ?? page.url.pathname
 	);
-	const detailViewHref = $derived(editing ? `${listViewHref}/${idPathSegment(id)}` : undefined);
+	const detailViewHref = $derived(editing ? recordPath(listViewHref, id) : undefined);
 	const instance = editing ? remote.update.for(id) : remote.create;
 	const form: RemoteFormLike = instance.preflight(formSchema(resource, mode));
 	const spec: readonly FormFieldSpec[] = toFormSpec(resource, mode);

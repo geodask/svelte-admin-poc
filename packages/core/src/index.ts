@@ -9,7 +9,7 @@ export {
 	type ResourceIcon,
 	type ResourceSchema
 } from './resource.ts';
-export { idFromParam, idPathSegment } from './ids.ts';
+export { idFromParam, idPathSegment, recordPath } from './ids.ts';
 export { recordTitle } from './record-title.ts';
 export type { ListParams, ListResult, Provider, ProviderContext } from './provider.ts';
 export { ConflictError, InvalidInputError, NotFoundError, ProviderError } from './errors.ts';

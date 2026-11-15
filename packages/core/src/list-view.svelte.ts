@@ -2,7 +2,7 @@ import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
-import { CREATE_SEGMENT, hasPathSegment, idPathSegment } from './ids.ts';
+import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
 import type { ListParams } from './provider.ts';
 import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
 import { TITLE_KEYS } from './record-title.ts';
@@ -135,7 +135,7 @@ export function createListView<R extends Resource>(
 		 */
 		recordHref(record: RecordOf<R>): string | undefined {
 			const id = (record as { id: IdOf<R> }).id;
-			return hasPathSegment(id) ? `${url.pathname}/${idPathSegment(id)}` : undefined;
+			return hasPathSegment(id) ? recordPath(url.pathname, id) : undefined;
 		},
 		/** The href of the Resource's create View, `{list}/new`, under the list's own path. */
 		get createHref(): string {

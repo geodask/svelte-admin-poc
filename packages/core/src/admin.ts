@@ -1,4 +1,4 @@
-import { CREATE_SEGMENT, EDIT_SEGMENT, idFromParam } from './ids.ts';
+import { CREATE_SEGMENT, EDIT_SEGMENT, decodeSegment, idFromParam } from './ids.ts';
 import type { IdOf, RecordOf, Resource, ResourceIcon } from './resource.ts';
 import type { ResourceRemote } from './remote.ts';
 
@@ -111,14 +111,10 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 			if (!isName(name)) return undefined;
 			const entry = resources[name] as AdminEntry;
 			const decoded = param === undefined ? undefined : decodeSegment(param);
-			const view: AdminView =
-				param === undefined
-					? 'list'
-					: action === EDIT_SEGMENT
-						? 'edit'
-						: decoded === CREATE_SEGMENT
-							? 'create'
-							: 'detail';
+			let view: AdminView = 'detail';
+			if (param === undefined) view = 'list';
+			else if (action === EDIT_SEGMENT) view = 'edit';
+			else if (decoded === CREATE_SEGMENT) view = 'create';
 			return {
 				name,
 				resource: entry.resource,
@@ -149,15 +145,6 @@ export type AdminLocation<M> = {
 			}
 		: never;
 }[keyof M & string];
-
-/** A path segment, decoded, or `undefined` when it is malformed. */
-function decodeSegment(segment: string): string | undefined {
-	try {
-		return decodeURIComponent(segment);
-	} catch {
-		return undefined;
-	}
-}
 
 function sidebarGroups(entries: AdminEntry[], href: (name: string) => string): SidebarGroup[] {
 	const groups = new Map<string | undefined, SidebarGroup>();

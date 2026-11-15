@@ -189,6 +189,25 @@ test.describe('the users edit View', () => {
 	});
 });
 
+test.describe('an edit form whose hidden id names another record', () => {
+	test('is refused before the backend is asked, and changes nothing', async ({ page, request }) => {
+		const before = (await userUpdates(request)).length;
+		await openEditView(page, 2);
+		// A crafted post: the edit View of user 2, carrying the id of user 3.
+		await page.locator('main form input[type=hidden]').evaluate((input: HTMLInputElement) => {
+			input.value = '3';
+		});
+		await roleSelect(page).selectOption('admin');
+
+		await save(page);
+
+		await expect(page).not.toHaveURL(/\/admin\/users\/3$/);
+		await expect(page.getByRole('heading', { level: 1, name: 'Server error' })).toBeVisible();
+		expect(await userUpdates(request)).toHaveLength(before);
+		expect(await storedUser(request, 3)).toMatchObject({ name: 'Alan Turing', role: 'editor' });
+	});
+});
+
 test.describe('the edit View for a user that does not exist', () => {
 	test('shows "not found" with a link back to the list', async ({ page }) => {
 		const response = await page.goto('/admin/users/999/edit');

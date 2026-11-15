@@ -5,7 +5,7 @@
 	label links back to the list.
 -->
 <script lang="ts">
-	import { idPathSegment } from '@svelte-admin/core';
+	import { recordPath } from '@svelte-admin/core';
 	import type { ShellState } from '@svelte-admin/core/views';
 	import * as Breadcrumb from './components/ui/breadcrumb/index.ts';
 	import RecordCrumb from './RecordCrumb.svelte';
@@ -36,7 +36,7 @@
 						<RecordCrumb
 							here={shell.here}
 							{id}
-							href={view === 'edit' ? `${listHref}/${idPathSegment(id)}` : undefined}
+							href={view === 'edit' ? recordPath(listHref, id) : undefined}
 						/>
 					</Breadcrumb.Item>
 					{#if view === 'edit'}
