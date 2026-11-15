@@ -22,14 +22,20 @@ type IdOfRecord<T> = T extends { id: infer Id } ? Id : never;
 
 /**
  * The adapter that carries out a Resource's data operations against a backend. Its record
- * type must be the Resource schema's output type, and its ids the schema's id type. This is
- * the read half; the write methods come in a later milestone.
+ * type must be the Resource schema's output type, and its ids the schema's id type. `Create` is
+ * what `create` receives: the record without its id. Editing and deleting come next.
  */
-export type Provider<T, Id = IdOfRecord<T>> = {
+export type Provider<T, Id = IdOfRecord<T>, Create = Omit<T, 'id'>> = {
 	getList(ctx: ProviderContext, params: ListParams): Promise<ListResult<T>>;
 	/**
 	 * One record by its id. The id arrives with the schema's id type, never coerced. Build any
 	 * URL from it with `idPathSegment`, so a crafted id can't reach a different record.
 	 */
 	getOne(ctx: ProviderContext, id: Id): Promise<T>;
+	/**
+	 * Create a record. `data` is the record without its id, already validated with the Resource
+	 * schema, so a Provider only forwards it to the backend. Return the record the backend saved,
+	 * with the id it assigned.
+	 */
+	create(ctx: ProviderContext, data: Create): Promise<T>;
 };

@@ -2,8 +2,9 @@
 	The toolbar above a list View. On a searchable Resource it holds a search box in a GET form:
 	without JavaScript, submitting the form opens the search at page 1 and keeps the page size;
 	with JavaScript, the list follows typing and the URL is updated in place, so the browser
-	history doesn't fill up. Beside it, a count of the selected rows, once any are selected. The
-	row is there on every Resource, so the content below doesn't move when the count appears.
+	history doesn't fill up. Beside it, a count of the selected rows, once any are selected, and at
+	the end a "New" link to the create View. The row is there on every Resource, so the content
+	below doesn't move when the count appears.
 	A Theme part, exported for a replaced list View: give it the core's `createListView` helper.
 -->
 <script module lang="ts">
@@ -64,4 +65,11 @@
 			{view.selection.size} selected
 		{/if}
 	</p>
+
+	<a
+		href={view.createHref}
+		class="ms-auto inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+	>
+		New
+	</a>
 </div>

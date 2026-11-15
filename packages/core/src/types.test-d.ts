@@ -21,23 +21,43 @@ type Recipe = { id: number; name: string };
 
 const recipeProvider: Provider<Recipe> = {
 	getList: async () => ({ data: [{ id: 1, name: 'Classic Margherita Pizza' }], total: 1 }),
-	getOne: async (_ctx, id) => ({ id, name: 'Classic Margherita Pizza' })
+	getOne: async (_ctx, id) => ({ id, name: 'Classic Margherita Pizza' }),
+	// `create` gets the record without its id, and returns it with the id the backend assigned.
+	create: async (_ctx, data) => ({ id: 2, ...data })
 };
 
 const userProvider: Provider<{ id: number; email: string }> = {
 	getList: async () => ({ data: [], hasNextPage: false }),
-	getOne: async (_ctx, id) => ({ id, email: 'ada@example.com' })
+	getOne: async (_ctx, id) => ({ id, email: 'ada@example.com' }),
+	create: async (_ctx, data) => ({ id: 1, ...data })
 };
 
 // @ts-expect-error a Provider must be able to read one record
 const listOnlyProvider: Provider<Recipe> = {
-	getList: async () => ({ data: [], total: 0 })
+	getList: async () => ({ data: [], total: 0 }),
+	create: async (_ctx, data) => ({ id: 2, ...data })
 };
+
+// @ts-expect-error a Provider must be able to create a record
+const readOnlyProvider: Provider<Recipe> = {
+	getList: async () => ({ data: [], total: 0 }),
+	getOne: async (_ctx, id) => ({ id, name: 'Classic Margherita Pizza' })
+};
+
+const sneakyProvider: Provider<Recipe> = {
+	getList: async () => ({ data: [], total: 0 }),
+	getOne: async (_ctx, id) => ({ id, name: 'Classic Margherita Pizza' }),
+	// @ts-expect-error `create` never receives an id: the backend assigns it
+	create: async (_ctx, data) => ({ id: data.id, name: data.name })
+};
+void readOnlyProvider;
+void sneakyProvider;
 
 // A Provider's ids have the schema's id type, never coerced.
 const stringIdProvider: Provider<Recipe, string> = {
 	getList: async () => ({ data: [], total: 0 }),
-	getOne: async (_ctx, id) => ({ id: Number(id), name: 'Coerced' })
+	getOne: async (_ctx, id) => ({ id: Number(id), name: 'Coerced' }),
+	create: async (_ctx, data) => ({ id: 2, ...data })
 };
 
 // A Provider whose records match the schema is accepted, and what it serves fits admin.ts.

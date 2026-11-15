@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { ConflictError, InvalidInputError, NotFoundError } from './errors.ts';
 import { idPathSegment } from './ids.ts';
+import type { CreateData } from './form-spec.ts';
 import type { ListResult, Provider } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -18,6 +19,8 @@ const listResponse = z.union([
  *   `{ data, hasNextPage }`. `q` is the search, sent only when there is one.
  * - `GET {base}/{resource}/{id}` returns the record. The id is always one path segment
  *   (`idPathSegment`), so `../users/1` is asked for as `..%2Fusers%2F1`.
+ * - `POST {base}/{resource}` with the record (without its id) as JSON creates it, and returns
+ *   the created record, with its id (usually with a 201).
  *
  * - A failing status becomes a Provider error: 404 is `NotFoundError`, 400 and 422 are
  *   `InvalidInputError`, 409 is `ConflictError`. Any other is an unexpected error, whose message
@@ -35,7 +38,7 @@ export function restProvider(baseUrl: string) {
 
 	return {
 		/** The Provider for one Resource, at `{base}/{resource.name}`. */
-		for<R extends Resource>(resource: R): Provider<RecordOf<R>, IdOf<R>> {
+		for<R extends Resource>(resource: R): Provider<RecordOf<R>, IdOf<R>, CreateData<R>> {
 			const resourceUrl = `${base}/${encodeURIComponent(resource.name)}`;
 
 			return {
@@ -43,7 +46,7 @@ export function restProvider(baseUrl: string) {
 					const query = new URLSearchParams({ page: String(page), perPage: String(perPage) });
 					if (search !== undefined) query.set('q', search);
 					const url = `${resourceUrl}?${query}`;
-					const parsed = listResponse.safeParse(await getJson(fetch, url));
+					const parsed = listResponse.safeParse(await requestJson(fetch, 'GET', url));
 					if (!parsed.success) {
 						throw new Error(
 							`REST Provider: GET ${url} returned neither { data, total } nor { data, hasNextPage }`
@@ -53,7 +56,12 @@ export function restProvider(baseUrl: string) {
 				},
 
 				async getOne({ fetch }, id) {
-					return (await getJson(fetch, `${resourceUrl}/${idPathSegment(id)}`)) as RecordOf<R>;
+					const url = `${resourceUrl}/${idPathSegment(id)}`;
+					return (await requestJson(fetch, 'GET', url)) as RecordOf<R>;
+				},
+
+				async create({ fetch }, data) {
+					return (await requestJson(fetch, 'POST', resourceUrl, data)) as RecordOf<R>;
 				}
 			};
 		}
@@ -71,16 +79,29 @@ const statusErrors: Record<number, new () => Error> = {
 /** How much of a failing response's body an unexpected error keeps, for the server log. */
 const MAX_BODY_IN_LOG = 500;
 
-async function getJson(fetch: typeof globalThis.fetch, url: string): Promise<unknown> {
-	const response = await fetch(url, { headers: { accept: 'application/json' } });
+/** Send a request, with `body` as JSON when there is one, and read the JSON response. */
+async function requestJson(
+	fetch: typeof globalThis.fetch,
+	method: 'GET' | 'POST',
+	url: string,
+	body?: unknown
+): Promise<unknown> {
+	const response = await fetch(url, {
+		method,
+		headers:
+			body === undefined
+				? { accept: 'application/json' }
+				: { accept: 'application/json', 'content-type': 'application/json' },
+		...(body === undefined ? {} : { body: JSON.stringify(body) })
+	});
 	if (!response.ok) {
 		// A Provider error's message reaches the user, so it keeps its safe default.
 		const KnownError = statusErrors[response.status];
 		if (KnownError) throw new KnownError();
 		// An unexpected error is only logged, so it says what happened upstream.
-		const body = (await response.text().catch(() => '')).slice(0, MAX_BODY_IN_LOG);
+		const said = (await response.text().catch(() => '')).slice(0, MAX_BODY_IN_LOG);
 		throw new Error(
-			`REST Provider: GET ${url} failed with ${response.status}${body ? `: ${body}` : ''}`
+			`REST Provider: ${method} ${url} failed with ${response.status}${said ? `: ${said}` : ''}`
 		);
 	}
 	return response.json();

@@ -1,4 +1,4 @@
-import { idFromParam } from './ids.ts';
+import { CREATE_SEGMENT, idFromParam } from './ids.ts';
 import type { IdOf, RecordOf, Resource, ResourceIcon } from './resource.ts';
 import type { ResourceRemote } from './remote.ts';
 
@@ -97,11 +97,12 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 		/** Where the admin's index leads: the first Resource's list in admin.ts, if there is one. */
 		homeHref: first === undefined ? undefined : listHref(first),
 		/**
-		 * The Resource a path is on, and on a detail View the record's typed id, for the shell's
-		 * active sidebar link and breadcrumb. The path is a URL pathname, still encoded. A path on
-		 * a Resource's list or anything under it finds that Resource; `id` is the next segment
-		 * read as the Resource's id, or `undefined` when there is none or it names no id. A path
-		 * outside the admin's Resources finds nothing.
+		 * The Resource a path is on, which of its Views, and on a detail View the record's typed
+		 * id, for the shell's active sidebar link and breadcrumb. The path is a URL pathname,
+		 * still encoded. A path on a Resource's list or anything under it finds that Resource:
+		 * the list itself is its list View, `{list}/new` its create View, and any other next
+		 * segment a detail View, whose `id` is that segment read as the Resource's id, or
+		 * `undefined` when it names none. A path outside the admin's Resources finds nothing.
 		 */
 		locate(pathname: string): AdminLocation<M> | undefined {
 			if (!pathname.startsWith(`${basePath}/`)) return undefined;
@@ -109,16 +110,22 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 			if (!isName(name)) return undefined;
 			const entry = resources[name] as AdminEntry;
 			const decoded = param === undefined ? undefined : decodeSegment(param);
+			const view: AdminView =
+				param === undefined ? 'list' : decoded === CREATE_SEGMENT ? 'create' : 'detail';
 			return {
 				name,
 				resource: entry.resource,
 				remote: entry.remote,
 				listHref: listHref(name),
+				view,
 				id: decoded === undefined ? undefined : idFromParam(entry.resource, decoded)
 			} as AdminLocation<M>;
 		}
 	};
 }
+
+/** Which of a Resource's Views a path is on. */
+export type AdminView = 'list' | 'detail' | 'create';
 
 /** Where a path is in the admin: see `locate`. One member per Resource, so `id` stays typed. */
 export type AdminLocation<M> = {
@@ -129,6 +136,8 @@ export type AdminLocation<M> = {
 				/** The lazy import of the Resource's remote module, as in admin.ts. */
 				remote: M[K]['remote'];
 				listHref: string;
+				view: AdminView;
+				/** On a detail View, the record's typed id, if the path names one. */
 				id: IdOf<R> | undefined;
 			}
 		: never;

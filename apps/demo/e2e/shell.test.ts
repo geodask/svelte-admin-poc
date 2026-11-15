@@ -122,3 +122,18 @@ test('every sidebar and breadcrumb href is under /admin', async ({ page }) => {
 		'/admin/users'
 	]);
 });
+
+test.describe('on the create View', () => {
+	test('keeps the Resource active and reads Resource / New in the breadcrumb', async ({ page }) => {
+		await page.goto('/admin/users/new');
+
+		await expect(resourceNav(page).getByRole('link', { name: 'Users' })).toHaveAttribute(
+			'aria-current',
+			'true'
+		);
+		await expect(resourceNav(page).locator('a[aria-current]')).toHaveCount(1);
+		await expect(breadcrumb(page).getByRole('listitem')).toHaveText(['Users', 'New']);
+		await breadcrumb(page).getByRole('link', { name: 'Users' }).click();
+		await expect(page).toHaveURL('/admin/users');
+	});
+});
