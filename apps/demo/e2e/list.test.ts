@@ -27,9 +27,9 @@ test.describe('the recipes list View', () => {
 	}) => {
 		await page.goto('/admin/recipes');
 
-		// The first column holds the selection checkboxes.
+		// The first header cell names the selection checkboxes below it.
 		await expect(page.getByRole('columnheader')).toHaveText([
-			'',
+			'Select',
 			'ID',
 			'Name',
 			'Cuisine',

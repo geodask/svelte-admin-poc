@@ -18,7 +18,7 @@ const selectedCount = (page: Page) => page.getByText(/^\d+ selected$/);
 const openInSidebar = (page: Page, label: string) =>
 	page.getByRole('navigation', { name: 'Resources' }).getByRole('link', { name: label }).click();
 
-test.describe('row selection', { tag: '@js' }, () => {
+test.describe('row selection @js', () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto('/admin/recipes');
 		await hydrated(page);
@@ -76,7 +76,7 @@ test.describe('row selection', { tag: '@js' }, () => {
 		await openInSidebar(page, 'Users');
 
 		await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
-		await expect(dataRows(page)).not.toHaveCount(0);
+		await expect(dataRows(page).first()).toContainText('Ada Lovelace');
 		await expect(selectedRows(page)).toHaveCount(0);
 		await expect(headerCheckbox(page)).not.toBeChecked();
 		await expect(selectedCount(page)).toHaveCount(0);
@@ -90,36 +90,43 @@ test.describe('row selection', { tag: '@js' }, () => {
 
 		await openInSidebar(page, 'Recipes');
 		await expect(page.getByRole('heading', { level: 1, name: 'Recipes' })).toBeVisible();
-		await rowCheckbox(page, 'Classic Margherita Pizza').check();
+		await expect(dataRows(page).first()).toContainText('Classic Margherita Pizza');
+		// Switching Resources cleared the earlier selection.
+		await expect(selectedRows(page)).toHaveCount(0);
+		await rowCheckbox(page, 'Chocolate Chip Cookies').check();
 
 		// The count covers only what was selected in recipes now.
 		await expect(selectedCount(page)).toHaveText('1 selected');
 
-		await openInSidebar(page, 'Users');
+		await page.goBack();
 
 		await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
+		await expect(dataRows(page).first()).toContainText('Ada Lovelace');
 		await expect(selectedRows(page)).toHaveCount(0);
 		await expect(selectedCount(page)).toHaveCount(0);
 	});
 });
 
 test.describe('row selection without JavaScript', () => {
-	test('shows the checkboxes, disabled, and leaves the list usable', async ({
+	// Runs with JavaScript on too: the server-rendered list must work either way.
+	test('leaves the list usable, with the checkboxes disabled until hydration', async ({
 		page,
 		javaScriptEnabled
 	}) => {
-		test.skip(javaScriptEnabled, 'Checks the server-rendered page only');
-
 		const response = await page.goto('/admin/recipes');
 
 		expect(response?.status()).toBe(200);
 		await expect(dataRows(page)).toHaveCount(25);
-		// Selection needs JavaScript, so its checkboxes can't be ticked to no effect.
-		await expect(headerCheckbox(page)).toBeDisabled();
-		await expect(rowCheckbox(page, 'Classic Margherita Pizza')).toBeDisabled();
+		await expect(headerCheckbox(page)).toBeVisible();
+		await expect(rowCheckbox(page, 'Classic Margherita Pizza')).toBeVisible();
 		await expect(selectedCount(page)).toHaveCount(0);
+		if (!javaScriptEnabled) {
+			// Selection needs JavaScript, so its checkboxes can't be ticked to no effect.
+			await expect(headerCheckbox(page)).toBeDisabled();
+			await expect(rowCheckbox(page, 'Classic Margherita Pizza')).toBeDisabled();
+		}
 
-		// The record links and the pager still work.
+		// The pager and the record links still work.
 		await pager(page).getByRole('link', { name: 'Next' }).click();
 		await expect(page).toHaveURL('/admin/recipes?page=2');
 		await expect(dataRows(page).first()).not.toContainText('Classic Margherita Pizza');

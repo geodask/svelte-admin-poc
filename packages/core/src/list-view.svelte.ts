@@ -32,7 +32,8 @@ const SEARCH_DEBOUNCE_MS = 300;
  * lasts while the list View does, across pages and searches, and is never in the URL.
  *
  * Call it during component setup. In a component whose Resource can change, wrap the call in
- * `$derived`, so the list View follows the Resource.
+ * `$derived`, so the list View follows the Resource: each Resource then gets a new list View,
+ * with a selection of its own that starts empty.
  *
  * @example
  * const view = createListView(recipes, remote);
@@ -86,7 +87,7 @@ export function createListView<R extends Resource>(
 
 	const searchText = () => draft ?? params.search ?? '';
 
-	const selection = createSelection<IdOf<R>>(resource.name);
+	const selection = createSelection<IdOf<R>>();
 
 	/** Write a search to the URL now, in place, at page 1 of the current page size. */
 	function writeSearch(text: string) {
@@ -178,39 +179,39 @@ export function createListView<R extends Resource>(
 }
 
 /**
- * A list View's selection: the ids of the rows a person has checked, for one Resource. It is
- * keyed by that Resource's name: each list View makes its own for the Resource it was made for,
- * so the ids in it always belong to that Resource, and they keep its id type (a number id stays
- * a number). "On the page" means the ids of the records the list
- * View shows now, which the caller passes in, since the page is loaded by `query`.
+ * A list View's selection: the ids of the rows a person has checked, for one Resource. Each
+ * list View makes its own for the Resource it was made for, so the ids in it always belong to
+ * that Resource, and they keep its id type (a number id stays a number). "On the page" means
+ * the ids of the records the list View shows now, which the caller passes in, since the page is
+ * loaded by `query`.
  */
-function createSelection<Id extends string | number>(resourceName: string) {
+function createSelection<Id extends string | number>() {
 	const ids = new SvelteSet<Id>();
 
+	/** Select every row given, or clear every one of them. */
+	function setAll(pageIds: readonly Id[], selected: boolean) {
+		for (const id of pageIds) {
+			if (selected) ids.add(id);
+			else ids.delete(id);
+		}
+	}
+
 	return {
-		/** The name of the Resource whose rows these are. */
-		resource: resourceName,
 		/** Whether a row is selected. */
 		has(id: Id): boolean {
 			return ids.has(id);
 		},
 		/** Select a row, or clear it: `selected` defaults to the opposite of what it is now. */
 		toggle(id: Id, selected = !ids.has(id)) {
-			if (selected) ids.add(id);
-			else ids.delete(id);
+			setAll([id], selected);
 		},
 		/** Select every row on the page, or clear every one of them. Other pages keep theirs. */
-		setAll(pageIds: readonly Id[], selected: boolean) {
-			for (const id of pageIds) {
-				if (selected) ids.add(id);
-				else ids.delete(id);
-			}
-		},
+		setAll,
 		/** Whether the page has rows and every one of them is selected. */
 		allSelected(pageIds: readonly Id[]): boolean {
 			return pageIds.length > 0 && pageIds.every((id) => ids.has(id));
 		},
-		/** Whether some rows on the page are selected, but not all: the select-all box's mixed state. */
+		/** Whether some rows on the page are selected, but not all: the select-all mixed state. */
 		someSelected(pageIds: readonly Id[]): boolean {
 			const count = pageIds.filter((id) => ids.has(id)).length;
 			return count > 0 && count < pageIds.length;
@@ -219,13 +220,9 @@ function createSelection<Id extends string | number>(resourceName: string) {
 		get size(): number {
 			return ids.size;
 		},
-		/** The selected ids, in the order they were selected. */
+		/** The selected ids, in the order they were selected, e.g. for a bulk action. */
 		get ids(): Id[] {
 			return [...ids];
-		},
-		/** Clear the selection. */
-		clear() {
-			ids.clear();
 		}
 	};
 }

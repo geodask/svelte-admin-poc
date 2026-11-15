@@ -3,9 +3,9 @@
 	without JavaScript, submitting the form opens the search at page 1 and keeps the page size;
 	with JavaScript, the list follows typing and the URL is updated in place, so the browser
 	history doesn't fill up. Beside it, a count of the selected rows, once any are selected. The
-	row is there on every Resource, so the table doesn't move when the count appears. A Theme part, driven by the
-	core's `createListView`, so a replaced list View can render it too once the Theme exports it
-	(M1.10).
+	row is there on every Resource, so the table doesn't move when the count appears. A Theme
+	part, driven by the core's `createListView`, so a replaced list View can render it too once
+	the Theme exports it (M1.10).
 -->
 <script lang="ts">
 	import type { ListViewState } from '@svelte-admin/core/views';

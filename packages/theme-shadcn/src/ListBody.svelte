@@ -3,8 +3,9 @@
 	the page, so the list View renders it inside its boundary. While a new page loads (after a
 	page change or a search), the old rows stay and a small indicator shows.
 
-	The first column selects rows: a checkbox per row, and one in the header that selects or
-	clears every row on the page. The selection is the core's, so it belongs to this Resource.
+	The first cell of each row is a checkbox that selects the row, and the one in the header
+	selects or clears every row on the page. The selection is the core's, so it belongs to this
+	Resource.
 -->
 <script lang="ts">
 	import { recordTitle } from '@svelte-admin/core';
@@ -58,7 +59,7 @@
 			return columns;
 		},
 		manualPagination: true,
-		getRowId: (row) => String(row.id),
+		getRowId: (row) => String(idOf(row)),
 		getCoreRowModel: getCoreRowModel()
 	});
 
@@ -88,6 +89,7 @@
 				{#each table.getHeaderGroups() as headerGroup (headerGroup.id)}
 					<Table.Row>
 						<Table.Head class="w-10">
+							<span class="sr-only">Select</span>
 							<SelectionCheckbox
 								label="Select all on this page"
 								checked={selection.allSelected(pageIds)}
