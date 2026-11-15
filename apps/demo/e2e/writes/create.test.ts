@@ -53,7 +53,7 @@ test.describe('the users create View', () => {
 		await openCreateView(page);
 
 		const form = page.locator('main form');
-		await expect(form.locator('input:not([type=hidden]), select')).toHaveCount(5);
+		await expect(form.locator('input:not([type=hidden]), select')).toHaveCount(6);
 		await expect(nameInput(page)).toHaveJSProperty('type', 'text');
 		await expect(emailInput(page)).toHaveJSProperty('type', 'email');
 		await expect(roleSelect(page)).toHaveJSProperty('tagName', 'SELECT');
@@ -62,6 +62,7 @@ test.describe('the users create View', () => {
 		await expect(form.locator('label')).toHaveText([
 			/^Name\s*\*$/,
 			/^Email\s*\*$/,
+			/^Phone\s*$/,
 			/^Role\s*\*$/,
 			/^\s*Active\s*$/,
 			/^Joined at\s*\(UTC\)\s*\*$/

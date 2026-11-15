@@ -14,13 +14,12 @@
 <script lang="ts">
 	import type { Resource, ResourceRemote } from '@svelte-admin/core';
 	import { createFormView } from '@svelte-admin/core/views';
-	import FieldInput from './FieldInput.svelte';
+	import FormBody from './FormBody.svelte';
 
 	let { resource, remote }: { resource: Resource; remote: ResourceRemote } = $props();
 
 	// Derived, so the View follows the route to another Resource.
 	const view = $derived(createFormView(resource, remote, 'create'));
-	const form = $derived(view.form);
 </script>
 
 <svelte:head>
@@ -31,32 +30,7 @@
 	<h1 class="text-2xl font-semibold tracking-tight">New record in {resource.label}</h1>
 
 	<svelte:boundary>
-		<form
-			{...form}
-			novalidate
-			oninput={() => view.revalidate()}
-			class="flex flex-col gap-5 rounded-lg border p-6"
-		>
-			{#each view.spec as spec (spec.key)}
-				<FieldInput {spec} field={form.fields[spec.key]} />
-			{/each}
-
-			<div class="flex items-center gap-2">
-				<button
-					type="submit"
-					disabled={view.saving}
-					class="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-				>
-					{view.saving ? 'Saving…' : 'Save'}
-				</button>
-				<a
-					href={view.cancelHref}
-					class="inline-flex h-9 items-center rounded-md border bg-background px-4 text-sm font-medium hover:bg-muted"
-				>
-					Cancel
-				</a>
-			</div>
-		</form>
+		<FormBody {view} />
 
 		{#snippet failed(error, reset)}
 			<div role="alert" class="flex flex-col items-start gap-3 rounded-lg border p-6 text-sm">

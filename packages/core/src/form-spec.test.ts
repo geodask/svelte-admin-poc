@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { defineResource, field, formSchema, toFormSpec } from '@svelte-admin/core';
+import {
+	defineResource,
+	field,
+	formSchema,
+	toFormSpec,
+	toFormValues,
+	type Resource
+} from '@svelte-admin/core';
 
 /** A Resource with one Field, `value`, of the given type. */
 const withField = (schema: z.ZodType) =>
@@ -264,5 +271,220 @@ describe('formSchema', () => {
 		expect(await outcome(formSchema(servings, 'create'), { value: 4, extra: 'x' })).toEqual({
 			value: { value: 4 }
 		});
+	});
+});
+
+describe('formSchema for the edit form', () => {
+	it('gives the validated editable Fields, with the hidden id as the typed id', async () => {
+		expect(await outcome(formSchema(users, 'edit'), { ...filledUser, id: '7' })).toEqual({
+			value: {
+				id: 7,
+				name: 'Ada Lovelace',
+				email: 'ada@example.com',
+				role: 'admin',
+				active: true,
+				joinedAt: '2024-03-01T09:30:00.000Z'
+			}
+		});
+	});
+
+	it('reads a number id that the browser sent as a number', async () => {
+		expect(await outcome(formSchema(users, 'edit'), { ...filledUser, id: 7 })).toEqual({
+			value: expect.objectContaining({ id: 7 })
+		});
+	});
+
+	it('keeps a string id as it is', async () => {
+		const pages = defineResource({
+			name: 'pages',
+			label: 'Pages',
+			schema: z.object({ id: z.string(), title: z.string() })
+		});
+		expect(await outcome(formSchema(pages, 'edit'), { id: 'about/team', title: 'Team' })).toEqual({
+			value: { id: 'about/team', title: 'Team' }
+		});
+	});
+
+	it.each([
+		['text for a number id', 'abc'],
+		['a number not written canonically', '01'],
+		['an empty id', ''],
+		['no id at all', undefined]
+	])('reports %s as invalid input', async (_, id) => {
+		expect(await outcome(formSchema(users, 'edit'), { ...filledUser, id })).toEqual({
+			issues: ['id: Invalid input']
+		});
+	});
+
+	it('reports an invalid id together with the issues of the Fields', async () => {
+		expect(
+			await outcome(formSchema(users, 'edit'), { ...filledUser, name: '', id: 'abc' })
+		).toEqual({ issues: ['id: Invalid input', 'name: Required'] });
+	});
+
+	it('leaves a cleared optional Field out, so the Provider removes its value', async () => {
+		const result = await outcome(formSchema(users, 'edit'), { ...filledUser, age: '', id: '7' });
+		expect(result).toEqual({ value: expect.not.objectContaining({ age: expect.anything() }) });
+	});
+});
+
+describe('toFormValues', () => {
+	/** The edit form's input values for a record of a Resource with one Field, `value`. */
+	const valuesOf = (schema: z.ZodType, value: unknown) => {
+		const resource = withField(schema);
+		return toFormValues(toFormSpec(resource, 'edit'), { id: 1, value });
+	};
+
+	it('gives text, numbers, booleans and enum options as the inputs show them', () => {
+		expect(valuesOf(z.string(), 'Ada')).toEqual({ value: 'Ada' });
+		expect(valuesOf(z.number(), 4.5)).toEqual({ value: 4.5 });
+		expect(valuesOf(z.boolean(), true)).toEqual({ value: true });
+		expect(valuesOf(z.boolean(), false)).toEqual({ value: false });
+		expect(valuesOf(z.enum(['Easy', 'Hard']), 'Hard')).toEqual({ value: 'Hard' });
+	});
+
+	it('writes a number option as the select writes it', () => {
+		expect(valuesOf(z.enum({ One: 1, Two: 2 }), 2)).toEqual({ value: '2' });
+	});
+
+	it('writes a datetime in UTC to the minute, with seconds only when it has them', () => {
+		expect(valuesOf(z.iso.datetime(), '2024-03-01T23:30:00.000Z')).toEqual({
+			value: '2024-03-01T23:30'
+		});
+		expect(valuesOf(z.iso.datetime(), '2024-03-01T23:30:15Z')).toEqual({
+			value: '2024-03-01T23:30:15'
+		});
+		expect(valuesOf(z.iso.datetime(), '2024-03-01T23:30:15.250Z')).toEqual({
+			value: '2024-03-01T23:30:15.250'
+		});
+	});
+
+	it('writes a date as its day, in UTC for a Date', () => {
+		expect(valuesOf(z.iso.date(), '2024-01-08')).toEqual({ value: '2024-01-08' });
+		expect(valuesOf(z.date(), new Date(Date.UTC(2024, 0, 8)))).toEqual({ value: '2024-01-08' });
+	});
+
+	it('leaves out a Field with no value', () => {
+		expect(valuesOf(z.string().optional(), undefined)).toEqual({});
+		expect(valuesOf(z.string().nullable(), null)).toEqual({});
+	});
+
+	it('never gives the id, which the edit form carries as a hidden input', () => {
+		expect(valuesOf(z.string(), 'Ada')).not.toHaveProperty('id');
+	});
+
+	// The demo's Resources, cut down to the scalar Fields the forms edit so far, each with a
+	// record shaped like the demo backend's seed.
+	const demo = [
+		{
+			resource: defineResource({
+				name: 'recipes',
+				label: 'Recipes',
+				schema: z.object({
+					id: z.number(),
+					name: z.string(),
+					cuisine: z.string(),
+					difficulty: z.enum(['Easy', 'Medium', 'Hard']),
+					prepTimeMinutes: field(z.number(), { label: 'Prep time (min)' }),
+					servings: z.number(),
+					caloriesPerServing: field(z.number(), { label: 'Calories' }).optional(),
+					vegetarian: z.boolean(),
+					reviewCount: z.number(),
+					publishedAt: z.iso.datetime(),
+					instructions: field(z.string(), { list: false, description: 'How to cook it' })
+				})
+			}),
+			records: [
+				{
+					id: 1,
+					name: 'Classic Margherita Pizza',
+					cuisine: 'Italian',
+					difficulty: 'Easy',
+					prepTimeMinutes: 20,
+					servings: 4,
+					caloriesPerServing: 300,
+					vegetarian: true,
+					reviewCount: 97,
+					publishedAt: '2024-01-08T10:00:00.000Z',
+					instructions: 'Stretch the dough.'
+				},
+				{
+					id: 2,
+					name: 'Beef Bourguignon',
+					cuisine: 'French',
+					difficulty: 'Hard',
+					prepTimeMinutes: 45,
+					servings: 6,
+					vegetarian: false,
+					reviewCount: 0,
+					publishedAt: '2024-02-08T10:00:00.000Z',
+					instructions: 'Brown the beef.'
+				}
+			]
+		},
+		{
+			resource: defineResource({
+				name: 'posts',
+				label: 'Posts',
+				schema: z.object({
+					id: z.number(),
+					title: z.string(),
+					userId: field(z.number(), { label: 'Author ID' }),
+					status: z.enum(['draft', 'published']),
+					body: field(z.string(), { list: false })
+				})
+			}),
+			records: [{ id: 3, title: 'On testing', userId: 2, status: 'draft', body: 'Notes.' }]
+		},
+		{
+			resource: defineResource({
+				name: 'users',
+				label: 'Users',
+				schema: z.object({
+					id: z.number(),
+					name: z.string(),
+					email: z.email(),
+					phone: z.string().optional(),
+					role: z.enum(['admin', 'editor', 'viewer']),
+					active: z.boolean(),
+					joinedAt: z.iso.datetime()
+				})
+			}),
+			records: [
+				{
+					id: 1,
+					name: 'Ada Lovelace',
+					email: 'ada@example.com',
+					phone: '+44 20 7946 0001',
+					role: 'admin',
+					active: true,
+					joinedAt: '2023-01-15T09:00:00.000Z'
+				},
+				{
+					id: 4,
+					name: 'Katherine Johnson',
+					email: 'katherine@example.com',
+					role: 'editor',
+					active: false,
+					joinedAt: '2023-04-15T09:00:00.000Z'
+				}
+			]
+		}
+	];
+
+	const cases = demo.flatMap(({ resource, records }) =>
+		records.map((record): [string, Resource, { id: number }] => [
+			`${resource.name} ${record.id}`,
+			resource,
+			record
+		])
+	);
+
+	it.each(cases)('round-trips through the edit form schema for %s', async (_, resource, record) => {
+		const values = toFormValues(toFormSpec(resource, 'edit'), record);
+
+		expect(
+			await outcome(formSchema(resource, 'edit'), { ...values, id: String(record.id) })
+		).toEqual({ value: record });
 	});
 });

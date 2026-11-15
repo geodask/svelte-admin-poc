@@ -1,9 +1,11 @@
 <!--
 	The shell's header: a breadcrumb with the current Resource's label and, on a detail View, the
-	record's Record title, or "New" on the create View. Off the list View the label links back to
-	the list.
+	record's Record title, or "New" on the create View. On the edit View it reads Resource /
+	Record title / Edit, with the Record title linking to the detail View. Off the list View the
+	label links back to the list.
 -->
 <script lang="ts">
+	import { idPathSegment } from '@svelte-admin/core';
 	import type { ShellState } from '@svelte-admin/core/views';
 	import * as Breadcrumb from './components/ui/breadcrumb/index.ts';
 	import RecordCrumb from './RecordCrumb.svelte';
@@ -31,8 +33,18 @@
 				{:else if id !== undefined}
 					<Breadcrumb.Separator />
 					<Breadcrumb.Item>
-						<RecordCrumb here={shell.here} {id} />
+						<RecordCrumb
+							here={shell.here}
+							{id}
+							href={view === 'edit' ? `${listHref}/${idPathSegment(id)}` : undefined}
+						/>
 					</Breadcrumb.Item>
+					{#if view === 'edit'}
+						<Breadcrumb.Separator />
+						<Breadcrumb.Item>
+							<Breadcrumb.Page>Edit</Breadcrumb.Page>
+						</Breadcrumb.Item>
+					{/if}
 				{/if}
 			</Breadcrumb.List>
 		</Breadcrumb.Root>

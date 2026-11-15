@@ -10,6 +10,10 @@
 //                                     and matched against each record's id written as text
 //   POST /{resource}                  create a record from the JSON body, with the next id (the
 //                                     highest plus one); answers 201 with the created record
+//   PUT  /{resource}/{id}             replace a record's editable Fields with the JSON body, keeping
+//                                     its id and the Fields only the backend sets; a Field missing
+//                                     from the body is removed. Answers with the saved record, or a
+//                                     404
 //   POST /reset                       restore the seed data and clear any faults (e2e tests call
 //                                     it first)
 //   POST /faults                      test-only: make the next resource request(s) slow or fail.
@@ -35,6 +39,14 @@ function fresh(): Record<string, Records> {
 
 /** The Resources answered with `hasNextPage` instead of `total`. */
 const uncounted = new Set(['posts']);
+
+/**
+ * The Fields only the backend sets, which no form sends: a PUT keeps them as they are. (The id
+ * is always kept.)
+ */
+const backendOwned: Record<string, string[]> = {
+	recipes: ['reviewCount', 'sourceId', 'internalNotes']
+};
 
 /** The text Fields `q` is matched against, for each Resource that can be searched. */
 const searchFields: Record<string, string[]> = {
@@ -148,6 +160,24 @@ const server = Bun.serve({
 			const record = { ...body, id };
 			records.push(record);
 			return json(record, 201);
+		}
+
+		if (request.method === 'PUT' && segments.length === 2 && Object.hasOwn(db, segments[0])) {
+			const name = segments[0];
+			const id = decodeSegment(segments[1]);
+			const index = db[name].findIndex((r) => String(r.id) === id);
+			if (index === -1) return json({ message: 'Not found' }, 404);
+			const body: unknown = await request.json().catch(() => undefined);
+			if (typeof body !== 'object' || body === null || Array.isArray(body)) {
+				return json({ message: 'The body must be a JSON object' }, 400);
+			}
+			const current = db[name][index] as Record<string, unknown> & Records[number];
+			const kept = Object.fromEntries(
+				(backendOwned[name] ?? []).filter((key) => key in current).map((key) => [key, current[key]])
+			);
+			const record = { ...body, ...kept, id: current.id };
+			db[name][index] = record;
+			return json(record);
 		}
 
 		if (request.method === 'GET' && segments.length === 2 && Object.hasOwn(db, segments[0])) {

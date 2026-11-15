@@ -1,4 +1,5 @@
 import { page } from '$app/state';
+import { EDIT_SEGMENT, idPathSegment } from './ids.ts';
 import { recordTitle } from './record-title.ts';
 import type { ResourceRemote } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
@@ -47,6 +48,10 @@ export function createDetailView<R extends Resource>(
 		/** The href of the Resource's list View. */
 		get listViewHref(): string {
 			return listViewHref;
+		},
+		/** The href of the record's edit View, `{list}/{id}/edit`. */
+		get editHref(): string {
+			return `${listViewHref}/${idPathSegment(id)}/${EDIT_SEGMENT}`;
 		}
 	};
 }

@@ -9,6 +9,7 @@
 export { default as AdminShell } from './AdminShell.svelte';
 export { default as CreateView } from './CreateView.svelte';
 export { default as DetailView } from './DetailView.svelte';
+export { default as EditView } from './EditView.svelte';
 export { default as ErrorPage } from './ErrorPage.svelte';
 export { default as ListView } from './ListView.svelte';
 

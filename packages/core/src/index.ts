@@ -45,9 +45,12 @@ export {
 export {
 	formSchema,
 	toFormSpec,
+	toFormValues,
 	type CreateData,
+	type EditData,
 	type FormFieldSpec,
 	type FormInput,
-	type FormMode
+	type FormMode,
+	type FormOutput
 } from './form-spec.ts';
 export type { StandardSchemaV1 } from './standard-schema.ts';
