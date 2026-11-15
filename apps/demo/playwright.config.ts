@@ -11,7 +11,8 @@ const faultTests = /faults\.test\.ts$/;
 /**
  * Tests that write to the demo backend. A write is seen by every test that reads the same list
  * (a new user is on the users list), and each test's reset undoes it, so they run one at a time,
- * after the read-only tests and before the fault tests.
+ * after the read-only tests and before the fault tests. Nothing runs beside them, so they may
+ * inject backend faults too.
  */
 const writeTests = /\/writes\//;
 

@@ -29,8 +29,8 @@ export async function hydrated(page: Page) {
 
 /**
  * Make the demo backend's next resource request(s) slow or fail. Reset clears it. Faults are
- * shared by every test, so only tests in `faults.test.ts` use them: that file runs on its own,
- * after every other test.
+ * shared by every test, so only tests that run one at a time, with no other test running, use
+ * them: those in `faults.test.ts` and in `writes/` (see playwright.config.ts).
  */
 export async function injectFault(request: APIRequestContext, fault: Fault) {
 	const response = await request.post(`${BACKEND_URL}/faults`, { data: fault });

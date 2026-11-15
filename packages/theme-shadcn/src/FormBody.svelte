@@ -9,6 +9,9 @@
 	the issues and what was typed, or redirects to the record's detail View. With JavaScript the
 	input is checked before it is sent, and issues follow typing once the form has been
 	submitted. Save shows progress and is disabled while a save is in flight.
+
+	When the backend refuses a save for a reason no input is to blame for (a conflict, or a
+	record deleted meanwhile), the reason shows above the Fields, and what was typed stays.
 -->
 <script lang="ts">
 	import type { FormViewState } from '@svelte-admin/core/views';
@@ -33,6 +36,17 @@
 	oninput={() => view.revalidate()}
 	class="flex flex-col gap-5 rounded-lg border p-6"
 >
+	{#if view.issues.length}
+		<div
+			role="alert"
+			class="rounded-md border border-destructive/50 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+		>
+			{#each view.issues as issue, index (index)}
+				<p>{issue.message}</p>
+			{/each}
+		</div>
+	{/if}
+
 	{#if view.id !== undefined}
 		<input {...form.fields.id.as('hidden', view.id)} />
 	{/if}

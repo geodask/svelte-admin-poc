@@ -11,16 +11,19 @@
 //   POST /{resource}                  create a record from the JSON body, with the next id (the
 //                                     highest plus one) and the Fields only the backend sets
 //                                     (recipes' sourceId, reviewCount and internalNotes), whatever
-//                                     the body says; answers 201 with the created record
+//                                     the body says; answers 201 with the created record. A user
+//                                     whose email is already taken is a 422 with an issue on email
 //   PUT  /{resource}/{id}             replace a record's editable Fields with the JSON body, keeping
 //                                     its id and the Fields no edit can set (the backend's own, and
 //                                     users' email, set once on create); a Field missing from the
 //                                     body is removed. Answers with the saved record, or a 404
+//   DELETE /{resource}/{id}           delete a record: a 204, or a 404
 //   POST /reset                       restore the seed data and clear any faults (e2e tests call
 //                                     it first)
 //   POST /faults                      test-only: make the next resource request(s) slow or fail.
 //                                     The JSON body is a Fault (config.ts). Faults queue up, and each
 //                                     one is used by the next resource request that matches it
+//                                     (its path and method, when it names them)
 //   GET  /requests                    every resource request since the server started, writes too,
 //                                     so a test can check that the Provider was or wasn't called. Reset
 //                                     keeps it, since tests run in parallel against one backend:
@@ -62,6 +65,25 @@ const keptOnUpdate: Record<string, string[]> = {
 	users: ['email']
 };
 
+/**
+ * The rules only the backend can check for a new record, by Resource: each returns the issues
+ * a POST is answered with (a 422), or none.
+ */
+const createRules: Record<
+	string,
+	(body: Record<string, unknown>, records: Records) => { path: string[]; message: string }[]
+> = {
+	users: (body, records) => {
+		const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : undefined;
+		const taken = records.some(
+			(record) => String((record as { email?: unknown }).email).toLowerCase() === email
+		);
+		return email !== undefined && taken
+			? [{ path: ['email'], message: 'A user with this email already exists' }]
+			: [];
+	}
+};
+
 /** The text Fields `q` is matched against, for each Resource that can be searched. */
 const searchFields: Record<string, string[]> = {
 	recipes: ['name', 'cuisine', 'instructions'],
@@ -83,9 +105,13 @@ let db = fresh();
 let faults: Fault[] = [];
 const requests: string[] = [];
 
-/** The first queued fault for `pathname`, used up by this request. */
-function takeFault(pathname: string): Fault | undefined {
-	const fault = faults.find((f) => f.path === undefined || f.path === pathname);
+/** The first queued fault for this request's method and pathname, used up by it. */
+function takeFault(method: string, pathname: string): Fault | undefined {
+	const fault = faults.find(
+		(f) =>
+			(f.path === undefined || f.path === pathname) &&
+			(f.method === undefined || f.method.toUpperCase() === method)
+	);
 	if (fault === undefined) return undefined;
 	fault.times = (fault.times ?? 1) - 1;
 	if (fault.times <= 0) faults = faults.filter((f) => f !== fault);
@@ -136,10 +162,10 @@ const server = Bun.serve({
 
 		requests.push(`${request.method} ${url.pathname}${url.search}`);
 
-		const fault = takeFault(url.pathname);
+		const fault = takeFault(request.method, url.pathname);
 		if (fault?.delayMs) await Bun.sleep(fault.delayMs);
 		if (fault?.status) {
-			return json({ message: fault.message ?? 'Injected failure' }, fault.status);
+			return json(fault.body ?? { message: fault.message ?? 'Injected failure' }, fault.status);
 		}
 
 		if (request.method === 'GET' && segments.length === 1 && Object.hasOwn(db, segments[0])) {
@@ -169,6 +195,8 @@ const server = Bun.serve({
 			if (typeof body !== 'object' || body === null || Array.isArray(body)) {
 				return json({ message: 'The body must be a JSON object' }, 400);
 			}
+			const issues = createRules[segments[0]]?.(body as Record<string, unknown>, records) ?? [];
+			if (issues.length > 0) return json({ issues }, 422);
 			// Every demo Resource has number ids, so the next one is the highest plus one.
 			const id = Math.max(0, ...records.map((record) => Number(record.id))) + 1;
 			const record = { ...body, ...backendOwned[segments[0]]?.(id), id };
@@ -192,6 +220,15 @@ const server = Bun.serve({
 			const record = { ...body, ...kept, id: current.id };
 			db[name][index] = record;
 			return json(record);
+		}
+
+		if (request.method === 'DELETE' && segments.length === 2 && Object.hasOwn(db, segments[0])) {
+			const name = segments[0];
+			const id = decodeSegment(segments[1]);
+			const index = db[name].findIndex((r) => String(r.id) === id);
+			if (index === -1) return json({ message: 'Not found' }, 404);
+			db[name].splice(index, 1);
+			return new Response(null, { status: 204 });
 		}
 
 		if (request.method === 'GET' && segments.length === 2 && Object.hasOwn(db, segments[0])) {

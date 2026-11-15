@@ -8,7 +8,7 @@ import {
 } from './form-spec.ts';
 import { listPathOfCreateView, listPathOfEditView, recordPath } from './ids.ts';
 import { recordTitle } from './record-title.ts';
-import type { RemoteFormLike, RemoteRead, ResourceRemote } from './remote.ts';
+import type { RemoteFormIssue, RemoteFormLike, RemoteRead, ResourceRemote } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /**
@@ -112,6 +112,14 @@ export function createFormView<R extends Resource>(
 		get cancelHref(): string {
 			return detailViewHref ?? listViewHref;
 		},
+		/**
+		 * The issues of the form as a whole, to show above its Fields: why the backend refused
+		 * the last save when no input is to blame (e.g. a conflict, or "This record no longer
+		 * exists" on edit). Empty when there are none.
+		 */
+		get issues(): RemoteFormIssue[] {
+			return form.fields.issues() ?? [];
+		},
 		/** Whether a submit is in flight, so Save can show progress and be disabled. */
 		get saving(): boolean {
 			return form.pending > 0;
@@ -140,6 +148,7 @@ export type FormView<R extends Resource, M extends FormMode> = {
 	prefill(record: RecordOf<R>): void;
 	readonly listViewHref: string;
 	readonly cancelHref: string;
+	readonly issues: RemoteFormIssue[];
 	readonly saving: boolean;
 	revalidate(): void;
 };

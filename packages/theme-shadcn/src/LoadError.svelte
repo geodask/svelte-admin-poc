@@ -3,6 +3,9 @@
 	and links back to the list. Any other error shows its message, which the server has already
 	made safe (an unexpected error never reaches the browser with its details), and a Retry button
 	that loads again without a full page reload.
+
+	`reasons` replace the "not found" sentence when the View already knows why, e.g. the edit
+	View's "This record no longer exists" after a save of a record deleted meanwhile.
 -->
 <script lang="ts">
 	import type { Resource } from '@svelte-admin/core';
@@ -12,7 +15,8 @@
 		retry,
 		resource,
 		listViewHref,
-		target
+		target,
+		reasons = []
 	}: {
 		/** What the boundary caught: Kit hands it over as `App.Error`, `{ status, message }`. */
 		error: unknown;
@@ -29,6 +33,8 @@
 		 * (with no heading of its own, so this one is the page's `h1`).
 		 */
 		target: 'list' | 'record';
+		/** Why the record is missing, when the View knows: shown in place of "not found". */
+		reasons?: readonly string[];
 	} = $props();
 
 	const failure = $derived(readFailure(error));
@@ -63,7 +69,9 @@
 	{#if failure.status === 404}
 		<svelte:element this={heading} class="text-lg font-semibold">Not found</svelte:element>
 		<p class="text-muted-foreground">
-			{#if target === 'record'}
+			{#if reasons.length}
+				{reasons.join(' ')}
+			{:else if target === 'record'}
 				This record doesn't exist in {resource.label}. It may have been deleted.
 			{:else}
 				The backend has no {records} to list.

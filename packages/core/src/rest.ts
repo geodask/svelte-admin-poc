@@ -1,11 +1,18 @@
 // The bundled REST Provider. It is server code: import it only from server-only modules and
 // `.remote.ts` files, never from a module the browser loads.
 import { z } from 'zod';
-import { ConflictError, InvalidInputError, NotFoundError } from './errors.ts';
+import { ConflictError, FieldError, InvalidInputError, NotFoundError } from './errors.ts';
 import { idPathSegment } from './ids.ts';
 import type { CreateData, EditData } from './form-spec.ts';
 import type { ListResult, Provider } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
+
+/** A 422's body that names the Fields the backend rejected. */
+const fieldIssuesBody = z.object({
+	issues: z
+		.array(z.object({ path: z.array(z.union([z.string(), z.number()])), message: z.string() }))
+		.min(1)
+});
 
 const listResponse = z.union([
 	z.object({ data: z.array(z.unknown()), total: z.number().int().min(0) }),
@@ -24,9 +31,13 @@ const listResponse = z.union([
  * - `PUT {base}/{resource}/{id}` with the whole editable record (without its id) as JSON
  *   replaces it, and returns the saved record. An optional Field missing from the body was
  *   cleared.
- * - A failing status becomes a Provider error: 404 is `NotFoundError`, 400 and 422 are
- *   `InvalidInputError`, 409 is `ConflictError`. Any other is an unexpected error, whose message
- *   names the request, the status and the start of the body, for the server log.
+ * - A failing status becomes a Provider error: 404 is `NotFoundError`, 400 is
+ *   `InvalidInputError`, 409 is `ConflictError`. A 422 whose body is
+ *   `{ issues: [{ path, message }] }` is a `FieldError` with those issues, so each message
+ *   shows under the input its path names (e.g. `['email']`, or `['ingredients', 2, 'name']`):
+ *   the messages reach the user, so the backend must keep them safe to show. A 422 without that
+ *   body is `InvalidInputError`. Any other status is an unexpected error, whose message names
+ *   the request, the status and the start of the body, for the server log.
  *
  * It uses only the `fetch` from its context. Records are not checked here: `serveResource`
  * parses each one with the Resource schema.
@@ -104,6 +115,10 @@ async function requestJson(
 		...(body === undefined ? {} : { body: JSON.stringify(body) })
 	});
 	if (!response.ok) {
+		if (response.status === 422) {
+			const parsed = fieldIssuesBody.safeParse(await response.json().catch(() => undefined));
+			if (parsed.success) throw new FieldError(parsed.data.issues);
+		}
 		// A Provider error's message reaches the user, so it keeps its safe default.
 		const KnownError = statusErrors[response.status];
 		if (KnownError) throw new KnownError();
