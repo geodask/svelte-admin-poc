@@ -1,6 +1,8 @@
 <!--
 	The form of a create or edit View: one labelled input per Field the form maps, in schema
-	order, and Save and Cancel. On edit it also carries the record's id as a hidden input. It is
+	order, and Save and Cancel. On edit it also carries the record's id as a hidden input, and
+	shows the Fields the backend owns as text, in their place among the inputs, as the detail
+	View shows them; they are never submitted. It is
 	driven by the core's headless `createFormView`, so the create and edit Views share it.
 
 	It works without JavaScript: the form posts to the page, and the server renders it again with
@@ -11,8 +13,16 @@
 <script lang="ts">
 	import type { FormViewState } from '@svelte-admin/core/views';
 	import FieldInput from './FieldInput.svelte';
+	import FieldValue from './FieldValue.svelte';
 
-	let { view }: { view: FormViewState } = $props();
+	let {
+		view,
+		record
+	}: {
+		view: FormViewState;
+		/** The record being edited, whose read-only Fields show as text. Only on edit. */
+		record?: Record<string, unknown>;
+	} = $props();
 
 	const form = $derived(view.form);
 </script>
@@ -28,7 +38,19 @@
 	{/if}
 
 	{#each view.spec as spec (spec.key)}
-		<FieldInput {spec} field={form.fields[spec.key]} />
+		{#if spec.kind === 'readOnly'}
+			<dl class="flex flex-col gap-1.5 text-sm">
+				<dt class="font-medium">
+					{spec.label}
+					{#if spec.description}
+						<p class="text-xs font-normal text-muted-foreground">{spec.description}</p>
+					{/if}
+				</dt>
+				<dd><FieldValue field={spec.field} value={record?.[spec.key]} /></dd>
+			</dl>
+		{:else}
+			<FieldInput {spec} field={form.fields[spec.key]} />
+		{/if}
 	{/each}
 
 	<div class="flex items-center gap-2">

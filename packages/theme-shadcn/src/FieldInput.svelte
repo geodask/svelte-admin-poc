@@ -2,9 +2,9 @@
 	One Field's input on a create or edit form, chosen by its spec kind: a text, email or url
 	input, a textarea, a number, a checkbox, a select, a date, a datetime read and written in UTC,
 	a list, rows or a group. It shows the Field's label (with a marker when it is required), its
-	description as help text, and its issues under it. The form sets `novalidate`, so the browser
-	never blocks a submit: every rule comes from the Resource's schema, with and without
-	JavaScript.
+	placeholder in the input, its description as help text, and its issues under it. The form
+	sets `novalidate`, so the browser never blocks a submit: every rule comes from the Resource's
+	schema, with and without JavaScript.
 
 	A list in rows and rows always end with one blank row: typing into it adds an item (without
 	JavaScript, one item per save), and clearing a row removes its item. With JavaScript a ×
@@ -19,7 +19,7 @@
 	import {
 		rowCount,
 		withoutRow,
-		type FormFieldSpec,
+		type FormInputSpec,
 		type RemoteFormField
 	} from '@svelte-admin/core';
 	import FieldInput from './FieldInput.svelte';
@@ -30,7 +30,7 @@
 		field,
 		labelHidden = false
 	}: {
-		spec: FormFieldSpec;
+		spec: FormInputSpec;
 		field: RemoteFormField;
 		/**
 		 * Keep the label for assistive technology only, e.g. for each item of a list. Only for a
@@ -39,9 +39,9 @@
 		labelHidden?: boolean;
 	} = $props();
 
-	type ListSpec = Extract<FormFieldSpec, { kind: 'list' }>;
-	type RowsSpec = Extract<FormFieldSpec, { kind: 'rows' }>;
-	type GroupSpec = Extract<FormFieldSpec, { kind: 'group' }>;
+	type ListSpec = Extract<FormInputSpec, { kind: 'list' }>;
+	type RowsSpec = Extract<FormInputSpec, { kind: 'rows' }>;
+	type GroupSpec = Extract<FormInputSpec, { kind: 'group' }>;
 
 	const inputId = $props.id();
 	const issuesId = `${inputId}-issues`;
@@ -209,6 +209,7 @@
 					{...attributes}
 					value={attributes.value as string}
 					id={inputId}
+					placeholder={spec.placeholder}
 					rows={spec.kind === 'list' ? 4 : 5}
 					aria-required={spec.required}
 					aria-describedby={describedBy}
@@ -223,6 +224,7 @@
 								: spec.kind
 					)}
 					id={inputId}
+					placeholder={spec.placeholder}
 					step={spec.kind === 'number' ? (spec.integer ? 1 : 'any') : undefined}
 					aria-required={spec.required}
 					aria-describedby={describedBy}

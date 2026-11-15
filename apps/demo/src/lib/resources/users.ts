@@ -1,4 +1,4 @@
-import { defineResource } from '@svelte-admin/core';
+import { defineResource, field } from '@svelte-admin/core';
 import { z } from 'zod';
 
 export const users = defineResource({
@@ -11,7 +11,8 @@ export const users = defineResource({
 	schema: z.object({
 		id: z.number(),
 		name: z.string(),
-		email: z.email(),
+		// Set once on create, then shown as text on the edit View.
+		email: field(z.email(), { readOnly: 'afterCreate', placeholder: 'name@example.com' }),
 		// Optional, so clearing it on the edit View removes it.
 		phone: z.string().optional(),
 		role: z.enum(['admin', 'editor', 'viewer']),

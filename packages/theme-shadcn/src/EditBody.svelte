@@ -24,4 +24,4 @@
 
 <h1 class="text-2xl font-semibold tracking-tight">Edit {title}</h1>
 
-<FormBody {view} />
+<FormBody {view} {record} />

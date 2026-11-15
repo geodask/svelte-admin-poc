@@ -2,13 +2,28 @@ import { z } from 'zod';
 
 /**
  * The metadata a Field can carry, attached with `field()`: `label`, `description`, `hidden` (in
- * no View), `list: false` (left off the list View only) and `input`.
+ * no View), `list: false` (left off the list View only), `readOnly`, `placeholder` and `input`.
  */
 export type FieldMeta = {
 	label?: string;
+	/** Shown under the Field's label on the detail View, and as help text under its input. */
 	description?: string;
+	/**
+	 * Shown in no View. The forms treat a hidden Field as read-only, so a save never clears a
+	 * value no View shows: the backend must keep it.
+	 */
 	hidden?: boolean;
 	list?: false;
+	/**
+	 * Whether the backend owns the Field, so no form can set it. `true`: it is left out of the
+	 * create form, shown as text on the edit form, and left out of both form schemas, so a
+	 * crafted request can't set it either. `'afterCreate'`: it is editable on create, then
+	 * treated as `true` on edit (for example an email or a slug). Only a top-level Field's
+	 * setting counts.
+	 */
+	readOnly?: true | 'afterCreate';
+	/** An example value, shown in the Field's input while it is empty. */
+	placeholder?: string;
 	/**
 	 * Which input the create and edit forms give the Field, where its type leaves a choice:
 	 * `textarea` for a long text Field, and for an array of text `rows` (one input per item, the
@@ -129,6 +144,10 @@ export type Field = DetectedKind & {
 	detail: boolean;
 	/** The input its metadata chose for the forms, if any. */
 	input?: FieldInputChoice;
+	/** Whether the backend owns it: see `FieldMeta.readOnly`. Absent when the forms may set it. */
+	readOnly?: true | 'afterCreate';
+	/** The example value its input shows while empty, if any. */
+	placeholder?: string;
 	/**
 	 * For an object Field, the Fields of the object (or of each object in an array of objects),
 	 * so the detail View can show it as nested label-value pairs.
@@ -161,6 +180,8 @@ export function describeField(key: string, schema: z.ZodType): Field {
 		label: meta.label ?? defaultLabel(key),
 		...(meta.description === undefined ? {} : { description: meta.description }),
 		...(meta.input === undefined ? {} : { input: meta.input }),
+		...(meta.readOnly === undefined ? {} : { readOnly: meta.readOnly }),
+		...(meta.placeholder === undefined ? {} : { placeholder: meta.placeholder }),
 		required: !chain.some(isWrapper),
 		list: !hidden && meta.list !== false && kind.kind !== 'object',
 		detail: !hidden,

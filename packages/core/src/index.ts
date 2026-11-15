@@ -45,6 +45,7 @@ export {
 } from './fields.ts';
 export {
 	formSchema,
+	isInputSpec,
 	rowCount,
 	toFormSpec,
 	toFormValues,
@@ -53,7 +54,9 @@ export {
 	type EditData,
 	type FormFieldSpec,
 	type FormInput,
+	type FormInputSpec,
 	type FormMode,
-	type FormOutput
+	type FormOutput,
+	type FormReadOnlySpec
 } from './form-spec.ts';
 export type { StandardSchemaV1 } from './standard-schema.ts';
