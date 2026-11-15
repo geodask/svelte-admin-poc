@@ -4,6 +4,8 @@ import { z } from 'zod';
 export const posts = defineResource({
 	name: 'posts',
 	label: 'Posts',
+	icon: () => import('@lucide/svelte/icons/newspaper'),
+	group: 'Content',
 	// The demo backend can't count posts, so their list View pages with previous and next only.
 	// Posts aren't searchable, so their list View shows no search box.
 	schema: z.object({

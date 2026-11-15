@@ -1,4 +1,5 @@
-import type { RecordOf, Resource } from './resource.ts';
+import { idFromParam } from './ids.ts';
+import type { IdOf, RecordOf, Resource, ResourceIcon } from './resource.ts';
 import type { ResourceRemote } from './remote.ts';
 
 /**
@@ -13,6 +14,19 @@ export type AdminEntry<R extends Resource = Resource<string, any>> = {
 	remote: () => Promise<ResourceRemote<RecordOf<R>>>;
 };
 
+/** One link in the sidebar: a Resource's list View. */
+export type SidebarItem = {
+	/** The Resource's name. */
+	name: string;
+	label: string;
+	/** The href of the Resource's list View, under the admin's base path. */
+	href: string;
+	icon: ResourceIcon | undefined;
+};
+
+/** A sidebar group: its label (none for ungrouped Resources) and its links, in admin.ts order. */
+export type SidebarGroup = { label: string | undefined; items: SidebarItem[] };
+
 /** Each key must be its Resource's name, so a URL segment and a Resource never disagree. */
 type AdminResources<M> = {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- any schema fits
@@ -21,7 +35,7 @@ type AdminResources<M> = {
 
 /**
  * The app's admin: its base path and its Resources by name. Write it once in `admin.ts`; the
- * routes, the param matcher and (later) the sidebar all read the same list. It imports only
+ * routes, the param matcher and the sidebar all read the same list. It imports only
  * shared and remote modules, so it is safe in the browser.
  *
  * @example
@@ -56,9 +70,19 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 
 	type Name = keyof M & string;
 
+	const listHref = (name: Name) => `${basePath}/${name}`;
+	const isName = (segment: string): segment is Name => Object.hasOwn(resources, segment);
+	const first = Object.keys(resources)[0] as Name | undefined;
+
 	return {
 		basePath,
 		resources,
+		/**
+		 * The sidebar: the Resources grouped by their group. Groups appear in the order their
+		 * first Resource appears in admin.ts, and keep admin.ts order inside. Resources without a
+		 * group share one group with no label, placed the same way.
+		 */
+		sidebar: sidebarGroups(Object.values<AdminEntry>(resources), (name) => listHref(name as Name)),
 		/**
 		 * The param matcher for a Resource segment: the name if it is one of this admin's
 		 * Resources, otherwise `undefined`. `Object.hasOwn` keeps inherited keys such as
@@ -68,9 +92,69 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 		 * export const params = defineParams({ resource: admin.matchResource });
 		 */
 		matchResource(param: string): Name | undefined {
-			return Object.hasOwn(resources, param) ? (param as Name) : undefined;
+			return isName(param) ? param : undefined;
+		},
+		/** Where the admin's index leads: the first Resource's list in admin.ts, if there is one. */
+		homeHref: first === undefined ? undefined : listHref(first),
+		/**
+		 * The Resource a path is on, and on a detail View the record's typed id, for the shell's
+		 * active sidebar link and breadcrumb. The path is a URL pathname, still encoded. A path on
+		 * a Resource's list or anything under it finds that Resource; `id` is the next segment
+		 * read as the Resource's id, or `undefined` when there is none or it names no id. A path
+		 * outside the admin's Resources finds nothing.
+		 */
+		locate(pathname: string): AdminLocation<M> | undefined {
+			if (!pathname.startsWith(`${basePath}/`)) return undefined;
+			const [name, param] = pathname.slice(basePath.length + 1).split('/');
+			if (!isName(name)) return undefined;
+			const entry = resources[name] as AdminEntry;
+			const decoded = param === undefined ? undefined : decodeSegment(param);
+			return {
+				name,
+				resource: entry.resource,
+				remote: entry.remote,
+				listHref: listHref(name),
+				id: decoded === undefined ? undefined : idFromParam(entry.resource, decoded)
+			} as AdminLocation<M>;
 		}
 	};
+}
+
+/** Where a path is in the admin: see `locate`. One member per Resource, so `id` stays typed. */
+export type AdminLocation<M> = {
+	[K in keyof M & string]: M[K] extends AdminEntry<infer R>
+		? {
+				name: K;
+				resource: R;
+				/** The lazy import of the Resource's remote module, as in admin.ts. */
+				remote: M[K]['remote'];
+				listHref: string;
+				id: IdOf<R> | undefined;
+			}
+		: never;
+}[keyof M & string];
+
+/** A path segment, decoded, or `undefined` when it is malformed. */
+function decodeSegment(segment: string): string | undefined {
+	try {
+		return decodeURIComponent(segment);
+	} catch {
+		return undefined;
+	}
+}
+
+function sidebarGroups(entries: AdminEntry[], href: (name: string) => string): SidebarGroup[] {
+	const groups = new Map<string | undefined, SidebarGroup>();
+	for (const { resource } of entries) {
+		const { name, label, icon, group } = resource;
+		let target = groups.get(group);
+		if (target === undefined) {
+			target = { label: group, items: [] };
+			groups.set(group, target);
+		}
+		target.items.push({ name, label, href: href(name), icon });
+	}
+	return [...groups.values()];
 }
 
 /** The names of an admin's Resources, e.g. `'recipes' | 'users'`. */

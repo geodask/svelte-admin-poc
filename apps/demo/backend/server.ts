@@ -4,8 +4,8 @@
 //   GET  /{resource}?page=&perPage=&q=
 //                                     one page: { data, total }, or { data, hasNextPage } for
 //                                     posts, which stand in for a backend that can't count. q
-//                                     searches recipes by their text Fields; posts can't be
-//                                     searched, and q for them is a 400
+//                                     searches recipes by their text Fields and users by name
+//                                     and email; posts can't be searched, and q for them is a 400
 //   GET  /{resource}/{id}             one record, or a 404. The id is one path segment, decoded,
 //                                     and matched against each record's id written as text
 //   POST /reset                       restore the seed data and clear any faults (e2e tests call
@@ -24,7 +24,11 @@ import * as seed from './seed.ts';
 type Records = { id: number | string }[];
 
 function fresh(): Record<string, Records> {
-	return { recipes: structuredClone(seed.recipes), posts: structuredClone(seed.posts) };
+	return {
+		recipes: structuredClone(seed.recipes),
+		posts: structuredClone(seed.posts),
+		users: structuredClone(seed.users)
+	};
 }
 
 /** The Resources answered with `hasNextPage` instead of `total`. */
@@ -32,7 +36,8 @@ const uncounted = new Set(['posts']);
 
 /** The text Fields `q` is matched against, for each Resource that can be searched. */
 const searchFields: Record<string, string[]> = {
-	recipes: ['name', 'cuisine', 'instructions']
+	recipes: ['name', 'cuisine', 'instructions'],
+	users: ['name', 'email']
 };
 
 /** The records whose search Fields contain `q`, ignoring case and surrounding spaces. */

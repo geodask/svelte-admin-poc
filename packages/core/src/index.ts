@@ -6,6 +6,7 @@ export {
 	type IdOf,
 	type RecordOf,
 	type Resource,
+	type ResourceIcon,
 	type ResourceSchema
 } from './resource.ts';
 export { idFromParam, idPathSegment } from './ids.ts';
@@ -14,7 +15,14 @@ export type { ListParams, ListResult, Provider, ProviderContext } from './provid
 export { ConflictError, InvalidInputError, NotFoundError, ProviderError } from './errors.ts';
 export { DEFAULT_PER_PAGE, MAX_PER_PAGE, listParamsSchema } from './list-params.ts';
 export { listHref, listUrlRewrite, readListParams } from './list-url.ts';
-export { defineAdmin, type AdminEntry, type ResourceNameOf } from './admin.ts';
+export {
+	defineAdmin,
+	type AdminEntry,
+	type AdminLocation,
+	type ResourceNameOf,
+	type SidebarGroup,
+	type SidebarItem
+} from './admin.ts';
 export type { RemoteRead, ResourceRemote } from './remote.ts';
 export {
 	defaultLabel,
