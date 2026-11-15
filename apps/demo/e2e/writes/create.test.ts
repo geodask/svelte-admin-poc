@@ -3,10 +3,7 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { BACKEND_URL } from '../../backend/config.ts';
 import { expect, hydrated, test } from '../fixtures.ts';
-
-/** The value shown beside a Field label on the detail View. */
-const valueOf = (page: Page, label: string) =>
-	page.locator(`xpath=//dt[normalize-space(text())="${label}"]/following-sibling::dd[1]`).first();
+import { valueOf } from '../list-helpers.ts';
 
 /** The `POST /users` requests the demo backend has received so far. */
 async function userCreates(request: APIRequestContext) {

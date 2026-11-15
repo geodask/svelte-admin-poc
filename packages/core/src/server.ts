@@ -5,7 +5,7 @@ import { error, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { ProviderError } from './errors.ts';
 import { formSchema, type CreateData } from './form-spec.ts';
-import { hasPathSegment, idPathSegment } from './ids.ts';
+import { hasPathSegment, idPathSegment, listPathOfCreateView } from './ids.ts';
 import { listParamsSchema } from './list-params.ts';
 import type { ListResult, Provider, ProviderContext } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
@@ -71,7 +71,11 @@ export function serveResource<R extends Resource>(
 
 	const create = form(formSchema(resource, 'create'), async (data) => {
 		// Before the Provider is called, so a form posted from the wrong page creates nothing.
-		const listPath = listPathOfCreateView(getRequestEvent().url.pathname);
+		const { pathname } = getRequestEvent().url;
+		const listPath = listPathOfCreateView(pathname);
+		if (listPath === undefined) {
+			throw new Error(`A create form was submitted from ${pathname}, which is no create View`);
+		}
 		const saved = await served(() => provider.create(providerContext(), data));
 		// Like a read, a record that doesn't match the schema is an unexpected error.
 		const record = resource.schema.parse(saved) as RecordOf<R>;
@@ -84,18 +88,6 @@ export function serveResource<R extends Resource>(
 	});
 
 	return { getList, getOne, create };
-}
-
-/**
- * The list View's path for a create View at `{list}/new`. Any other path is an error, as is
- * one starting with `//`, which a browser would follow to another host.
- */
-function listPathOfCreateView(pathname: string): string {
-	const match = /^(\/(?!\/).*)\/new$/.exec(pathname);
-	if (match === null) {
-		throw new Error(`A create form was submitted from ${pathname}, which is not a {list}/new path`);
-	}
-	return match[1];
 }
 
 /** Run a Provider call, turning a Provider error into the HTTP error with its status. */

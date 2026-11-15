@@ -43,7 +43,7 @@ export type RemoteFormLike = {
 	/** Check the input in the browser with `schema` before it is sent. */
 	preflight(schema: StandardSchemaV1<FormInput, unknown>): RemoteFormLike;
 	/** Check the input again now, e.g. as the user edits after a failed submit. */
-	validate(options?: { all?: boolean; preflightOnly?: boolean }): Promise<void>;
+	validate(options?: { preflightOnly?: boolean }): Promise<void>;
 };
 
 /**

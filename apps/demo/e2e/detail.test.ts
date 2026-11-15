@@ -1,10 +1,7 @@
-import type { APIRequestContext, Page } from '@playwright/test';
+import type { APIRequestContext } from '@playwright/test';
 import { BACKEND_URL } from '../backend/config.ts';
 import { expect, hydrated, test } from './fixtures.ts';
-
-/** The value shown beside a top-level Field label on the detail View. */
-const valueOf = (page: Page, label: string) =>
-	page.locator(`xpath=//dt[normalize-space(text())="${label}"]/following-sibling::dd[1]`).first();
+import { valueOf } from './list-helpers.ts';
 
 /** The demo backend's log of resource requests, e.g. `GET /recipes/1`. */
 async function backendLog(request: APIRequestContext) {

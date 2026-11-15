@@ -1,6 +1,6 @@
 import { page } from '$app/state';
 import { formSchema, toFormSpec, type FormFieldSpec, type FormMode } from './form-spec.ts';
-import { CREATE_SEGMENT } from './ids.ts';
+import { listPathOfCreateView } from './ids.ts';
 import type { RemoteFormLike, ResourceRemote } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -27,7 +27,7 @@ export function createFormView<R extends Resource>(
 	mode: FormMode
 ) {
 	// The create View sits at `{list}/new`, so the list's path carries the base path.
-	const listViewHref = $derived(page.url.pathname.replace(new RegExp(`/${CREATE_SEGMENT}$`), ''));
+	const listViewHref = $derived(listPathOfCreateView(page.url.pathname) ?? page.url.pathname);
 	const form: RemoteFormLike = remote.create.preflight(formSchema(resource, mode));
 	const spec: readonly FormFieldSpec[] = toFormSpec(resource, mode);
 

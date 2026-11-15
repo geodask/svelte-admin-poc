@@ -28,6 +28,17 @@ export function idPathSegment(id: string | number): string {
 export const CREATE_SEGMENT = 'new';
 
 /**
+ * The list View's path for a create View's path (`{list}/new`), or `undefined` for any other
+ * path, including one that starts with `//`, which a browser would follow to another host.
+ */
+export function listPathOfCreateView(pathname: string): string | undefined {
+	const suffix = `/${CREATE_SEGMENT}`;
+	if (!pathname.endsWith(suffix) || pathname.startsWith('//')) return undefined;
+	const list = pathname.slice(0, -suffix.length);
+	return list.startsWith('/') ? list : undefined;
+}
+
+/**
  * The typed id a route param names, or `undefined` when it names none, which a route answers
  * with a 404 so the Provider is never asked. The param goes through the Resource's id schema,
  * which never coerces: for a number id, only a number written as `String(id)` writes it (`1`,

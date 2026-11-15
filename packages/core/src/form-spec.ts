@@ -29,23 +29,22 @@ export type FormFieldSpec = {
 	| { kind: 'datetime' }
 );
 
-/** The kind-specific part of a spec, for a Field's unwrapped type, or none when it has no input. */
+/** The input-specific part of a spec: what `inputFor` adds to the Field's own details. */
 type InputOf = FormFieldSpec extends infer S
 	? S extends unknown
 		? Omit<S, keyof Field>
 		: never
 	: never;
 
-function inputFor(schema: z.ZodType): InputOf | undefined {
+/**
+ * The input for a Field, from its Kind, refined by its unwrapped type where the Kind leaves a
+ * choice (a text format, an integer, a date or a datetime). `undefined` for a Kind with no input
+ * yet (a list, an object, unknown).
+ */
+function inputFor(field: Field, schema: z.ZodType): InputOf | undefined {
 	const type = unwrap(schema);
-
-	if (type instanceof z.ZodISODateTime) return { kind: 'datetime' };
-	if (type instanceof z.ZodISODate) return { kind: 'date' };
-	if (type instanceof z.ZodEnum) return { kind: 'select', options: type.options };
-
-	// The def's type, not `instanceof`, so string and number formats count as their base type.
-	switch (type._zod.def.type) {
-		case 'string': {
+	switch (field.kind) {
+		case 'text': {
 			// `format` covers both `z.email()` and `z.string().email()`.
 			const { format } = type as z.ZodString;
 			return { kind: 'text', format: format === 'email' || format === 'url' ? format : 'text' };
@@ -54,8 +53,10 @@ function inputFor(schema: z.ZodType): InputOf | undefined {
 			return { kind: 'number', integer: (type as z.ZodNumber).isInt };
 		case 'boolean':
 			return { kind: 'checkbox' };
+		case 'enum':
+			return { kind: 'select', options: field.options };
 		case 'date':
-			return { kind: 'date' };
+			return type instanceof z.ZodISODateTime ? { kind: 'datetime' } : { kind: 'date' };
 		default:
 			return undefined;
 	}
@@ -63,15 +64,15 @@ function inputFor(schema: z.ZodType): InputOf | undefined {
 
 /**
  * The inputs of a Resource's create form: one per Field it can map, in schema order. The id is
- * never in a form, since the backend assigns it. Field types with no input yet (lists, objects,
- * unions) are left out for now.
+ * never in a form, since the backend assigns it. Kinds with no input yet (lists, objects,
+ * unknown) are left out for now.
  */
 export function toFormSpec(resource: Resource, mode: FormMode): FormFieldSpec[] {
 	void mode;
 	const specs: FormFieldSpec[] = [];
 	for (const field of resource.fields) {
 		if (field.key === 'id') continue;
-		const input = inputFor(resource.schema.shape[field.key] as z.ZodType);
+		const input = inputFor(field, resource.schema.shape[field.key] as z.ZodType);
 		if (input === undefined) continue;
 		specs.push({
 			key: field.key,
@@ -121,11 +122,13 @@ function normalize(spec: FormFieldSpec, schema: z.ZodType, raw: unknown): unknow
 			const date = new Date(`${raw}T00:00:00Z`);
 			return Number.isNaN(date.getTime()) ? raw : date;
 		}
-		case 'datetime':
-			// The input has no time zone: it is read as UTC, as the Views show dates.
-			return typeof raw === 'string' && LOCAL_DATETIME.test(raw)
-				? new Date(`${raw}Z`).toISOString()
-				: raw;
+		case 'datetime': {
+			// The input has no time zone: it is read as UTC, as the Views show dates. Text that is
+			// no real date (month 13) is left as it is, for the schema to report.
+			if (typeof raw !== 'string' || !LOCAL_DATETIME.test(raw)) return raw;
+			const date = new Date(`${raw}Z`);
+			return Number.isNaN(date.getTime()) ? raw : date.toISOString();
+		}
 		default:
 			return raw;
 	}

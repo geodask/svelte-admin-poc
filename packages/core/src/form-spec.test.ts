@@ -46,6 +46,24 @@ describe('toFormSpec', () => {
 		});
 	});
 
+	it.each([
+		['optional', (schema: z.ZodType) => schema.optional()],
+		['nullable', (schema: z.ZodType) => schema.nullable()]
+	])('maps every scalar type the same when it is %s, and not required', (_, wrap) => {
+		const scalars: [z.ZodType, object][] = [
+			[z.email(), { kind: 'text', format: 'email' }],
+			[z.url(), { kind: 'text', format: 'url' }],
+			[z.number(), { kind: 'number', integer: false }],
+			[z.boolean(), { kind: 'checkbox' }],
+			[z.iso.date(), { kind: 'date' }],
+			[z.date(), { kind: 'date' }],
+			[z.iso.datetime(), { kind: 'datetime' }]
+		];
+		for (const [schema, input] of scalars) {
+			expect(specOf(wrap(schema))).toMatchObject({ ...input, required: false });
+		}
+	});
+
 	it('sees through a wrapper on an int, an enum and a datetime too', () => {
 		expect(specOf(z.int().optional())).toMatchObject({ kind: 'number', integer: true });
 		expect(specOf(z.enum(['a', 'b']).nullable())).toMatchObject({
@@ -83,7 +101,7 @@ describe('toFormSpec', () => {
 		]);
 	});
 
-	it('leaves out the Field types it has no input for yet', () => {
+	it('leaves out the Kinds it has no input for yet: lists, objects and unknown', () => {
 		const recipes = defineResource({
 			name: 'recipes',
 			label: 'Recipes',
@@ -207,6 +225,18 @@ describe('formSchema', () => {
 		expect(await outcome(schema, { value: '2024-01-08T23:30:15' })).toEqual({
 			value: { value: '2024-01-08T23:30:15.000Z' }
 		});
+	});
+
+	it('reports a date or datetime that is no real date as an issue, never an error', async () => {
+		const datetime = formSchema(withField(z.iso.datetime()), 'create');
+		const date = formSchema(withField(z.date()), 'create');
+
+		expect((await outcome(datetime, { value: '2024-13-45T10:00' })).issues).toEqual([
+			expect.stringMatching(/^value: /)
+		]);
+		expect((await outcome(date, { value: '2024-13-45' })).issues).toEqual([
+			expect.stringMatching(/^value: /)
+		]);
 	});
 
 	it("reports the schema's own message for a bad value", async () => {
