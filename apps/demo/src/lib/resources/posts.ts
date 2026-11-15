@@ -16,5 +16,8 @@ export const posts = defineResource({
 		status: z.enum(['draft', 'published']),
 		tags: z.array(z.string()),
 		body: field(z.string(), { list: false })
-	})
+	}),
+	// Posts have no `name` Field, so the default rule would pick `title` anyway; written out, it
+	// shows the key form of the setting.
+	recordTitle: 'title'
 });

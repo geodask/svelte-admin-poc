@@ -72,3 +72,95 @@ describe('the Record title, by the default rule', () => {
 		expect(recordTitle(accounts, { id: 5, name: 'Secret' })).toBe('5');
 	});
 });
+
+describe('the Record title, by the `recordTitle` setting', () => {
+	const schema = z.object({
+		id: z.number(),
+		name: z.string(),
+		sku: z.string(),
+		size: z.string().optional()
+	});
+
+	it('is the value of the Field a key names, ahead of `name`', () => {
+		const products = defineResource({
+			name: 'products',
+			label: 'Products',
+			schema,
+			recordTitle: 'sku'
+		});
+
+		expect(recordTitle(products, { id: 1, name: 'Linen shirt', sku: 'LS-042' })).toBe('LS-042');
+	});
+
+	it("is a number Field's value written as digits", () => {
+		const invoices = defineResource({
+			name: 'invoices',
+			label: 'Invoices',
+			schema: z.object({ id: z.string(), number: z.number() }),
+			recordTitle: 'number'
+		});
+
+		expect(recordTitle(invoices, { id: 'inv_9', number: 2026001 })).toBe('2026001');
+	});
+
+	it("is the id when the key's Field is empty, so a record is never named by nothing", () => {
+		const products = defineResource({
+			name: 'products',
+			label: 'Products',
+			schema,
+			recordTitle: 'size'
+		});
+
+		expect(recordTitle(products, { id: 4, name: 'Linen shirt', sku: 'LS-042' })).toBe('4');
+		expect(recordTitle(products, { id: 4, name: 'Linen shirt', sku: 'LS-042', size: '' })).toBe(
+			'4'
+		);
+	});
+
+	it("is the function's result", () => {
+		const products = defineResource({
+			name: 'products',
+			label: 'Products',
+			schema,
+			recordTitle: (product) => `${product.name} (${product.sku})`
+		});
+
+		expect(recordTitle(products, { id: 1, name: 'Linen shirt', sku: 'LS-042' })).toBe(
+			'Linen shirt (LS-042)'
+		);
+	});
+
+	it('is the id when the function returns empty text', () => {
+		const products = defineResource({
+			name: 'products',
+			label: 'Products',
+			schema,
+			recordTitle: (product) => product.size ?? ''
+		});
+
+		expect(recordTitle(products, { id: 8, name: 'Linen shirt', sku: 'LS-042' })).toBe('8');
+	});
+
+	it('is checked at startup: a key that names no Field throws', () => {
+		expect(() =>
+			defineResource({
+				name: 'products',
+				label: 'Products',
+				schema,
+				// A JavaScript app, or a cast, gets past TypeScript.
+				recordTitle: 'title' as 'name'
+			})
+		).toThrow(/Resource "products": `recordTitle` names "title", which is not one of its Fields/);
+	});
+
+	it('is checked at startup: a key that names a hidden Field throws, since a title is shown', () => {
+		expect(() =>
+			defineResource({
+				name: 'accounts',
+				label: 'Accounts',
+				schema: z.object({ id: z.number(), secret: field(z.string(), { hidden: true }) }),
+				recordTitle: 'secret'
+			})
+		).toThrow(/Resource "accounts": `recordTitle` names the hidden Field "secret"/);
+	});
+});

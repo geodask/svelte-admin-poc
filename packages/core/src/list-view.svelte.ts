@@ -49,10 +49,13 @@ export function createListView<R extends Resource>(
 	const url = $derived(new URL(page.url.href));
 	const params = $derived(readListParams(url, resource));
 	const fields = resource.fields.filter((field) => field.list);
-	// The Fields that name a record (as the Record title's rule tries them), then the id.
+	// The Field a `recordTitle` key names, else the Fields that name a record (as the Record
+	// title's default rule tries them), then the id, whichever the list shows first.
+	const titleKey = typeof resource.recordTitle === 'string' ? [resource.recordTitle] : [];
 	const linkField =
-		[...TITLE_KEYS, 'id'].map((key) => fields.find((field) => field.key === key)).find(Boolean) ??
-		fields[0];
+		[...titleKey, ...TITLE_KEYS, 'id']
+			.map((key) => fields.find((field) => field.key === key))
+			.find(Boolean) ?? fields[0];
 
 	$effect(() => {
 		const rewrite = listUrlRewrite(url, resource);
@@ -124,8 +127,9 @@ export function createListView<R extends Resource>(
 			return remote.getList(params).refresh();
 		},
 		/**
-		 * The Field whose cell links each row to its record's detail View: `name`, else `title`,
-		 * else the id, else the first Field shown, whichever the list shows first.
+		 * The Field whose cell links each row to its record's detail View: the Field the
+		 * Resource's `recordTitle` key names, else `name`, else `title`, else the id, else the
+		 * first Field shown, taking the first of these the list shows.
 		 */
 		linkField,
 		/**
