@@ -14,6 +14,7 @@ export type Recipe = {
 	caloriesPerServing?: number;
 	vegetarian: boolean;
 	tags: string[];
+	ingredients: { name: string; quantity?: string }[];
 	reviewCount: number;
 	publishedAt: string;
 	sourceId: string | number;
@@ -87,6 +88,27 @@ const rows: [string, string, Recipe['difficulty'], number, number, string[]][] =
 	['Mapo Tofu', 'Chinese', 'Medium', 15, 4, ['Tofu', 'Spicy']]
 ];
 
+/** The ingredients of the first recipes; every other recipe gets two made-up ones. */
+const ingredients: Recipe['ingredients'][] = [
+	[
+		{ name: 'Pizza dough', quantity: '1 ball' },
+		{ name: 'Tomato sauce', quantity: '120 ml' },
+		{ name: 'Mozzarella', quantity: '125 g' },
+		// No quantity: the optional Field is sometimes empty.
+		{ name: 'Basil leaves' }
+	],
+	[
+		{ name: 'Mixed vegetables', quantity: '400 g' },
+		{ name: 'Soy sauce', quantity: '2 tbsp' },
+		{ name: 'Garlic' }
+	],
+	[
+		{ name: 'Flour', quantity: '280 g' },
+		{ name: 'Butter', quantity: '225 g' },
+		{ name: 'Chocolate chips', quantity: '300 g' }
+	]
+];
+
 export const recipes: Recipe[] = rows.map(
 	([name, cuisine, difficulty, prepTimeMinutes, servings, tags], index) => ({
 		id: index + 1,
@@ -99,6 +121,10 @@ export const recipes: Recipe[] = rows.map(
 		...(index % 3 === 2 ? {} : { caloriesPerServing: 250 + index * 15 }),
 		vegetarian: tags.includes('Vegetarian'),
 		tags,
+		ingredients: ingredients[index] ?? [
+			{ name: `${cuisine} spice mix`, quantity: `${servings} tsp` },
+			{ name: 'Salt' }
+		],
 		reviewCount: 1250 + index * 37,
 		// Late in the UTC day, so formatting it in any other time zone would show another date.
 		publishedAt: new Date(Date.UTC(2024, 0, 1 + index * 7, 23, 30)).toISOString(),

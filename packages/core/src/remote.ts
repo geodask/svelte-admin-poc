@@ -12,18 +12,24 @@ export type RemoteRead<T> = Promise<T> & { refresh(): Promise<void> };
 export type RemoteFormIssue = { message: string; path: (string | number)[] };
 
 /**
- * One input of a remote form, as a Theme renders it: `as(type)` gives the attributes to spread
- * onto the input (its name, type, value and `aria-invalid`), and `issues()` the issues that
- * belong to it. (Kit's own type is stricter; this is the part the core relies on.)
+ * One input of a remote form, or a set of them (a list, a row or a group), as a Theme renders
+ * it: `as(type)` gives the attributes to spread onto an input (its name, type, value and
+ * `aria-invalid`), and `issues()` the issues that belong to it itself. A list's items and a
+ * row's or group's Fields are read by index or key: `fields.tags[0]`,
+ * `fields.ingredients[2].name`. (Kit's own type is stricter; this is the part the core relies
+ * on.)
  */
 export type RemoteFormField = {
+	/** What the input, or set of inputs, will submit: an array for a list or rows. */
 	value(): unknown;
+	/** Replace what it will submit, e.g. a list without the item a × button removed. */
+	set(value: unknown): unknown;
 	issues(): RemoteFormIssue[] | undefined;
 	// Methods, so Kit's stricter, generic `as` fits them.
 	as(type: RemoteFormInputType): Record<string, unknown>;
 	/** A hidden input, which needs its value given, e.g. the edit form's record id. */
 	as(type: 'hidden', value: string | number): Record<string, unknown>;
-};
+} & { readonly [key: string | number]: RemoteFormField };
 
 /** The input types a Theme renders a form's Fields with. */
 export type RemoteFormInputType =

@@ -39,13 +39,16 @@ export {
 	fieldRegistry,
 	type DetectedKind,
 	type Field,
+	type FieldInputChoice,
 	type FieldMeta,
 	type KindName
 } from './fields.ts';
 export {
 	formSchema,
+	rowCount,
 	toFormSpec,
 	toFormValues,
+	withoutRow,
 	type CreateData,
 	type EditData,
 	type FormFieldSpec,
