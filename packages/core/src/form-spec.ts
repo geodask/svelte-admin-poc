@@ -10,14 +10,11 @@ import type { IdOf, RecordOf, Resource } from './resource.ts';
 /** Which form a spec or a schema is for: the create View's or the edit View's. */
 export type FormMode = 'create' | 'edit';
 
-/**
- * One input of a create or edit form: the Field it edits, how it is labelled, and the kind of
- * input it gets, chosen from the Field's Zod type. A list, rows and a group hold the specs of
- * their own inputs, so a Theme renders them recursively.
- */
-export type FormFieldSpec = {
+/** What every spec of a form has: the Field it is for, and how it is labelled. */
+type FormFieldBase = {
 	key: string;
 	label: string;
+	/** The Field's description, shown as help text under its input. */
 	description?: string;
 	/**
 	 * False when the Field may be left empty (`optional`, `nullable` or `default`). A list or
@@ -25,32 +22,55 @@ export type FormFieldSpec = {
 	 * are required only then.
 	 */
 	required: boolean;
+};
+
+/**
+ * One input of a create or edit form: the Field it edits, how it is labelled, and the kind of
+ * input it gets, chosen from the Field's Zod type. A list, rows and a group hold the specs of
+ * their own inputs, so a Theme renders them recursively.
+ */
+export type FormInputSpec = FormFieldBase & {
+	/** The example value the input shows while it is empty. */
+	placeholder?: string;
 } & (
-	| { kind: 'text'; format: 'text' | 'email' | 'url' }
-	/** Long text, with `input: 'textarea'`. */
-	| { kind: 'textarea' }
-	| { kind: 'number'; integer: boolean }
-	| { kind: 'checkbox' }
-	| { kind: 'select'; options: readonly (string | number)[] }
-	| { kind: 'date' }
-	/** An ISO datetime, edited in a `datetime-local` input and read and written in UTC. */
-	| { kind: 'datetime' }
-	/**
-	 * An array of scalars: one input per item (`rows`), always with one blank row at the end
-	 * to add an item, or one textarea with one item per line (`lines`). `item` is the spec of
-	 * one item's input; it has the list's key and label.
-	 */
-	| { kind: 'list'; mode: 'rows' | 'lines'; item: FormFieldSpec }
-	/** An array of objects: one fieldset per item, with the same blank row at the end. */
-	| { kind: 'rows'; fields: FormFieldSpec[] }
-	/** A nested object: a fieldset, whose inputs are named with dots (`nutrition.carbsGrams`). */
-	| { kind: 'group'; fields: FormFieldSpec[] }
-);
+		| { kind: 'text'; format: 'text' | 'email' | 'url' }
+		/** Long text, with `input: 'textarea'`. */
+		| { kind: 'textarea' }
+		| { kind: 'number'; integer: boolean }
+		| { kind: 'checkbox' }
+		| { kind: 'select'; options: readonly (string | number)[] }
+		| { kind: 'date' }
+		/** An ISO datetime, edited in a `datetime-local` input and read and written in UTC. */
+		| { kind: 'datetime' }
+		/**
+		 * An array of scalars: one input per item (`rows`), always with one blank row at the end
+		 * to add an item, or one textarea with one item per line (`lines`). `item` is the spec of
+		 * one item's input; it has the list's key, label and placeholder.
+		 */
+		| { kind: 'list'; mode: 'rows' | 'lines'; item: FormInputSpec }
+		/** An array of objects: one fieldset per item, with the same blank row at the end. */
+		| { kind: 'rows'; fields: FormInputSpec[] }
+		/** A nested object: a fieldset, whose inputs are named with dots (`nutrition.carbsGrams`). */
+		| { kind: 'group'; fields: FormInputSpec[] }
+	);
+
+/**
+ * A Field the edit form shows as text, not as an input: one the backend owns (`readOnly: true`,
+ * or `'afterCreate'` on edit). The form never submits it. `field` is the Field as the detail
+ * View shows it, so a Theme can show the record's value the same way.
+ */
+export type FormReadOnlySpec = FormFieldBase & { kind: 'readOnly'; field: Field };
+
+/** One Field of a create or edit form: an input, or on edit a read-only Field shown as text. */
+export type FormFieldSpec = FormInputSpec | FormReadOnlySpec;
+
+/** Whether a spec is an input, which the form submits, rather than read-only text. */
+const isInputSpec = (spec: FormFieldSpec): spec is FormInputSpec => spec.kind !== 'readOnly';
 
 /** The input-specific part of a spec: what `inputFor` adds to the Field's own details. */
-type InputOf = FormFieldSpec extends infer S
+type InputOf = FormInputSpec extends infer S
 	? S extends unknown
-		? Omit<S, keyof Field>
+		? Omit<S, keyof FormFieldBase | 'placeholder'>
 		: never
 	: never;
 
@@ -67,8 +87,8 @@ function minimumLength(array: z.ZodArray): number {
 }
 
 /** The specs of an object's Fields, or `undefined` when any of them has no input. */
-function specsOf(fields: readonly Field[], object: z.ZodObject): FormFieldSpec[] | undefined {
-	const specs: FormFieldSpec[] = [];
+function specsOf(fields: readonly Field[], object: z.ZodObject): FormInputSpec[] | undefined {
+	const specs: FormInputSpec[] = [];
 	for (const field of fields) {
 		const spec = specFor(field, object.shape[field.key] as z.ZodType);
 		// A row or group with a Field the form can't edit can't be saved whole: leave it out.
@@ -103,7 +123,12 @@ function inputFor(field: Field, schema: z.ZodType): InputOf | undefined {
 			return type instanceof z.ZodISODateTime ? { kind: 'datetime' } : { kind: 'date' };
 		case 'list': {
 			const element = (type as z.ZodArray).element as z.ZodType;
-			const item = specFor({ ...describeField(field.key, element), label: field.label }, element);
+			const own = describeField(field.key, element);
+			const placeholder = field.placeholder ?? own.placeholder;
+			const item = specFor(
+				{ ...own, label: field.label, ...(placeholder === undefined ? {} : { placeholder }) },
+				element
+			);
 			// A list of checkboxes has no blank row to tell an item from none.
 			if (item === undefined || item.kind === 'checkbox') return undefined;
 			const lines = field.input === 'lines' && item.kind === 'text';
@@ -123,33 +148,82 @@ function inputFor(field: Field, schema: z.ZodType): InputOf | undefined {
 	}
 }
 
+/** What every spec of a Field has, from the Field itself. */
+const baseOf = (field: Field): FormFieldBase => ({
+	key: field.key,
+	label: field.label,
+	...(field.description === undefined ? {} : { description: field.description }),
+	required: field.required
+});
+
 /** The spec of one Field's input, or `undefined` when the form has no input for it. */
-function specFor(field: Field, schema: z.ZodType): FormFieldSpec | undefined {
+function specFor(field: Field, schema: z.ZodType): FormInputSpec | undefined {
 	const input = inputFor(field, schema);
 	if (input === undefined) return undefined;
 	const type = unwrap(schema);
 	return {
-		key: field.key,
-		label: field.label,
-		...(field.description === undefined ? {} : { description: field.description }),
+		...baseOf(field),
+		...(field.placeholder === undefined ? {} : { placeholder: field.placeholder }),
 		required: field.required && (!(type instanceof z.ZodArray) || minimumLength(type) > 0),
 		...input
-	} as FormFieldSpec;
+	} as FormInputSpec;
 }
 
 /**
- * The inputs of a Resource's create or edit form: one per Field it can map, in schema order.
- * The id is never one of them: the backend assigns it on create, and the edit form carries it
- * as a hidden input. A Field whose type has no input (a union, a record), or a list, rows or
- * group holding one, is left out, and so out of the form schema too.
+ * How a form treats a top-level Field: as an input, as read-only text, or not at all. A
+ * hidden Field is in no form, so a save never clears a value no View shows.
+ */
+function roleIn(field: Field, mode: FormMode): 'input' | 'readOnly' | 'none' {
+	if (field.key === 'id' || !field.detail) return 'none';
+	if (field.readOnly === true || (field.readOnly === 'afterCreate' && mode === 'edit')) {
+		return mode === 'edit' ? 'readOnly' : 'none';
+	}
+	return 'input';
+}
+
+/**
+ * Check that the forms can edit every Field they would give an input: one whose type has no
+ * input (a union, a record), or a list, rows or group holding one, must be `readOnly: true` or
+ * `hidden`. `defineResource` runs it, so a Resource whose form could never be saved fails at
+ * startup, naming the Field.
+ */
+export function assertFormInputs(name: string, fields: readonly Field[], schema: z.ZodObject) {
+	for (const field of fields) {
+		if (roleIn(field, 'create') !== 'input' && roleIn(field, 'edit') !== 'input') continue;
+		if (specFor(field, schema.shape[field.key] as z.ZodType) === undefined) {
+			throw noInputError(name, field);
+		}
+	}
+}
+
+/** The startup error for a Field the forms would edit but have no input for. */
+function noInputError(name: string, field: Field): Error {
+	const afterCreate =
+		field.readOnly === 'afterCreate' ? " `readOnly: 'afterCreate'` still needs one on create." : '';
+	return new Error(
+		`Resource "${name}": the Field "${field.key}" has no form input for its type.` +
+			afterCreate +
+			' Mark it `readOnly: true` or `hidden: true` with `field()`, so the forms leave it out.'
+	);
+}
+
+/**
+ * The Fields of a Resource's create or edit form, in schema order: an input for each Field the
+ * form may set, and on edit read-only text for each Field the backend owns (`readOnly: true`,
+ * and `'afterCreate'` ones). Read-only Fields are left out of create, and hidden Fields out of
+ * both. The id is never one of them: the backend assigns it on create, and the edit form
+ * carries it as a hidden input.
  */
 export function toFormSpec(resource: Resource, mode: FormMode): FormFieldSpec[] {
-	void mode;
 	const specs: FormFieldSpec[] = [];
 	for (const field of resource.fields) {
-		if (field.key === 'id') continue;
+		const role = roleIn(field, mode);
+		if (role === 'readOnly') specs.push({ ...baseOf(field), kind: 'readOnly', field });
+		if (role !== 'input') continue;
 		const spec = specFor(field, resource.schema.shape[field.key] as z.ZodType);
-		if (spec !== undefined) specs.push(spec);
+		// `defineResource` has checked every Field has one; a Resource built by hand may not.
+		if (spec === undefined) throw noInputError(resource.name, field);
+		specs.push(spec);
 	}
 	return specs;
 }
@@ -209,7 +283,7 @@ export function toFormValues(spec: readonly FormFieldSpec[], record: object): Fo
 function valuesOf(specs: readonly FormFieldSpec[], object: object): Record<string, unknown> {
 	const values: Record<string, unknown> = {};
 	const fields = object as Record<string, unknown>;
-	for (const spec of specs) {
+	for (const spec of specs.filter(isInputSpec)) {
 		const value = fields[spec.key];
 		if (value === undefined || value === null) continue;
 		const shown = inputValue(spec, value);
@@ -219,7 +293,7 @@ function valuesOf(specs: readonly FormFieldSpec[], object: object): Record<strin
 }
 
 /** One value as its input writes it, or `undefined` for a value the input can't show. */
-function inputValue(spec: FormFieldSpec, value: unknown): unknown {
+function inputValue(spec: FormInputSpec, value: unknown): unknown {
 	switch (spec.kind) {
 		case 'select':
 			return String(value);
@@ -309,7 +383,7 @@ const pathKey = (path: readonly PropertyKey[]) => JSON.stringify(path);
 
 /** One input's value, or a set of them, as the browser sent it, turned into what the schema checks. */
 function normalize(
-	spec: FormFieldSpec,
+	spec: FormInputSpec,
 	schema: z.ZodType,
 	raw: unknown,
 	path: (string | number)[],
@@ -371,7 +445,7 @@ function normalizeItems(
 
 /** The values of an object's Fields (a record's, a row's or a group's), left out when empty. */
 function normalizeObject(
-	specs: readonly FormFieldSpec[],
+	specs: readonly FormInputSpec[],
 	object: z.ZodObject,
 	raw: unknown,
 	path: (string | number)[],
@@ -388,7 +462,7 @@ function normalizeObject(
 }
 
 /** One scalar input's value as the browser sent it, turned into the value the schema checks. */
-function normalizeScalar(spec: FormFieldSpec, schema: z.ZodType, raw: unknown): unknown {
+function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): unknown {
 	if (raw === undefined || raw === null || raw === '') return noValue(schema);
 
 	switch (spec.kind) {
@@ -438,7 +512,9 @@ function inputPath(path: readonly PropertyKey[], origins: Origins): (string | nu
 /**
  * The schema a Resource's remote create or edit form validates with, and the browser runs as
  * its `preflight`. It normalises what the browser sent, then validates with the Resource's own
- * schema, cut down to the Fields the form has inputs for, which it never rewrites:
+ * schema, cut down to the Fields the form has inputs for, which it never rewrites. The id and
+ * the Fields read-only in that mode (`readOnly: true` and hidden ones, and `'afterCreate'` ones
+ * on edit) are left out of that schema, so a crafted request can't set them:
  *
  * - An empty input means no value, so a required Field reports "Required" (unless its schema
  *   sets its own message) and an optional one is left out: on edit, that clears it. A Field
@@ -454,7 +530,7 @@ function inputPath(path: readonly PropertyKey[], origins: Origins): (string | nu
  *   shows on the textarea.
  * - An all-blank optional group means no value. Once it has any value, its required Fields
  *   are required.
- * - Only the inputs the form has are read; any other key is dropped.
+ * - Only the inputs the form has are read; any other key, a read-only Field's too, is dropped.
  * - On edit, the hidden `id` input becomes the typed id by the same rule as a route param
  *   (`idFromParam`), so it is the id the detail View reads the record by. An id that names
  *   none is invalid input.
@@ -463,7 +539,8 @@ export function formSchema<R extends Resource, M extends FormMode>(
 	resource: R,
 	mode: M
 ): StandardSchemaV1<FormInput, FormOutput<R, M>> {
-	const specs = toFormSpec(resource, mode);
+	// Only the inputs: a read-only Field is left out of the schema, not ignored after parsing.
+	const specs = toFormSpec(resource, mode).filter(isInputSpec);
 	const keys: Record<string, true> = Object.fromEntries(specs.map((spec) => [spec.key, true]));
 	const target = resource.schema.pick(keys as z.util.Mask<string>);
 

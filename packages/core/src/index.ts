@@ -41,6 +41,7 @@ export {
 	type Field,
 	type FieldInputChoice,
 	type FieldMeta,
+	type FieldReadOnly,
 	type KindName
 } from './fields.ts';
 export {
@@ -53,7 +54,9 @@ export {
 	type EditData,
 	type FormFieldSpec,
 	type FormInput,
+	type FormInputSpec,
 	type FormMode,
-	type FormOutput
+	type FormOutput,
+	type FormReadOnlySpec
 } from './form-spec.ts';
 export type { StandardSchemaV1 } from './standard-schema.ts';

@@ -110,21 +110,6 @@ describe('toFormSpec', () => {
 		]);
 	});
 
-	it('leaves out a Field whose type it has no input for', () => {
-		const recipes = defineResource({
-			name: 'recipes',
-			label: 'Recipes',
-			schema: z.object({
-				id: z.number(),
-				name: z.string(),
-				sourceId: z.union([z.string(), z.number()]),
-				servings: z.number()
-			})
-		});
-
-		expect(toFormSpec(recipes, 'create').map((input) => input.key)).toEqual(['name', 'servings']);
-	});
-
 	it('gives a long text Field a textarea with `input: "textarea"`, and ignores it elsewhere', () => {
 		expect(specOf(field(z.string(), { input: 'textarea' }))).toMatchObject({ kind: 'textarea' });
 		expect(specOf(field(z.string(), { input: 'textarea' }).optional())).toMatchObject({
@@ -254,20 +239,58 @@ describe('toFormSpec', () => {
 			]
 		});
 	});
+});
+
+describe('defineResource, checking every Field the forms would edit has an input', () => {
+	const define = (sourceId: z.ZodType) => () =>
+		defineResource({
+			name: 'recipes',
+			label: 'Recipes',
+			schema: z.object({ id: z.number(), name: z.string(), sourceId })
+		});
+	const union = () => z.union([z.string(), z.number()]);
+
+	it('throws for a required union Field that is neither read-only nor hidden, naming both', () => {
+		expect(define(union())).toThrow(
+			'Resource "recipes": the Field "sourceId" has no form input for its type.'
+		);
+		expect(define(union())).toThrow('Mark it `readOnly: true` or `hidden: true`');
+	});
+
+	it('throws for an optional one too', () => {
+		expect(define(union().optional())).toThrow('the Field "sourceId"');
+	});
+
+	it('accepts it when it is read-only or hidden, inside or outside a wrapper', () => {
+		expect(define(field(union(), { readOnly: true }))).not.toThrow();
+		expect(define(field(union(), { hidden: true }))).not.toThrow();
+		expect(define(field(union(), { readOnly: true }).optional())).not.toThrow();
+	});
+
+	it("throws for one that is `readOnly: 'afterCreate'`, since create still needs its input", () => {
+		expect(define(field(union(), { readOnly: 'afterCreate' }))).toThrow(
+			"`readOnly: 'afterCreate'` still needs one on create"
+		);
+	});
 
 	it.each([
+		['a record', z.record(z.string(), z.string())],
 		['a list of booleans', z.array(z.boolean())],
 		['a list of unions', z.array(z.union([z.string(), z.number()]))],
-		[
-			'rows with a Field it has no input for',
-			z.array(z.object({ id: z.union([z.string(), z.number()]) }))
-		],
+		['rows with a Field it has no input for', z.array(z.object({ id: union() }))],
 		[
 			'a group with a Field it has no input for',
 			z.object({ meta: z.record(z.string(), z.string()) })
 		]
-	])('leaves out %s, since it could not be saved whole', (_, schema) => {
-		expect(specOf(schema)).toBeUndefined();
+	])('throws for %s, since it could not be saved whole', (_, schema) => {
+		expect(define(schema)).toThrow('the Field "sourceId"');
+		expect(define(field(schema, { readOnly: true }))).not.toThrow();
+	});
+
+	it('never checks the id, which no form edits', () => {
+		expect(() =>
+			defineResource({ name: 'things', label: 'Things', schema: z.object({ id: z.number() }) })
+		).not.toThrow();
 	});
 });
 
@@ -639,20 +662,41 @@ describe('formSchema for lists, rows and groups', () => {
 			await outcome(formSchema(notes, 'create'), { value: 'Stretch the dough.\r\nBake it hot.' })
 		).toEqual({ value: { value: 'Stretch the dough.\nBake it hot.' } });
 	});
+});
 
-	it('validates only the Fields the form has inputs for', async () => {
-		const sourced = defineResource({
-			name: 'recipes',
-			label: 'Recipes',
-			schema: z.object({
-				id: z.number(),
-				name: z.string(),
-				sourceId: z.union([z.string(), z.number()])
-			})
+describe('formSchema for read-only and hidden Fields', () => {
+	const accounts = defineResource({
+		name: 'accounts',
+		label: 'Accounts',
+		schema: z.object({
+			id: z.number(),
+			name: z.string(),
+			email: field(z.email(), { readOnly: 'afterCreate' }),
+			loginCount: field(z.number(), { readOnly: true }),
+			source: field(z.union([z.string(), z.number()]), { readOnly: true }),
+			notes: field(z.string(), { hidden: true })
+		})
+	});
+	const crafted = { name: 'Ada', email: 'ada@example.com', loginCount: '99', notes: 'Set' };
+
+	it('validates create without read-only and hidden Fields, but with `afterCreate` ones', async () => {
+		expect(await outcome(formSchema(accounts, 'create'), { ...crafted, source: 'x' })).toEqual({
+			value: { name: 'Ada', email: 'ada@example.com' }
 		});
+	});
 
-		expect(await outcome(formSchema(sourced, 'edit'), { id: '1', name: 'Pho' })).toEqual({
-			value: { id: 1, name: 'Pho' }
+	it('validates edit without read-only, hidden or `afterCreate` Fields', async () => {
+		expect(await outcome(formSchema(accounts, 'edit'), { ...crafted, id: '3' })).toEqual({
+			value: { id: 3, name: 'Ada' }
+		});
+	});
+
+	it('never requires them: they are left out of the schema, not ignored after it', async () => {
+		expect(await outcome(formSchema(accounts, 'create'), { name: '' })).toEqual({
+			issues: ['name: Required', 'email: Required']
+		});
+		expect(await outcome(formSchema(accounts, 'edit'), { id: '3', name: 'Ada' })).toEqual({
+			value: { id: 3, name: 'Ada' }
 		});
 	});
 });
@@ -732,8 +776,8 @@ describe('toFormValues', () => {
 		expect(valuesOf(z.object({ a: z.string() }).nullable(), null)).toEqual({});
 	});
 
-	// The demo's Resources, cut down to the Fields the forms can map, each with a record shaped
-	// like the demo backend's seed.
+	// The demo's Resources, each with a record shaped like the demo backend's seed, and the
+	// Fields the edit form can't set.
 	const demo = [
 		{
 			resource: defineResource({
@@ -748,20 +792,23 @@ describe('toFormValues', () => {
 					servings: z.number(),
 					caloriesPerServing: field(z.number(), { label: 'Calories' }).optional(),
 					vegetarian: z.boolean(),
-					reviewCount: z.number(),
+					reviewCount: field(z.number(), { readOnly: true }),
 					tags: field(z.array(z.string()), { input: 'lines' }),
 					ingredients: z
 						.array(z.object({ name: z.string(), quantity: z.string().optional() }))
 						.min(1, 'Add at least one ingredient'),
 					publishedAt: z.iso.datetime(),
+					sourceId: field(z.union([z.string(), z.number()]), { readOnly: true }),
 					nutrition: z.object({ proteinGrams: z.number(), carbsGrams: z.number() }),
 					instructions: field(z.string(), {
 						list: false,
 						description: 'How to cook it',
 						input: 'textarea'
-					})
+					}),
+					internalNotes: field(z.string(), { hidden: true })
 				})
 			}),
+			readOnly: ['reviewCount', 'sourceId', 'internalNotes'],
 			records: [
 				{
 					id: 1,
@@ -776,8 +823,10 @@ describe('toFormValues', () => {
 					tags: ['Pizza', 'Vegetarian'],
 					ingredients: [{ name: 'Pizza dough', quantity: '1 ball' }, { name: 'Basil leaves' }],
 					publishedAt: '2024-01-08T10:00:00.000Z',
+					sourceId: 'dj-1',
 					nutrition: { proteinGrams: 10, carbsGrams: 40 },
-					instructions: 'Stretch the dough.\nBake it hot.'
+					instructions: 'Stretch the dough.\nBake it hot.',
+					internalNotes: 'Imported batch 1'
 				},
 				{
 					id: 2,
@@ -791,8 +840,10 @@ describe('toFormValues', () => {
 					tags: [],
 					ingredients: [{ name: 'Beef', quantity: '1 kg' }],
 					publishedAt: '2024-02-08T10:00:00.000Z',
+					sourceId: 9001,
 					nutrition: { proteinGrams: 30.5, carbsGrams: 0 },
-					instructions: 'Brown the beef.'
+					instructions: 'Brown the beef.',
+					internalNotes: 'Imported batch 1'
 				}
 			]
 		},
@@ -809,6 +860,7 @@ describe('toFormValues', () => {
 					body: field(z.string(), { list: false })
 				})
 			}),
+			readOnly: [],
 			records: [
 				{
 					id: 3,
@@ -828,13 +880,14 @@ describe('toFormValues', () => {
 				schema: z.object({
 					id: z.number(),
 					name: z.string(),
-					email: z.email(),
+					email: field(z.email(), { readOnly: 'afterCreate' }),
 					phone: z.string().optional(),
 					role: z.enum(['admin', 'editor', 'viewer']),
 					active: z.boolean(),
 					joinedAt: z.iso.datetime()
 				})
 			}),
+			readOnly: ['email'],
 			records: [
 				{
 					id: 1,
@@ -857,21 +910,29 @@ describe('toFormValues', () => {
 		}
 	];
 
-	const cases = demo.flatMap(({ resource, records }) =>
-		records.map((record): [string, Resource, { id: number }] => [
+	const cases = demo.flatMap(({ resource, readOnly, records }) =>
+		records.map((record): [string, Resource, string[], { id: number }] => [
 			`${resource.name} ${record.id}`,
 			resource,
+			readOnly,
 			record
 		])
 	);
 
-	it.each(cases)('round-trips through the edit form schema for %s', async (_, resource, record) => {
-		const values = toFormValues(toFormSpec(resource, 'edit'), record);
+	it.each(cases)(
+		'round-trips the editable Fields through the edit form schema for %s',
+		async (_, resource, readOnly, record) => {
+			const values = toFormValues(toFormSpec(resource, 'edit'), record);
+			const editable = Object.fromEntries(
+				Object.entries(record).filter(([key]) => !readOnly.includes(key))
+			);
 
-		expect(
-			await outcome(formSchema(resource, 'edit'), { ...values, id: String(record.id) })
-		).toEqual({ value: record });
-	});
+			expect(Object.keys(values).some((key) => readOnly.includes(key))).toBe(false);
+			expect(
+				await outcome(formSchema(resource, 'edit'), { ...values, id: String(record.id) })
+			).toEqual({ value: editable });
+		}
+	);
 });
 
 describe('rowCount', () => {

@@ -1,6 +1,7 @@
 import type { Component } from 'svelte';
 import type { z } from 'zod';
 import { describeFields, type Field } from './fields.ts';
+import { assertFormInputs } from './form-spec.ts';
 
 /** Any Zod object schema. `defineResource` checks that it has a usable `id` Field. */
 export type ResourceSchema = z.ZodObject;
@@ -70,7 +71,11 @@ export function defineResource<const N extends string, S extends ResourceSchema>
 	 * Resource appears in `admin.ts`; a Resource without one is listed in a group with no label.
 	 */
 	group?: string;
-	/** One Zod object schema, the single source of truth for the Resource's Fields. */
+	/**
+	 * One Zod object schema, the single source of truth for the Resource's Fields. Every Field
+	 * the forms edit needs a type they have an input for; one that has none (a union, a record)
+	 * must be `readOnly: true` or `hidden`, or `defineResource` throws.
+	 */
 	schema: S & (HasValidId<S> extends true ? unknown : IdRequired);
 	/**
 	 * Whether the backend can search this Resource. Only then does the list View show a search
@@ -79,5 +84,8 @@ export function defineResource<const N extends string, S extends ResourceSchema>
 	searchable?: boolean;
 }): Resource<N, S> {
 	const { name, label, icon, group, schema, searchable = false } = definition;
-	return { name, label, icon, group, schema, searchable, fields: describeFields(schema) };
+	const fields = describeFields(schema);
+	// Fail at startup, not on a form that could never be saved.
+	assertFormInputs(name, fields, schema);
+	return { name, label, icon, group, schema, searchable, fields };
 }

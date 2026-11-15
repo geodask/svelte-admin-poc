@@ -32,7 +32,6 @@ const breadcrumb = (page: Page) => page.getByRole('navigation', { name: 'breadcr
 
 /** The edit View's inputs, by their accessible names (a required marker is not part of one). */
 const nameInput = (page: Page) => page.getByRole('textbox', { name: 'Name', exact: true });
-const emailInput = (page: Page) => page.getByRole('textbox', { name: 'Email', exact: true });
 const phoneInput = (page: Page) => page.getByRole('textbox', { name: 'Phone', exact: true });
 const roleSelect = (page: Page) => page.getByRole('combobox', { name: 'Role', exact: true });
 const activeCheckbox = (page: Page) => page.getByRole('checkbox', { name: 'Active', exact: true });
@@ -49,7 +48,8 @@ test.describe('the users edit View', () => {
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Edit Grace Hopper');
 		await expect(page).toHaveTitle('Edit Grace Hopper · Users');
 		await expect(nameInput(page)).toHaveValue('Grace Hopper');
-		await expect(emailInput(page)).toHaveValue('grace@example.com');
+		// Set once on create, so shown as text.
+		await expect(valueOf(page, 'Email')).toHaveText('grace@example.com');
 		await expect(phoneInput(page)).toHaveValue('+44 20 7946 0002');
 		await expect(roleSelect(page)).toHaveValue('editor');
 		await expect(activeCheckbox(page)).toBeChecked();
@@ -132,7 +132,7 @@ test.describe('the users edit View', () => {
 		await expect(roleSelect(page)).toHaveValue('viewer');
 		await expect(phoneInput(page)).toHaveValue('+1 555 0100');
 		await expect(activeCheckbox(page)).not.toBeChecked();
-		await expect(emailInput(page)).toHaveValue('grace@example.com');
+		await expect(valueOf(page, 'Email')).toHaveText('grace@example.com');
 		// The heading still names the record as it is stored.
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText('Edit Grace Hopper');
 		// Without JavaScript the form posted to the page itself, which shows the issues.

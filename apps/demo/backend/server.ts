@@ -9,11 +9,13 @@
 //   GET  /{resource}/{id}             one record, or a 404. The id is one path segment, decoded,
 //                                     and matched against each record's id written as text
 //   POST /{resource}                  create a record from the JSON body, with the next id (the
-//                                     highest plus one); answers 201 with the created record
+//                                     highest plus one) and the Fields only the backend sets
+//                                     (recipes' sourceId, reviewCount and internalNotes), whatever
+//                                     the body says; answers 201 with the created record
 //   PUT  /{resource}/{id}             replace a record's editable Fields with the JSON body, keeping
-//                                     its id and the Fields only the backend sets; a Field missing
-//                                     from the body is removed. Answers with the saved record, or a
-//                                     404
+//                                     its id and the Fields no edit can set (the backend's own, and
+//                                     users' email, set once on create); a Field missing from the
+//                                     body is removed. Answers with the saved record, or a 404
 //   POST /reset                       restore the seed data and clear any faults (e2e tests call
 //                                     it first)
 //   POST /faults                      test-only: make the next resource request(s) slow or fail.
@@ -41,11 +43,23 @@ function fresh(): Record<string, Records> {
 const uncounted = new Set(['posts']);
 
 /**
- * The Fields only the backend sets, which no form sends: a PUT keeps them as they are. (The id
- * is always kept.)
+ * The Fields only the backend sets, which no form sends, and their values for a record created
+ * with `id`. A POST sets them, and a PUT keeps them as they are. (The id is always the
+ * backend's.)
  */
-const backendOwned: Record<string, string[]> = {
-	recipes: ['reviewCount', 'sourceId', 'internalNotes']
+const backendOwned: Record<string, (id: number) => Record<string, unknown>> = {
+	recipes: (id) => ({
+		reviewCount: 0,
+		sourceId: `local-${id}`,
+		internalNotes: 'Created in the admin'
+	})
+};
+
+/** The Fields a PUT keeps as they are, since no edit can set them: the backend's own, and more. */
+const keptOnUpdate: Record<string, string[]> = {
+	recipes: ['reviewCount', 'sourceId', 'internalNotes'],
+	// Set once on create.
+	users: ['email']
 };
 
 /** The text Fields `q` is matched against, for each Resource that can be searched. */
@@ -157,7 +171,7 @@ const server = Bun.serve({
 			}
 			// Every demo Resource has number ids, so the next one is the highest plus one.
 			const id = Math.max(0, ...records.map((record) => Number(record.id))) + 1;
-			const record = { ...body, id };
+			const record = { ...body, ...backendOwned[segments[0]]?.(id), id };
 			records.push(record);
 			return json(record, 201);
 		}
@@ -173,7 +187,7 @@ const server = Bun.serve({
 			}
 			const current = db[name][index] as Record<string, unknown> & Records[number];
 			const kept = Object.fromEntries(
-				(backendOwned[name] ?? []).filter((key) => key in current).map((key) => [key, current[key]])
+				(keptOnUpdate[name] ?? []).filter((key) => key in current).map((key) => [key, current[key]])
 			);
 			const record = { ...body, ...kept, id: current.id };
 			db[name][index] = record;
