@@ -137,6 +137,15 @@ export function createListView<R extends Resource>(
 			const id = (record as { id: IdOf<R> }).id;
 			return hasPathSegment(id) ? `${url.pathname}/${idPathSegment(id)}` : undefined;
 		},
+		/**
+		 * What to say when the page has no records: that none match the search, that the page is
+		 * past the last one, or that the Resource has none yet.
+		 */
+		get emptyMessage(): string {
+			const records = resource.label.toLowerCase();
+			if (params.search !== undefined) return `No ${records} match “${params.search}”.`;
+			return `No ${records} ${params.page > 1 ? 'on this page' : 'yet'}.`;
+		},
 		/** The page sizes to offer, as plain links. */
 		perPageOptions: PER_PAGE_OPTIONS,
 		/** The href of another page, at the same page size. */
@@ -205,8 +214,8 @@ function createSelection<Id extends string | number>() {
 		toggle(id: Id, selected = !ids.has(id)) {
 			setAll([id], selected);
 		},
-		// Each of these is a method, not a function-valued property, so TypeScript lets a list View
-		// for one Resource stand in for any Resource's, as the Theme's parts take it.
+		// A method like `has` and `toggle`, not a function-valued property, so TypeScript lets a
+		// list View for one Resource stand in for any Resource's, as the Theme's parts take it.
 		/** Select every row on the page, or clear every one of them. Other pages keep theirs. */
 		setAll(pageIds: readonly Id[], selected: boolean) {
 			setAll(pageIds, selected);

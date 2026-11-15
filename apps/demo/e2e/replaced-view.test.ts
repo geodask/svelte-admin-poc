@@ -3,17 +3,12 @@
 // list View.
 import type { Page } from '@playwright/test';
 import { expect, hydrated, test } from './fixtures.ts';
-import { dataRows, pager } from './list-helpers.ts';
+import { dataRows, openInSidebar, pager, selectedCount } from './list-helpers.ts';
 
 /** The replaced View's cards, one per user on the page. */
 const cards = (page: Page) => page.getByRole('list', { name: 'Users' }).getByRole('listitem');
 
 const searchBox = (page: Page) => page.getByRole('searchbox', { name: 'Search users' });
-
-const selectedCount = (page: Page) => page.getByText(/^\d+ selected$/);
-
-const openInSidebar = (page: Page, label: string) =>
-	page.getByRole('navigation', { name: 'Resources' }).getByRole('link', { name: label }).click();
 
 test.describe('the replaced users list View', () => {
 	test('renders the app’s card grid on the server, not the stock table', async ({ page }) => {
@@ -82,6 +77,12 @@ test.describe('the replaced users list View', () => {
 
 		await expect(cards(page)).toHaveText(['No users match “nobody”.']);
 		await expect(pager(page)).toContainText('No rows on this page');
+	});
+
+	test('a page past the last one says so', async ({ page }) => {
+		await page.goto('/admin/users?page=9');
+
+		await expect(cards(page)).toHaveText(['No users on this page.']);
 	});
 
 	test('the exported pager changes page and page size with the stock URL params', async ({

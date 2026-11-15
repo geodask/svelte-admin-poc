@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, hydrated, test } from './fixtures.ts';
-import { dataRows, pager } from './list-helpers.ts';
+import { dataRows, openInSidebar, pager, selectedCount } from './list-helpers.ts';
 
 /** The checkbox that selects one row, by its record's Record title. */
 const rowCheckbox = (page: Page, title: string) =>
@@ -12,11 +12,6 @@ const headerCheckbox = (page: Page) =>
 /** The rows whose checkbox is ticked. */
 const selectedRows = (page: Page) =>
 	dataRows(page).filter({ has: page.getByRole('checkbox', { checked: true }) });
-
-const selectedCount = (page: Page) => page.getByText(/^\d+ selected$/);
-
-const openInSidebar = (page: Page, label: string) =>
-	page.getByRole('navigation', { name: 'Resources' }).getByRole('link', { name: label }).click();
 
 test.describe('row selection @js', () => {
 	test.beforeEach(async ({ page }) => {

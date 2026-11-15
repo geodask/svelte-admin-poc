@@ -50,7 +50,7 @@ export default ts.config(
 		// An app uses the packages through their public entries only, as a replaced View must.
 		files: ['apps/**/*.ts', 'apps/**/*.svelte'],
 		rules: {
-			'no-restricted-imports': [
+			'@typescript-eslint/no-restricted-imports': [
 				'error',
 				{
 					patterns: [

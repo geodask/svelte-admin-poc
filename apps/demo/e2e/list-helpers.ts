@@ -11,6 +11,13 @@ export const dataRows = (page: Page) =>
 
 export const pager = (page: Page) => page.getByRole('navigation', { name: 'Pagination' });
 
+/** The toolbar's count of selected rows, e.g. "2 selected". */
+export const selectedCount = (page: Page) => page.getByText(/^\d+ selected$/);
+
+/** Open a Resource's list View from the shell's sidebar, by its label. */
+export const openInSidebar = (page: Page, label: string) =>
+	page.getByRole('navigation', { name: 'Resources' }).getByRole('link', { name: label }).click();
+
 /**
  * Re-encode a captured `getList` remote query payload with some args changed. A payload is
  * Kit's url-safe base64 of a devalue array, where an object maps each key to the index of its
