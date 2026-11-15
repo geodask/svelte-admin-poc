@@ -4,8 +4,10 @@ import {
 	defineResource,
 	field,
 	formSchema,
+	rowCount,
 	toFormSpec,
 	toFormValues,
+	withoutRow,
 	type Resource
 } from '@svelte-admin/core';
 
@@ -108,21 +110,164 @@ describe('toFormSpec', () => {
 		]);
 	});
 
-	it('leaves out the Kinds it has no input for yet: lists, objects and unknown', () => {
+	it('leaves out a Field whose type it has no input for', () => {
 		const recipes = defineResource({
 			name: 'recipes',
 			label: 'Recipes',
 			schema: z.object({
 				id: z.number(),
 				name: z.string(),
-				tags: z.array(z.string()),
-				nutrition: z.object({ calories: z.number() }),
 				sourceId: z.union([z.string(), z.number()]),
 				servings: z.number()
 			})
 		});
 
 		expect(toFormSpec(recipes, 'create').map((input) => input.key)).toEqual(['name', 'servings']);
+	});
+
+	it('gives a long text Field a textarea with `input: "textarea"`, and ignores it elsewhere', () => {
+		expect(specOf(field(z.string(), { input: 'textarea' }))).toMatchObject({ kind: 'textarea' });
+		expect(specOf(field(z.string(), { input: 'textarea' }).optional())).toMatchObject({
+			kind: 'textarea',
+			required: false
+		});
+		expect(specOf(field(z.number(), { input: 'textarea' }))).toMatchObject({ kind: 'number' });
+	});
+
+	describe('maps an array of scalars to a list', () => {
+		it('with one input per item by default', () => {
+			expect(specOf(z.array(z.string()))).toEqual({
+				key: 'value',
+				label: 'Value',
+				required: false,
+				kind: 'list',
+				mode: 'rows',
+				item: { key: 'value', label: 'Value', required: true, kind: 'text', format: 'text' }
+			});
+		});
+
+		it('with one item per line with `input: "lines"`, or one input per item with "rows"', () => {
+			expect(specOf(field(z.array(z.string()), { input: 'lines' }))).toMatchObject({
+				kind: 'list',
+				mode: 'lines'
+			});
+			expect(specOf(field(z.array(z.string()), { input: 'rows' }))).toMatchObject({
+				kind: 'list',
+				mode: 'rows'
+			});
+		});
+
+		it('of any scalar type with an input, one input per item', () => {
+			expect(specOf(z.array(z.int()))).toMatchObject({
+				kind: 'list',
+				mode: 'rows',
+				item: { kind: 'number', integer: true }
+			});
+			expect(specOf(z.array(z.enum(['a', 'b'])))).toMatchObject({
+				kind: 'list',
+				item: { kind: 'select', options: ['a', 'b'] }
+			});
+			expect(specOf(z.array(z.email()))).toMatchObject({
+				kind: 'list',
+				item: { kind: 'text', format: 'email' }
+			});
+		});
+
+		it('keeps one input per item for a list that is not text, even with `input: "lines"`', () => {
+			expect(specOf(field(z.array(z.number()), { input: 'lines' }))).toMatchObject({
+				kind: 'list',
+				mode: 'rows'
+			});
+		});
+
+		it('required only when it must have an item, and never through a wrapper', () => {
+			expect(specOf(z.array(z.string()).min(1))).toMatchObject({ kind: 'list', required: true });
+			expect(specOf(z.array(z.string()).min(1).optional())).toMatchObject({
+				kind: 'list',
+				required: false
+			});
+		});
+	});
+
+	it('maps an array of objects to rows, one fieldset per item with an input per Field', () => {
+		const ingredients = z
+			.array(
+				z.object({
+					name: z.string(),
+					quantity: field(z.string(), { label: 'Amount' }).optional()
+				})
+			)
+			.min(1, 'Add at least one ingredient');
+
+		expect(specOf(ingredients)).toEqual({
+			key: 'value',
+			label: 'Value',
+			required: true,
+			kind: 'rows',
+			fields: [
+				{ key: 'name', label: 'Name', required: true, kind: 'text', format: 'text' },
+				{ key: 'quantity', label: 'Amount', required: false, kind: 'text', format: 'text' }
+			]
+		});
+	});
+
+	it('maps a nested object to a group, with an input per Field and its own wrappers', () => {
+		const nutrition = z.object({ proteinGrams: z.number(), carbsGrams: z.int().optional() });
+
+		expect(specOf(nutrition)).toEqual({
+			key: 'value',
+			label: 'Value',
+			required: true,
+			kind: 'group',
+			fields: [
+				{
+					key: 'proteinGrams',
+					label: 'Protein grams',
+					required: true,
+					kind: 'number',
+					integer: false
+				},
+				{ key: 'carbsGrams', label: 'Carbs grams', required: false, kind: 'number', integer: true }
+			]
+		});
+		expect(specOf(nutrition.optional())).toMatchObject({ kind: 'group', required: false });
+	});
+
+	it('maps lists and groups inside rows and groups', () => {
+		const spec = specOf(
+			z.object({
+				steps: z.array(z.object({ text: z.string(), tags: z.array(z.string()) }))
+			})
+		);
+
+		expect(spec).toMatchObject({
+			kind: 'group',
+			fields: [
+				{
+					key: 'steps',
+					kind: 'rows',
+					fields: [
+						{ key: 'text', kind: 'text' },
+						{ key: 'tags', kind: 'list', mode: 'rows' }
+					]
+				}
+			]
+		});
+	});
+
+	it.each([
+		['a list of booleans', z.array(z.boolean())],
+		['a list of unions', z.array(z.union([z.string(), z.number()]))],
+		[
+			'rows with a Field it has no input for',
+			z.array(z.object({ id: z.union([z.string(), z.number()]) }))
+		],
+		[
+			'a group with a Field it has no input for',
+			z.object({ meta: z.record(z.string(), z.string()) })
+		]
+	])('leaves out %s, since it could not be saved whole', (_, schema) => {
+		expect(specOf(schema)).toBeUndefined();
 	});
 });
 
@@ -328,6 +473,190 @@ describe('formSchema for the edit form', () => {
 	});
 });
 
+describe('formSchema for lists, rows and groups', () => {
+	const posts = defineResource({
+		name: 'posts',
+		label: 'Posts',
+		schema: z.object({
+			id: z.number(),
+			title: z.string(),
+			tags: z.array(z.string().min(2, 'Use at least two letters'))
+		})
+	});
+
+	const lined = defineResource({
+		name: 'posts',
+		label: 'Posts',
+		schema: z.object({
+			id: z.number(),
+			tags: field(z.array(z.string().min(2, 'Use at least two letters')), { input: 'lines' })
+		})
+	});
+
+	const recipes = defineResource({
+		name: 'recipes',
+		label: 'Recipes',
+		schema: z.object({
+			id: z.number(),
+			ingredients: z
+				.array(z.object({ name: z.string(), quantity: z.string().optional() }))
+				.min(1, 'Add at least one ingredient'),
+			nutrition: z.object({ proteinGrams: z.number(), carbsGrams: z.number() }).optional()
+		})
+	});
+
+	const flour = { name: 'Flour', quantity: '200 g' };
+
+	it('drops the blank rows of a list, wherever they are', async () => {
+		expect(
+			await outcome(formSchema(posts, 'create'), {
+				title: 'T',
+				tags: ['', 'Pizza', '', 'Quick', '']
+			})
+		).toEqual({ value: { title: 'T', tags: ['Pizza', 'Quick'] } });
+	});
+
+	it('gives an empty list when every row is blank, or the list sent nothing', async () => {
+		expect(await outcome(formSchema(posts, 'create'), { title: 'T', tags: [''] })).toEqual({
+			value: { title: 'T', tags: [] }
+		});
+		expect(await outcome(formSchema(posts, 'create'), { title: 'T' })).toEqual({
+			value: { title: 'T', tags: [] }
+		});
+	});
+
+	it('reports an issue of one item under that item, counting the rows as the form shows them', async () => {
+		expect(
+			await outcome(formSchema(posts, 'create'), { title: 'T', tags: ['', 'Pizza', 'x', ''] })
+		).toEqual({ issues: ['tags.2: Use at least two letters'] });
+	});
+
+	it('splits lines into an array, trimming each and dropping blank lines', async () => {
+		expect(
+			await outcome(formSchema(lined, 'create'), { tags: 'Pizza\n\n  Quick \r\nVegan\n' })
+		).toEqual({ value: { tags: ['Pizza', 'Quick', 'Vegan'] } });
+		expect(await outcome(formSchema(lined, 'create'), { tags: '' })).toEqual({
+			value: { tags: [] }
+		});
+	});
+
+	it('reports an issue of one line on the whole textarea, which is its only input', async () => {
+		expect(await outcome(formSchema(lined, 'create'), { tags: 'Pizza\nx' })).toEqual({
+			issues: ['tags: Use at least two letters']
+		});
+	});
+
+	it('drops the blank rows of an array of objects, and keeps a row with any value', async () => {
+		expect(
+			await outcome(formSchema(recipes, 'create'), {
+				ingredients: [flour, { name: '', quantity: '' }, { name: 'Salt', quantity: '' }, {}]
+			})
+		).toEqual({ value: { ingredients: [flour, { name: 'Salt' }] } });
+	});
+
+	it("reports a rule about the whole list on the list, with the schema's message", async () => {
+		expect(
+			await outcome(formSchema(recipes, 'create'), { ingredients: [{ name: '', quantity: '' }] })
+		).toEqual({ issues: ['ingredients: Add at least one ingredient'] });
+	});
+
+	it("reports an issue in a row under that row's input, counting the rows as the form shows them", async () => {
+		expect(
+			await outcome(formSchema(recipes, 'create'), {
+				ingredients: [{ name: '', quantity: '' }, flour, { name: '', quantity: '2 cups' }, {}]
+			})
+		).toEqual({ issues: ['ingredients.2.name: Required'] });
+	});
+
+	it('treats an all-blank optional group as no value', async () => {
+		const blank = { proteinGrams: undefined, carbsGrams: undefined };
+		expect(
+			await outcome(formSchema(recipes, 'create'), { ingredients: [flour], nutrition: blank })
+		).toEqual({ value: { ingredients: [flour] } });
+		expect(await outcome(formSchema(recipes, 'create'), { ingredients: [flour] })).toEqual({
+			value: { ingredients: [flour] }
+		});
+	});
+
+	it('requires the required Fields of an optional group once the group has any value', async () => {
+		expect(
+			await outcome(formSchema(recipes, 'create'), {
+				ingredients: [flour],
+				nutrition: { proteinGrams: 12, carbsGrams: undefined }
+			})
+		).toEqual({ issues: ['nutrition.carbsGrams: Required'] });
+		expect(
+			await outcome(formSchema(recipes, 'create'), {
+				ingredients: [flour],
+				nutrition: { proteinGrams: 12, carbsGrams: 40 }
+			})
+		).toEqual({ value: { ingredients: [flour], nutrition: { proteinGrams: 12, carbsGrams: 40 } } });
+	});
+
+	it('reports each required Field of a required group that is left blank', async () => {
+		const required = withField(z.object({ proteinGrams: z.number(), carbsGrams: z.number() }));
+		expect(await outcome(formSchema(required, 'create'), { value: {} })).toEqual({
+			issues: ['value.proteinGrams: Required', 'value.carbsGrams: Required']
+		});
+	});
+
+	it('normalises the inputs inside rows and groups as it does at the top level', async () => {
+		const things = withField(
+			z.object({
+				when: z.date(),
+				done: z.boolean(),
+				note: z.string().nullable(),
+				levels: z.array(z.object({ level: z.enum({ Low: 1, High: 2 }), on: z.boolean() }))
+			})
+		);
+
+		expect(
+			await outcome(formSchema(things, 'create'), {
+				value: {
+					when: '2024-01-08',
+					note: '',
+					levels: [{ level: '2' }, {}, { level: '1', on: true }]
+				}
+			})
+		).toEqual({
+			value: {
+				value: {
+					when: new Date(Date.UTC(2024, 0, 8)),
+					done: false,
+					note: null,
+					levels: [
+						{ level: 2, on: false },
+						{ level: 1, on: true }
+					]
+				}
+			}
+		});
+	});
+
+	it('writes the line breaks of a textarea as the browser shows them, whatever it sent', async () => {
+		const notes = withField(field(z.string(), { input: 'textarea' }));
+		expect(
+			await outcome(formSchema(notes, 'create'), { value: 'Stretch the dough.\r\nBake it hot.' })
+		).toEqual({ value: { value: 'Stretch the dough.\nBake it hot.' } });
+	});
+
+	it('validates only the Fields the form has inputs for', async () => {
+		const sourced = defineResource({
+			name: 'recipes',
+			label: 'Recipes',
+			schema: z.object({
+				id: z.number(),
+				name: z.string(),
+				sourceId: z.union([z.string(), z.number()])
+			})
+		});
+
+		expect(await outcome(formSchema(sourced, 'edit'), { id: '1', name: 'Pho' })).toEqual({
+			value: { id: 1, name: 'Pho' }
+		});
+	});
+});
+
 describe('toFormValues', () => {
 	/** The edit form's input values for a record of a Resource with one Field, `value`. */
 	const valuesOf = (schema: z.ZodType, value: unknown) => {
@@ -373,8 +702,38 @@ describe('toFormValues', () => {
 		expect(valuesOf(z.string(), 'Ada')).not.toHaveProperty('id');
 	});
 
-	// The demo's Resources, cut down to the scalar Fields the forms edit so far, each with a
-	// record shaped like the demo backend's seed.
+	it('writes a list as its items then one blank row, or as lines', () => {
+		expect(valuesOf(z.array(z.string()), ['Pizza', 'Quick'])).toEqual({
+			value: ['Pizza', 'Quick', '']
+		});
+		expect(valuesOf(z.array(z.string()), [])).toEqual({ value: [''] });
+		expect(valuesOf(z.array(z.enum({ One: 1, Two: 2 })), [2])).toEqual({ value: ['2', ''] });
+		expect(valuesOf(field(z.array(z.string()), { input: 'lines' }), ['Pizza', 'Quick'])).toEqual({
+			value: 'Pizza\nQuick'
+		});
+	});
+
+	it('writes rows as one set of values per item then one blank row', () => {
+		const ingredients = z.array(z.object({ name: z.string(), quantity: z.string().optional() }));
+		expect(valuesOf(ingredients, [{ name: 'Flour', quantity: '200 g' }, { name: 'Salt' }])).toEqual(
+			{ value: [{ name: 'Flour', quantity: '200 g' }, { name: 'Salt' }, {}] }
+		);
+	});
+
+	it('writes a group as the values of its Fields, as their inputs show them', () => {
+		const published = z.object({ at: z.iso.datetime(), proteinGrams: z.number().optional() });
+		expect(valuesOf(published, { at: '2024-03-01T23:30:00.000Z' })).toEqual({
+			value: { at: '2024-03-01T23:30' }
+		});
+	});
+
+	it('leaves out a list or group with no value', () => {
+		expect(valuesOf(z.array(z.string()).optional(), undefined)).toEqual({});
+		expect(valuesOf(z.object({ a: z.string() }).nullable(), null)).toEqual({});
+	});
+
+	// The demo's Resources, cut down to the Fields the forms can map, each with a record shaped
+	// like the demo backend's seed.
 	const demo = [
 		{
 			resource: defineResource({
@@ -390,8 +749,17 @@ describe('toFormValues', () => {
 					caloriesPerServing: field(z.number(), { label: 'Calories' }).optional(),
 					vegetarian: z.boolean(),
 					reviewCount: z.number(),
+					tags: field(z.array(z.string()), { input: 'lines' }),
+					ingredients: z
+						.array(z.object({ name: z.string(), quantity: z.string().optional() }))
+						.min(1, 'Add at least one ingredient'),
 					publishedAt: z.iso.datetime(),
-					instructions: field(z.string(), { list: false, description: 'How to cook it' })
+					nutrition: z.object({ proteinGrams: z.number(), carbsGrams: z.number() }),
+					instructions: field(z.string(), {
+						list: false,
+						description: 'How to cook it',
+						input: 'textarea'
+					})
 				})
 			}),
 			records: [
@@ -405,8 +773,11 @@ describe('toFormValues', () => {
 					caloriesPerServing: 300,
 					vegetarian: true,
 					reviewCount: 97,
+					tags: ['Pizza', 'Vegetarian'],
+					ingredients: [{ name: 'Pizza dough', quantity: '1 ball' }, { name: 'Basil leaves' }],
 					publishedAt: '2024-01-08T10:00:00.000Z',
-					instructions: 'Stretch the dough.'
+					nutrition: { proteinGrams: 10, carbsGrams: 40 },
+					instructions: 'Stretch the dough.\nBake it hot.'
 				},
 				{
 					id: 2,
@@ -417,7 +788,10 @@ describe('toFormValues', () => {
 					servings: 6,
 					vegetarian: false,
 					reviewCount: 0,
+					tags: [],
+					ingredients: [{ name: 'Beef', quantity: '1 kg' }],
 					publishedAt: '2024-02-08T10:00:00.000Z',
+					nutrition: { proteinGrams: 30.5, carbsGrams: 0 },
 					instructions: 'Brown the beef.'
 				}
 			]
@@ -431,10 +805,21 @@ describe('toFormValues', () => {
 					title: z.string(),
 					userId: field(z.number(), { label: 'Author ID' }),
 					status: z.enum(['draft', 'published']),
+					tags: z.array(z.string()),
 					body: field(z.string(), { list: false })
 				})
 			}),
-			records: [{ id: 3, title: 'On testing', userId: 2, status: 'draft', body: 'Notes.' }]
+			records: [
+				{
+					id: 3,
+					title: 'On testing',
+					userId: 2,
+					status: 'draft',
+					tags: ['Guide', 'Testing'],
+					body: 'Notes.'
+				},
+				{ id: 4, title: 'Untagged', userId: 1, status: 'published', tags: [], body: 'None.' }
+			]
 		},
 		{
 			resource: defineResource({
@@ -486,5 +871,32 @@ describe('toFormValues', () => {
 		expect(
 			await outcome(formSchema(resource, 'edit'), { ...values, id: String(record.id) })
 		).toEqual({ value: record });
+	});
+});
+
+describe('rowCount', () => {
+	it('is one row per item up to the last with a value, then one blank row', () => {
+		expect(rowCount(['Pizza', 'Quick', ''])).toBe(3);
+		expect(rowCount(['Pizza', '', 'Quick'])).toBe(4);
+		expect(rowCount(['Pizza', '', '', ''])).toBe(2);
+		expect(rowCount([{ name: 'Flour' }, { name: '', quantity: '' }])).toBe(2);
+		expect(rowCount([{ name: '' }, { quantity: '2 cups' }, {}])).toBe(3);
+	});
+
+	it('is the one blank row for a list with no items, or no value yet', () => {
+		expect(rowCount([])).toBe(1);
+		expect(rowCount(['', ''])).toBe(1);
+		expect(rowCount(undefined)).toBe(1);
+	});
+});
+
+describe('withoutRow', () => {
+	it('gives the items without the one at an index', () => {
+		expect(withoutRow(['Pizza', 'Quick', 'Vegan', ''], 1)).toEqual(['Pizza', 'Vegan', '']);
+		expect(withoutRow([{ name: 'Flour' }, { name: 'Salt' }], 0)).toEqual([{ name: 'Salt' }]);
+	});
+
+	it('gives an empty list for no value', () => {
+		expect(withoutRow(undefined, 0)).toEqual([]);
 	});
 });

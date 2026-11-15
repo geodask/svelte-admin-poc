@@ -1,15 +1,24 @@
 import { z } from 'zod';
 
 /**
- * The metadata a Field can carry, attached with `field()`. M1 knows `label`, `description`,
- * `hidden` (in no View) and `list: false` (left off the list View only).
+ * The metadata a Field can carry, attached with `field()`: `label`, `description`, `hidden` (in
+ * no View), `list: false` (left off the list View only) and `input`.
  */
 export type FieldMeta = {
 	label?: string;
 	description?: string;
 	hidden?: boolean;
 	list?: false;
+	/**
+	 * Which input the create and edit forms give the Field, where its type leaves a choice:
+	 * `textarea` for a long text Field, and for an array of text `rows` (one input per item, the
+	 * default) or `lines` (one textarea with one item per line). Ignored for any other type.
+	 */
+	input?: FieldInput;
 };
+
+/** The choices of input a Field's metadata can make. See `FieldMeta.input`. */
+export type FieldInput = 'textarea' | 'rows' | 'lines';
 
 /** The Zod registry that holds each Field's metadata. */
 export const fieldRegistry = z.registry<FieldMeta>();
@@ -118,6 +127,8 @@ export type Field = DetectedKind & {
 	list: boolean;
 	/** Whether the detail View shows it: every Field that isn't hidden. */
 	detail: boolean;
+	/** The input its metadata chose for the forms, if any. */
+	input?: FieldInput;
 	/**
 	 * For an object Field, the Fields of the object (or of each object in an array of objects),
 	 * so the detail View can show it as nested label-value pairs.
@@ -137,7 +148,7 @@ function nestedObject(schema: z.ZodType): z.ZodObject | undefined {
  * wrapper inside it, so it is found whether `field()` went inside or outside `.optional()`;
  * where both set a key, the outer one wins.
  */
-function describeField(key: string, schema: z.ZodType): Field {
+export function describeField(key: string, schema: z.ZodType): Field {
 	const chain = wrapperChain(schema);
 	const meta: FieldMeta = Object.assign({}, ...chain.map((s) => fieldRegistry.get(s)).reverse());
 	const kind = detectKind(schema);
@@ -149,6 +160,7 @@ function describeField(key: string, schema: z.ZodType): Field {
 		key,
 		label: meta.label ?? defaultLabel(key),
 		...(meta.description === undefined ? {} : { description: meta.description }),
+		...(meta.input === undefined ? {} : { input: meta.input }),
 		required: !chain.some(isWrapper),
 		list: !hidden && meta.list !== false && kind.kind !== 'object',
 		detail: !hidden,

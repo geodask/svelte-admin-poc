@@ -19,14 +19,23 @@ export const recipes = defineResource({
 		// Metadata set before `.optional()` still applies.
 		caloriesPerServing: field(z.number(), { label: 'Calories' }).optional(),
 		vegetarian: z.boolean(),
-		tags: z.array(z.string()),
+		// Edited as one textarea, one tag per line. Posts' tags keep one input per tag.
+		tags: field(z.array(z.string()), { input: 'lines' }),
+		// An array of objects: edited as one fieldset per ingredient, and never left empty.
+		ingredients: z
+			.array(z.object({ name: z.string(), quantity: z.string().optional() }))
+			.min(1, 'Add at least one ingredient'),
 		reviewCount: z.number(),
 		publishedAt: z.iso.datetime(),
 		// A number or a slug: no built-in Kind fits, so it shows as unknown.
 		sourceId: z.union([z.string(), z.number()]),
-		// An object: left off the list by default.
+		// An object: left off the list by default, and edited as a group of inputs.
 		nutrition: z.object({ proteinGrams: z.number(), carbsGrams: z.number() }),
-		instructions: field(z.string(), { list: false, description: 'How to cook it' }),
+		instructions: field(z.string(), {
+			list: false,
+			description: 'How to cook it',
+			input: 'textarea'
+		}),
 		internalNotes: field(z.string(), { hidden: true })
 	})
 });
