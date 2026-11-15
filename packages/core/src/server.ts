@@ -4,8 +4,15 @@ import { form, getRequestEvent, query, requested } from '$app/server';
 import { error, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { ProviderError } from './errors.ts';
-import { formSchema, type CreateData } from './form-spec.ts';
-import { hasPathSegment, idPathSegment, listPathOfCreateView } from './ids.ts';
+import { formSchema, type CreateData, type EditData } from './form-spec.ts';
+import {
+	decodeSegment,
+	detailPathOfEditView,
+	hasPathSegment,
+	idFromParam,
+	listPathOfCreateView,
+	recordPath
+} from './ids.ts';
 import { listParamsSchema } from './list-params.ts';
 import type { ListResult, Provider, ProviderContext } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
@@ -34,13 +41,16 @@ const MAX_REFRESHED_LISTS = 25;
  * `{list}/new`, so the detail View is that path minus `/new`, plus the new id. `serveResource`
  * never needs the admin's base path. A create form must therefore be submitted from a page
  * whose path ends in `/new`; from any other page it is refused before the Provider is called.
+ * Likewise the edit View sits at `{list}/{id}/edit`, so an edit form redirects to that path
+ * minus `/edit`. It must be submitted from the edit View of the record its hidden id names;
+ * from any other page it is refused before the Provider is called.
  *
  * @example
- * export const { getList, getOne, create } = serveResource(recipes, backend.for(recipes));
+ * export const { getList, getOne, create, update } = serveResource(recipes, backend.for(recipes));
  */
 export function serveResource<R extends Resource>(
 	resource: R,
-	provider: Provider<RecordOf<R>, IdOf<R>, CreateData<R>>
+	provider: Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>>
 ) {
 	const records = z.array(resource.schema);
 
@@ -84,10 +94,36 @@ export function serveResource<R extends Resource>(
 		getOne(id).set(record);
 		await requested(getList, MAX_REFRESHED_LISTS).refreshAll();
 		// A record whose id can't be one path segment has no detail View: land on the list.
-		redirect(303, hasPathSegment(id) ? `${listPath}/${idPathSegment(id)}` : listPath);
+		redirect(303, hasPathSegment(id) ? recordPath(listPath, id) : listPath);
 	});
 
-	return { getList, getOne, create };
+	const update = form(formSchema(resource, 'edit'), async ({ id, ...data }) => {
+		// Before the Provider is called, so a form posted from the wrong page changes nothing:
+		// the page must be the edit View of the record the hidden id names.
+		const { pathname } = getRequestEvent().url;
+		const detailPath = detailPathOfEditView(pathname);
+		const param = decodeSegment(detailPath?.slice(detailPath.lastIndexOf('/') + 1) ?? '');
+		if (detailPath === undefined || param === undefined || idFromParam(resource, param) !== id) {
+			throw new Error(
+				`An edit form for the id ${String(id)} was submitted from ${pathname}, not its edit View`
+			);
+		}
+		const saved = await served(() =>
+			provider.update(providerContext(), { id, data: data as EditData<R> })
+		);
+		// Like a read, a record that doesn't match the schema, or another record than the one
+		// edited, is an unexpected error.
+		const record = resource.schema.parse(saved) as RecordOf<R>;
+		if (record.id !== id) {
+			throw new Error(`The Provider for ${resource.name} returned another record from update`);
+		}
+
+		getOne(id).set(record);
+		await requested(getList, MAX_REFRESHED_LISTS).refreshAll();
+		redirect(303, detailPath);
+	});
+
+	return { getList, getOne, create, update };
 }
 
 /** Run a Provider call, turning a Provider error into the HTTP error with its status. */

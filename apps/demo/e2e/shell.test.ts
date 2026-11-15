@@ -137,3 +137,28 @@ test.describe('on the create View', () => {
 		await expect(page).toHaveURL('/admin/users');
 	});
 });
+
+test.describe('on the edit View', () => {
+	test('keeps the Resource active and reads Resource / Record title / Edit', async ({ page }) => {
+		await page.goto('/admin/users/2/edit');
+
+		await expect(resourceNav(page).getByRole('link', { name: 'Users' })).toHaveAttribute(
+			'aria-current',
+			'true'
+		);
+		await expect(resourceNav(page).locator('a[aria-current]')).toHaveCount(1);
+		await expect(breadcrumb(page).getByRole('listitem')).toHaveText([
+			'Users',
+			'Grace Hopper',
+			'Edit'
+		]);
+		await expect(breadcrumb(page).getByRole('link', { name: 'Users' })).toHaveAttribute(
+			'href',
+			'/admin/users'
+		);
+
+		await breadcrumb(page).getByRole('link', { name: 'Grace Hopper' }).click();
+
+		await expect(page).toHaveURL('/admin/users/2');
+	});
+});

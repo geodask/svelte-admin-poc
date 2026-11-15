@@ -205,6 +205,45 @@ describe('the bundled REST Provider', () => {
 			expect(result).toEqual(record);
 		});
 	});
+
+	describe('update', () => {
+		it('sends PUT {base}/{resource}/{id} with the whole editable record as JSON', async () => {
+			const { fetch, sent } = fakeFetch({ id: 7, name: 'Pad Thai' });
+			const provider = restProvider('http://api.test/v1/').for(recipes);
+
+			await provider.update(context(fetch), { id: 7, data: { name: 'Pad Thai' } });
+
+			expect(sent).toEqual([
+				{
+					method: 'PUT',
+					url: 'http://api.test/v1/recipes/7',
+					contentType: 'application/json',
+					body: { name: 'Pad Thai' }
+				}
+			]);
+		});
+
+		it('writes the id as one encoded path segment', async () => {
+			const { fetch, requests } = fakeFetch({ id: '../admins/1', email: 'ada@example.com' });
+
+			await restProvider('http://api.test')
+				.for(users)
+				.update(context(fetch), { id: '../admins/1', data: { email: 'ada@example.com' } });
+
+			expect(requests).toEqual(['http://api.test/users/..%2Fadmins%2F1']);
+		});
+
+		it('returns the saved record as the backend sent it', async () => {
+			const record = { id: 7, name: 'Pad Thai' };
+			const { fetch } = fakeFetch(record);
+
+			const result = await restProvider('http://api.test')
+				.for(recipes)
+				.update(context(fetch), { id: 7, data: { name: 'Pad Thai' } });
+
+			expect(result).toEqual(record);
+		});
+	});
 });
 
 describe('the bundled REST Provider, when the backend answers with an error status', () => {
@@ -216,14 +255,19 @@ describe('the bundled REST Provider, when the backend answers with an error stat
 		getOne: (fetch: typeof globalThis.fetch) =>
 			restProvider('http://api.test').for(recipes).getOne(context(fetch), 7),
 		create: (fetch: typeof globalThis.fetch) =>
-			restProvider('http://api.test').for(recipes).create(context(fetch), { name: 'Pad See Ew' })
+			restProvider('http://api.test').for(recipes).create(context(fetch), { name: 'Pad See Ew' }),
+		update: (fetch: typeof globalThis.fetch) =>
+			restProvider('http://api.test')
+				.for(recipes)
+				.update(context(fetch), { id: 7, data: { name: 'Pad Thai' } })
 	};
 
 	/** The request each call makes, as an unexpected error names it for the server log. */
 	const requestLines: Record<keyof typeof calls, string> = {
 		getList: 'GET http://api.test/recipes',
 		getOne: 'GET http://api.test/recipes/7',
-		create: 'POST http://api.test/recipes'
+		create: 'POST http://api.test/recipes',
+		update: 'PUT http://api.test/recipes/7'
 	};
 
 	describe.each(Object.entries(calls))('%s', (name, call) => {

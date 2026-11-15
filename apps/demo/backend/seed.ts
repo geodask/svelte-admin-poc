@@ -157,6 +157,7 @@ export type User = {
 	id: number;
 	name: string;
 	email: string;
+	phone?: string;
 	role: 'admin' | 'editor' | 'viewer';
 	active: boolean;
 	joinedAt: string;
@@ -181,6 +182,8 @@ export const users: User[] = people.map(([name, role], index) => ({
 	id: index + 1,
 	name,
 	email: `${name.split(' ')[0].toLowerCase()}@example.com`,
+	// Every third user has no phone number.
+	...(index % 3 === 2 ? {} : { phone: `+44 20 7946 ${String(index + 1).padStart(4, '0')}` }),
 	role,
 	// Every fourth user has left.
 	active: index % 4 !== 3,

@@ -3,7 +3,7 @@
 import { z } from 'zod';
 import { ConflictError, InvalidInputError, NotFoundError } from './errors.ts';
 import { idPathSegment } from './ids.ts';
-import type { CreateData } from './form-spec.ts';
+import type { CreateData, EditData } from './form-spec.ts';
 import type { ListResult, Provider } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -21,7 +21,9 @@ const listResponse = z.union([
  *   (`idPathSegment`), so `../users/1` is asked for as `..%2Fusers%2F1`.
  * - `POST {base}/{resource}` with the record (without its id) as JSON creates it, and returns
  *   the created record, with its id (usually with a 201).
- *
+ * - `PUT {base}/{resource}/{id}` with the whole editable record (without its id) as JSON
+ *   replaces it, and returns the saved record. An optional Field missing from the body was
+ *   cleared.
  * - A failing status becomes a Provider error: 404 is `NotFoundError`, 400 and 422 are
  *   `InvalidInputError`, 409 is `ConflictError`. Any other is an unexpected error, whose message
  *   names the request, the status and the start of the body, for the server log.
@@ -38,7 +40,9 @@ export function restProvider(baseUrl: string) {
 
 	return {
 		/** The Provider for one Resource, at `{base}/{resource.name}`. */
-		for<R extends Resource>(resource: R): Provider<RecordOf<R>, IdOf<R>, CreateData<R>> {
+		for<R extends Resource>(
+			resource: R
+		): Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>> {
 			const resourceUrl = `${base}/${encodeURIComponent(resource.name)}`;
 
 			return {
@@ -62,6 +66,11 @@ export function restProvider(baseUrl: string) {
 
 				async create({ fetch }, data) {
 					return (await requestJson(fetch, 'POST', resourceUrl, data)) as RecordOf<R>;
+				},
+
+				async update({ fetch }, { id, data }) {
+					const url = `${resourceUrl}/${idPathSegment(id)}`;
+					return (await requestJson(fetch, 'PUT', url, data)) as RecordOf<R>;
 				}
 			};
 		}
@@ -82,7 +91,7 @@ const MAX_BODY_IN_LOG = 500;
 /** Send a request, with `body` as JSON when there is one, and read the JSON response. */
 async function requestJson(
 	fetch: typeof globalThis.fetch,
-	method: 'GET' | 'POST',
+	method: 'GET' | 'POST' | 'PUT',
 	url: string,
 	body?: unknown
 ): Promise<unknown> {

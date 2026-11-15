@@ -1,5 +1,6 @@
 <!--
-	The breadcrumb's last crumb on a detail View: the record's Record title. It reads the record
+	The breadcrumb's crumb for a record: its Record title, the last crumb on a detail View, or a
+	link to the detail View (`href`) on the edit View. It reads the record
 	through the core's headless detail View, the same query the detail View awaits, so both share
 	one request. A failed read is the detail View's to report; the crumb only says "Not found" or
 	"Error", and shows the title once a Retry loads the record.
@@ -9,7 +10,8 @@
 	import { createDetailView, type ShellLocation } from '@svelte-admin/core/views';
 	import * as Breadcrumb from './components/ui/breadcrumb/index.ts';
 
-	let { here, id }: { here: ShellLocation; id: string | number } = $props();
+	let { here, id, href }: { here: ShellLocation; id: string | number; href?: string | undefined } =
+		$props();
 
 	const remote: ResourceRemote = $derived(await here.remote());
 	const view = $derived(createDetailView(here.resource, remote, id));
@@ -21,4 +23,8 @@
 	);
 </script>
 
-<Breadcrumb.Page>{title}</Breadcrumb.Page>
+{#if href === undefined}
+	<Breadcrumb.Page>{title}</Breadcrumb.Page>
+{:else}
+	<Breadcrumb.Link {href}>{title}</Breadcrumb.Link>
+{/if}

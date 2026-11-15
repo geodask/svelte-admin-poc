@@ -1,4 +1,4 @@
-import { CREATE_SEGMENT, idFromParam } from './ids.ts';
+import { CREATE_SEGMENT, EDIT_SEGMENT, decodeSegment, idFromParam } from './ids.ts';
 import type { IdOf, RecordOf, Resource, ResourceIcon } from './resource.ts';
 import type { ResourceRemote } from './remote.ts';
 
@@ -97,21 +97,24 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 		/** Where the admin's index leads: the first Resource's list in admin.ts, if there is one. */
 		homeHref: first === undefined ? undefined : listHref(first),
 		/**
-		 * The Resource a path is on, which of its Views, and on a detail View the record's typed
-		 * id, for the shell's active sidebar link and breadcrumb. The path is a URL pathname,
-		 * still encoded. A path on a Resource's list or anything under it finds that Resource:
-		 * the list itself is its list View, `{list}/new` its create View, and any other next
-		 * segment a detail View, whose `id` is that segment read as the Resource's id, or
-		 * `undefined` when it names none. A path outside the admin's Resources finds nothing.
+		 * The Resource a path is on, which of its Views, and on a detail or edit View the
+		 * record's typed id, for the shell's active sidebar link and breadcrumb. The path is a URL
+		 * pathname, still encoded. A path on a Resource's list or anything under it finds that
+		 * Resource: the list itself is its list View, `{list}/new` its create View,
+		 * `{list}/{id}/edit` an edit View, and any other next segment a detail View. The `id` is
+		 * the `{id}` segment read as the Resource's id, or `undefined` when it names none. A path
+		 * outside the admin's Resources finds nothing.
 		 */
 		locate(pathname: string): AdminLocation<M> | undefined {
 			if (!pathname.startsWith(`${basePath}/`)) return undefined;
-			const [name, param] = pathname.slice(basePath.length + 1).split('/');
+			const [name, param, action] = pathname.slice(basePath.length + 1).split('/');
 			if (!isName(name)) return undefined;
 			const entry = resources[name] as AdminEntry;
 			const decoded = param === undefined ? undefined : decodeSegment(param);
-			const view: AdminView =
-				param === undefined ? 'list' : decoded === CREATE_SEGMENT ? 'create' : 'detail';
+			let view: AdminView = 'detail';
+			if (param === undefined) view = 'list';
+			else if (action === EDIT_SEGMENT) view = 'edit';
+			else if (decoded === CREATE_SEGMENT) view = 'create';
 			return {
 				name,
 				resource: entry.resource,
@@ -125,7 +128,7 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 }
 
 /** Which of a Resource's Views a path is on. */
-export type AdminView = 'list' | 'detail' | 'create';
+export type AdminView = 'list' | 'detail' | 'create' | 'edit';
 
 /** Where a path is in the admin: see `locate`. One member per Resource, so `id` stays typed. */
 export type AdminLocation<M> = {
@@ -137,20 +140,11 @@ export type AdminLocation<M> = {
 				remote: M[K]['remote'];
 				listHref: string;
 				view: AdminView;
-				/** On a detail View, the record's typed id, if the path names one. */
+				/** On a detail or edit View, the record's typed id, if the path names one. */
 				id: IdOf<R> | undefined;
 			}
 		: never;
 }[keyof M & string];
-
-/** A path segment, decoded, or `undefined` when it is malformed. */
-function decodeSegment(segment: string): string | undefined {
-	try {
-		return decodeURIComponent(segment);
-	} catch {
-		return undefined;
-	}
-}
 
 function sidebarGroups(entries: AdminEntry[], href: (name: string) => string): SidebarGroup[] {
 	const groups = new Map<string | undefined, SidebarGroup>();

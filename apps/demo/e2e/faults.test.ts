@@ -118,6 +118,33 @@ test.describe('a transient backend error on a recipe', () => {
 	});
 });
 
+test.describe('a transient backend error on the edit View', () => {
+	test('shows the error with Retry, and Retry shows the prefilled form', async ({
+		page,
+		request
+	}) => {
+		await injectFault(request, { status: 500, path: '/users/2' });
+
+		await page.goto('/admin/users/2/edit');
+
+		await expect(
+			page.getByRole('heading', { level: 1, name: "Couldn't load this record" })
+		).toBeVisible();
+		await expect(page.locator('main form')).toHaveCount(0);
+
+		await hydrated(page);
+		await markWindow(page);
+		await loadError(page).getByRole('button', { name: 'Retry' }).click();
+
+		await expect(page.getByRole('heading', { level: 1, name: 'Edit Grace Hopper' })).toBeVisible();
+		await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue(
+			'Grace Hopper'
+		);
+		await expect(page.getByRole('combobox', { name: 'Role', exact: true })).toHaveValue('editor');
+		expect(await reloaded(page)).toBe(false);
+	});
+});
+
 test.describe('the recipes list refreshing after a page change', () => {
 	test('shows the refresh indicator and keeps the old rows until the new ones arrive', async ({
 		page,

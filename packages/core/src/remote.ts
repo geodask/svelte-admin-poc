@@ -19,8 +19,10 @@ export type RemoteFormIssue = { message: string; path: (string | number)[] };
 export type RemoteFormField = {
 	value(): unknown;
 	issues(): RemoteFormIssue[] | undefined;
-	// A method, so Kit's stricter, generic `as` fits it.
+	// Methods, so Kit's stricter, generic `as` fits them.
 	as(type: RemoteFormInputType): Record<string, unknown>;
+	/** A hidden input, which needs its value given, e.g. the edit form's record id. */
+	as(type: 'hidden', value: string | number): Record<string, unknown>;
 };
 
 /** The input types a Theme renders a form's Fields with. */
@@ -39,6 +41,11 @@ export type RemoteFormLike = {
 	readonly submitted: boolean;
 	readonly fields: { readonly [key: string]: RemoteFormField } & {
 		allIssues(): RemoteFormIssue[] | undefined;
+		/**
+		 * Set every input's value, e.g. the edit form's prefill. Kit leaves a submitted form's
+		 * input alone, so a failed save keeps what the user typed.
+		 */
+		set(values: FormInput): void;
 	};
 	/** Check the input in the browser with `schema` before it is sent. */
 	preflight(schema: StandardSchemaV1<FormInput, unknown>): RemoteFormLike;
@@ -59,4 +66,9 @@ export type ResourceRemote<T = any, Id = any> = {
 	getOne: (id: Id) => RemoteRead<T>;
 	/** The create form: it saves a new record and redirects to its detail View. */
 	create: RemoteFormLike;
+	/**
+	 * The edit form, one instance per record: `update.for(id)`. It saves the record's editable
+	 * Fields and redirects to its detail View.
+	 */
+	update: RemoteFormLike & { for(id: Id): RemoteFormLike };
 };

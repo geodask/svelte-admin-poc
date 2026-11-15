@@ -23,9 +23,10 @@ type IdOfRecord<T> = T extends { id: infer Id } ? Id : never;
 /**
  * The adapter that carries out a Resource's data operations against a backend. Its record
  * type must be the Resource schema's output type, and its ids the schema's id type. `Create` is
- * what `create` receives: the record without its id. Editing and deleting come next.
+ * what `create` receives: the record without its id. `Edit` is what `update` receives as its
+ * `data`: every editable Field. Deleting comes next.
  */
-export type Provider<T, Id = IdOfRecord<T>, Create = Omit<T, 'id'>> = {
+export type Provider<T, Id = IdOfRecord<T>, Create = Omit<T, 'id'>, Edit = Create> = {
 	getList(ctx: ProviderContext, params: ListParams): Promise<ListResult<T>>;
 	/**
 	 * One record by its id. The id arrives with the schema's id type, never coerced. Build any
@@ -38,4 +39,11 @@ export type Provider<T, Id = IdOfRecord<T>, Create = Omit<T, 'id'>> = {
 	 * with the id it assigned.
 	 */
 	create(ctx: ProviderContext, data: Create): Promise<T>;
+	/**
+	 * Replace a record's editable Fields. `data` is the whole editable record, already validated
+	 * with the Resource schema: an optional Field whose key is absent was cleared by the user, so
+	 * remove its value. There are no partial patches. Return the record the backend saved, with
+	 * the same id.
+	 */
+	update(ctx: ProviderContext, input: { id: Id; data: Edit }): Promise<T>;
 };

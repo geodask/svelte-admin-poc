@@ -144,6 +144,20 @@ describe('locate, the Resource and record a path is on', () => {
 		expect(admin.locate(path)).toMatchObject({ name, view: 'create', id: undefined });
 	});
 
+	it.each([
+		['/admin/recipes/12/edit', 'recipes', 12],
+		['/admin/users/a%2Fb/edit', 'users', 'a/b']
+	])('finds the Resource and the typed id on the edit View %j', (path, name, id) => {
+		expect(admin.locate(path)).toMatchObject({ name, view: 'edit', id });
+	});
+
+	it.each([
+		['/admin/recipes/abc/edit', 'recipes'],
+		['/admin/recipes/new/edit', 'recipes']
+	])('finds the edit View but no id on %j', (path, name) => {
+		expect(admin.locate(path)).toMatchObject({ name, view: 'edit', id: undefined });
+	});
+
 	it('decodes a string id from its path segment', () => {
 		expect(admin.locate('/admin/users/a%2Fb%20c')).toMatchObject({ name: 'users', id: 'a/b c' });
 	});

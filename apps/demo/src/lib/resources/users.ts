@@ -12,6 +12,8 @@ export const users = defineResource({
 		id: z.number(),
 		name: z.string(),
 		email: z.email(),
+		// Optional, so clearing it on the edit View removes it.
+		phone: z.string().optional(),
 		role: z.enum(['admin', 'editor', 'viewer']),
 		active: z.boolean(),
 		joinedAt: z.iso.datetime()
