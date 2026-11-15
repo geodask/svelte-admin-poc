@@ -25,8 +25,6 @@ export type RemoteFormField = {
 	/** Replace what it will submit, e.g. a list without the item a × button removed. */
 	set(value: unknown): unknown;
 	issues(): RemoteFormIssue[] | undefined;
-	/** The issues of the field and of every input inside it. */
-	allIssues(): RemoteFormIssue[] | undefined;
 	// Methods, so Kit's stricter, generic `as` fits them.
 	as(type: RemoteFormInputType): Record<string, unknown>;
 	/** A hidden input, which needs its value given, e.g. the edit form's record id. */

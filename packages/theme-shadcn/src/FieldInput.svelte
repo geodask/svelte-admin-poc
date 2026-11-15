@@ -15,7 +15,7 @@
 	at its foot, while an item's issues show under that item's input.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
 	import {
 		rowCount,
 		withoutRow,
@@ -38,6 +38,10 @@
 		 */
 		labelHidden?: boolean;
 	} = $props();
+
+	type ListSpec = Extract<FormFieldSpec, { kind: 'list' }>;
+	type RowsSpec = Extract<FormFieldSpec, { kind: 'rows' }>;
+	type GroupSpec = Extract<FormFieldSpec, { kind: 'group' }>;
 
 	const inputId = $props.id();
 	const issuesId = `${inputId}-issues`;
@@ -72,7 +76,6 @@
 
 	const control =
 		'w-full min-w-0 rounded-md border bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive';
-	const fieldset = 'flex min-w-0 flex-col gap-3 rounded-md border p-4';
 </script>
 
 {#snippet labelText()}
@@ -108,47 +111,67 @@
 	{/if}
 {/snippet}
 
+<!-- A list's, rows' or group's fieldset: its label, its inputs, then its help and own issues. -->
+{#snippet container(inputs: Snippet)}
+	<fieldset
+		class="flex min-w-0 flex-col gap-3 rounded-md border p-4"
+		aria-describedby={describedBy}
+	>
+		<legend class="px-1">{@render labelText()}</legend>
+		{@render inputs()}
+		{@render foot()}
+	</fieldset>
+{/snippet}
+
+<!-- One row of a list in rows, or of rows, then its × button. -->
+{#snippet eachRow(rowInputs: Snippet<[number]>)}
+	{#each rowIndexes as row (row)}
+		<div class="flex items-start gap-2">
+			{@render rowInputs(row)}
+			{@render removeButton(row)}
+		</div>
+	{/each}
+{/snippet}
+
+{#snippet listItem(row: number)}
+	<div class="min-w-0 flex-1">
+		<FieldInput
+			spec={{ ...(spec as ListSpec).item, label: `${spec.label} ${row + 1}`, required: false }}
+			field={field[row]}
+			labelHidden
+		/>
+	</div>
+{/snippet}
+
+{#snippet objectRow(row: number)}
+	<fieldset class="flex min-w-0 flex-1 flex-col gap-3 rounded-md bg-muted/40 p-3">
+		<legend class="text-xs text-muted-foreground">{spec.label} {row + 1}</legend>
+		{#each (spec as RowsSpec).fields as child (child.key)}
+			<FieldInput spec={child} field={field[row][child.key]} />
+		{/each}
+	</fieldset>
+{/snippet}
+
+{#snippet listRows()}
+	{@render eachRow(listItem)}
+{/snippet}
+
+{#snippet objectRows()}
+	{@render eachRow(objectRow)}
+{/snippet}
+
+{#snippet groupFields()}
+	{#each (spec as GroupSpec).fields as child (child.key)}
+		<FieldInput spec={child} field={field[child.key]} />
+	{/each}
+{/snippet}
+
 {#if spec.kind === 'list' && spec.mode === 'rows'}
-	<fieldset class={fieldset} aria-describedby={describedBy}>
-		<legend class="px-1">{@render labelText()}</legend>
-		{#each rowIndexes as row (row)}
-			<div class="flex items-start gap-2">
-				<div class="min-w-0 flex-1">
-					<FieldInput
-						spec={{ ...spec.item, label: `${spec.label} ${row + 1}`, required: false }}
-						field={field[row]}
-						labelHidden
-					/>
-				</div>
-				{@render removeButton(row)}
-			</div>
-		{/each}
-		{@render foot()}
-	</fieldset>
+	{@render container(listRows)}
 {:else if spec.kind === 'rows'}
-	<fieldset class={fieldset} aria-describedby={describedBy}>
-		<legend class="px-1">{@render labelText()}</legend>
-		{#each rowIndexes as row (row)}
-			<div class="flex items-start gap-2">
-				<fieldset class="flex min-w-0 flex-1 flex-col gap-3 rounded-md bg-muted/40 p-3">
-					<legend class="text-xs text-muted-foreground">{spec.label} {row + 1}</legend>
-					{#each spec.fields as child (child.key)}
-						<FieldInput spec={child} field={field[row][child.key]} />
-					{/each}
-				</fieldset>
-				{@render removeButton(row)}
-			</div>
-		{/each}
-		{@render foot()}
-	</fieldset>
+	{@render container(objectRows)}
 {:else if spec.kind === 'group'}
-	<fieldset class={fieldset} aria-describedby={describedBy}>
-		<legend class="px-1">{@render labelText()}</legend>
-		{#each spec.fields as child (child.key)}
-			<FieldInput spec={child} field={field[child.key]} />
-		{/each}
-		{@render foot()}
-	</fieldset>
+	{@render container(groupFields)}
 {:else}
 	<div class="flex flex-col gap-1.5">
 		{#if spec.kind === 'checkbox'}

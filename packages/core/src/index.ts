@@ -39,7 +39,7 @@ export {
 	fieldRegistry,
 	type DetectedKind,
 	type Field,
-	type FieldInput,
+	type FieldInputChoice,
 	type FieldMeta,
 	type KindName
 } from './fields.ts';

@@ -14,11 +14,11 @@ export type FieldMeta = {
 	 * `textarea` for a long text Field, and for an array of text `rows` (one input per item, the
 	 * default) or `lines` (one textarea with one item per line). Ignored for any other type.
 	 */
-	input?: FieldInput;
+	input?: FieldInputChoice;
 };
 
 /** The choices of input a Field's metadata can make. See `FieldMeta.input`. */
-export type FieldInput = 'textarea' | 'rows' | 'lines';
+export type FieldInputChoice = 'textarea' | 'rows' | 'lines';
 
 /** The Zod registry that holds each Field's metadata. */
 export const fieldRegistry = z.registry<FieldMeta>();
@@ -128,7 +128,7 @@ export type Field = DetectedKind & {
 	/** Whether the detail View shows it: every Field that isn't hidden. */
 	detail: boolean;
 	/** The input its metadata chose for the forms, if any. */
-	input?: FieldInput;
+	input?: FieldInputChoice;
 	/**
 	 * For an object Field, the Fields of the object (or of each object in an array of objects),
 	 * so the detail View can show it as nested label-value pairs.

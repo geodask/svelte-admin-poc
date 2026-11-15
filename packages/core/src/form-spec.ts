@@ -304,6 +304,9 @@ const itemsOf = (raw: unknown): unknown[] =>
  */
 type Origins = Map<string, number[] | 'whole'>;
 
+/** The key of a normalised path in `Origins`. */
+const pathKey = (path: readonly PropertyKey[]) => JSON.stringify(path);
+
 /** One input's value, or a set of them, as the browser sent it, turned into what the schema checks. */
 function normalize(
 	spec: FormFieldSpec,
@@ -318,7 +321,7 @@ function normalize(
 			return raw === true || raw === 'on' || raw === 'true';
 		case 'list': {
 			if (spec.mode === 'lines') {
-				origins.set(JSON.stringify(path), 'whole');
+				origins.set(pathKey(path), 'whole');
 				const text = itemsOf(raw)
 					.filter((item) => typeof item === 'string')
 					.join('\n');
@@ -362,7 +365,7 @@ function normalizeItems(
 		items.push(normalizeItem(item, [...path, items.length]));
 		rows.push(row);
 	});
-	origins.set(JSON.stringify(path), rows);
+	origins.set(pathKey(path), rows);
 	return items;
 }
 
@@ -420,7 +423,7 @@ function inputPath(path: readonly PropertyKey[], origins: Origins): (string | nu
 	const named: (string | number)[] = [];
 	const normalized: PropertyKey[] = [];
 	for (const segment of path) {
-		const origin = origins.get(JSON.stringify(normalized));
+		const origin = origins.get(pathKey(normalized));
 		if (origin === 'whole') break;
 		named.push(
 			typeof segment === 'number' && origin !== undefined
