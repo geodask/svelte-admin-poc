@@ -57,7 +57,7 @@ const backendOwned: Record<string, (id: number) => Record<string, unknown>> = {
 
 /** The Fields a PUT keeps as they are, since no edit can set them: the backend's own, and more. */
 const keptOnUpdate: Record<string, string[]> = {
-	recipes: Object.keys(backendOwned.recipes(0)),
+	recipes: ['reviewCount', 'sourceId', 'internalNotes'],
 	// Set once on create.
 	users: ['email']
 };

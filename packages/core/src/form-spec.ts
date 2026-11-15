@@ -65,7 +65,7 @@ export type FormReadOnlySpec = FormFieldBase & { kind: 'readOnly'; field: Field 
 export type FormFieldSpec = FormInputSpec | FormReadOnlySpec;
 
 /** Whether a spec is an input, which the form submits, rather than read-only text. */
-export const isInputSpec = (spec: FormFieldSpec): spec is FormInputSpec => spec.kind !== 'readOnly';
+const isInputSpec = (spec: FormFieldSpec): spec is FormInputSpec => spec.kind !== 'readOnly';
 
 /** The input-specific part of a spec: what `inputFor` adds to the Field's own details. */
 type InputOf = FormInputSpec extends infer S
@@ -190,17 +190,21 @@ function roleIn(field: Field, mode: FormMode): 'input' | 'readOnly' | 'none' {
 export function assertFormInputs(name: string, fields: readonly Field[], schema: z.ZodObject) {
 	for (const field of fields) {
 		if (roleIn(field, 'create') !== 'input' && roleIn(field, 'edit') !== 'input') continue;
-		if (specFor(field, schema.shape[field.key] as z.ZodType) !== undefined) continue;
-		const afterCreate =
-			field.readOnly === 'afterCreate'
-				? " `readOnly: 'afterCreate'` still needs one on create."
-				: '';
-		throw new Error(
-			`Resource "${name}": the Field "${field.key}" has no form input for its type.` +
-				afterCreate +
-				' Mark it `readOnly: true` or `hidden: true` with `field()`, so the forms leave it out.'
-		);
+		if (specFor(field, schema.shape[field.key] as z.ZodType) === undefined) {
+			throw noInputError(name, field);
+		}
 	}
+}
+
+/** The startup error for a Field the forms would edit but have no input for. */
+function noInputError(name: string, field: Field): Error {
+	const afterCreate =
+		field.readOnly === 'afterCreate' ? " `readOnly: 'afterCreate'` still needs one on create." : '';
+	return new Error(
+		`Resource "${name}": the Field "${field.key}" has no form input for its type.` +
+			afterCreate +
+			' Mark it `readOnly: true` or `hidden: true` with `field()`, so the forms leave it out.'
+	);
 }
 
 /**
@@ -218,8 +222,8 @@ export function toFormSpec(resource: Resource, mode: FormMode): FormFieldSpec[] 
 		if (role !== 'input') continue;
 		const spec = specFor(field, resource.schema.shape[field.key] as z.ZodType);
 		// `defineResource` has checked every Field has one; a Resource built by hand may not.
-		if (spec === undefined) assertFormInputs(resource.name, [field], resource.schema);
-		else specs.push(spec);
+		if (spec === undefined) throw noInputError(resource.name, field);
+		specs.push(spec);
 	}
 	return specs;
 }

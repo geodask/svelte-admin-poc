@@ -2,8 +2,8 @@
 	The form of a create or edit View: one labelled input per Field the form maps, in schema
 	order, and Save and Cancel. On edit it also carries the record's id as a hidden input, and
 	shows the Fields the backend owns as text, in their place among the inputs, as the detail
-	View shows them; they are never submitted. It is
-	driven by the core's headless `createFormView`, so the create and edit Views share it.
+	View shows them; they are never submitted. It is driven by the core's headless
+	`createFormView`, so the create and edit Views share it.
 
 	It works without JavaScript: the form posts to the page, and the server renders it again with
 	the issues and what was typed, or redirects to the record's detail View. With JavaScript the

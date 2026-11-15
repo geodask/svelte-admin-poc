@@ -1,8 +1,8 @@
 // Read-only and hidden Fields in the forms: recipes' review count and source id (owned by the
 // backend), their internal notes (hidden), and users' email (set once on create). Also the
 // placeholder and the help text an input shows. These tests write to the demo backend, so they
-// run one at a time, after the read-only tests (see playwright.config.ts), and with JavaScript
-// on and off.
+// run one at a time, after the tests that only read (see playwright.config.ts), and with
+// JavaScript on and off.
 import type { APIRequestContext, Page } from '@playwright/test';
 import { BACKEND_URL } from '../../backend/config.ts';
 import { expect, hydrated, test } from '../fixtures.ts';

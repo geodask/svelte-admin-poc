@@ -41,11 +41,11 @@ export {
 	type Field,
 	type FieldInputChoice,
 	type FieldMeta,
+	type FieldReadOnly,
 	type KindName
 } from './fields.ts';
 export {
 	formSchema,
-	isInputSpec,
 	rowCount,
 	toFormSpec,
 	toFormValues,

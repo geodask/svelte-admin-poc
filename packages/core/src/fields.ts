@@ -21,7 +21,7 @@ export type FieldMeta = {
 	 * treated as `true` on edit (for example an email or a slug). Only a top-level Field's
 	 * setting counts.
 	 */
-	readOnly?: true | 'afterCreate';
+	readOnly?: FieldReadOnly;
 	/** An example value, shown in the Field's input while it is empty. */
 	placeholder?: string;
 	/**
@@ -31,6 +31,9 @@ export type FieldMeta = {
 	 */
 	input?: FieldInputChoice;
 };
+
+/** Who may set a Field the backend owns: never (`true`), or only on create. See `FieldMeta.readOnly`. */
+export type FieldReadOnly = true | 'afterCreate';
 
 /** The choices of input a Field's metadata can make. See `FieldMeta.input`. */
 export type FieldInputChoice = 'textarea' | 'rows' | 'lines';
@@ -145,7 +148,7 @@ export type Field = DetectedKind & {
 	/** The input its metadata chose for the forms, if any. */
 	input?: FieldInputChoice;
 	/** Whether the backend owns it: see `FieldMeta.readOnly`. Absent when the forms may set it. */
-	readOnly?: true | 'afterCreate';
+	readOnly?: FieldReadOnly;
 	/** The example value its input shows while empty, if any. */
 	placeholder?: string;
 	/**
