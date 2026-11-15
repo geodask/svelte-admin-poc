@@ -2,15 +2,25 @@
 	The pager under a list View: page-size choices, the rows shown, and links to other pages.
 	With a total it shows the page count and first, previous, next and last links; when the
 	backend can't count (`hasNextPage`), only previous and next. Every control is a plain link,
-	so it works without JavaScript. A Theme part, driven by the core's `createListView`, so a
-	replaced list View can render it too once the Theme exports it (M1.10).
+	so it works without JavaScript. A Theme part, exported for a replaced list View: give it the
+	core's `createListView` helper and the page it awaited from `view.query`.
 -->
-<script lang="ts">
+<script module lang="ts">
 	import type { ListResult } from '@svelte-admin/core';
 	import type { ListViewState } from '@svelte-admin/core/views';
+
+	export type PagerProps = {
+		/** The list View helper from the core's `createListView`. */
+		view: ListViewState;
+		/** The current page of records: what `view.query` resolved to. */
+		result: ListResult<unknown>;
+	};
+</script>
+
+<script lang="ts">
 	import { formatNumber } from './format.ts';
 
-	let { view, result }: { view: ListViewState; result: ListResult<unknown> } = $props();
+	let { view, result }: PagerProps = $props();
 
 	const page = $derived(view.params.page);
 	const perPage = $derived(view.params.perPage);

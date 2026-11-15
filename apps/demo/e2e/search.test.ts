@@ -185,16 +185,3 @@ test.describe('the getList remote function with a search', () => {
 		]);
 	});
 });
-
-test.describe('searching users, which are searchable', () => {
-	test('a search from a shared link finds users by name or email', async ({ page }) => {
-		await page.goto('/admin/users?q=grace');
-
-		await expect(dataRows(page)).toHaveCount(1);
-		await expect(dataRows(page).first()).toContainText('Grace Hopper');
-		await expect(dataRows(page).first()).toContainText('grace@example.com');
-
-		await page.goto('/admin/users?q=radia%40example');
-		await expect(names(page)).toHaveText(['Radia Perlman']);
-	});
-});

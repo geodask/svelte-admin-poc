@@ -205,8 +205,12 @@ function createSelection<Id extends string | number>() {
 		toggle(id: Id, selected = !ids.has(id)) {
 			setAll([id], selected);
 		},
+		// Each of these is a method, not a function-valued property, so TypeScript lets a list View
+		// for one Resource stand in for any Resource's, as the Theme's parts take it.
 		/** Select every row on the page, or clear every one of them. Other pages keep theirs. */
-		setAll,
+		setAll(pageIds: readonly Id[], selected: boolean) {
+			setAll(pageIds, selected);
+		},
 		/** Whether the page has rows and every one of them is selected. */
 		allSelected(pageIds: readonly Id[]): boolean {
 			return pageIds.length > 0 && pageIds.every((id) => ids.has(id));

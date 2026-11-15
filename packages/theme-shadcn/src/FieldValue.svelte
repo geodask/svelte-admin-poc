@@ -1,16 +1,26 @@
 <!--
 	A Field's value on the detail View, shown by the Field's Kind. Scalars look as they do in a
 	list View cell, but a list shows every item, an object shows as nested label-value pairs (one
-	group per object for an array of objects), and an empty value shows as a dash. It is a Theme
-	part: a replaced detail View will render it to match the rest of the admin (exported in M1.10).
+	group per object for an array of objects), and an empty value shows as a dash. A Theme part,
+	exported so a replaced detail View shows values as the stock one does.
 -->
-<script lang="ts">
+<script module lang="ts">
 	import type { Field } from '@svelte-admin/core';
+
+	export type FieldValueProps = {
+		/** The Field, e.g. one of `view.fields` from the core's `createDetailView`. */
+		field: Field;
+		/** The record's value for the Field. */
+		value: unknown;
+	};
+</script>
+
+<script lang="ts">
 	import FieldValue from './FieldValue.svelte';
 	import ScalarValue from './ScalarValue.svelte';
 	import { formatScalar } from './format.ts';
 
-	let { field, value }: { field: Field; value: unknown } = $props();
+	let { field, value }: FieldValueProps = $props();
 
 	const nested = $derived(field.fields?.filter((f) => f.detail));
 	const isObject = (v: unknown): v is Record<string, unknown> =>
