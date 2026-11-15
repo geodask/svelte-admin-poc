@@ -4,7 +4,7 @@ import type { Component } from 'svelte';
 import { z } from 'zod';
 import { defineAdmin, defineResource, type Provider } from '@svelte-admin/core';
 import { serveResource } from '@svelte-admin/core/server';
-import type { ShellAdmin } from '@svelte-admin/core/views';
+import type { ListSelection, ListViewState, ShellAdmin } from '@svelte-admin/core/views';
 
 const recipes = defineResource({
 	name: 'recipes',
@@ -118,3 +118,30 @@ if (here?.name === 'recipes') {
 // The admin `defineAdmin` returns is what the shell takes.
 const shellAdmin: ShellAdmin = admin;
 void shellAdmin;
+
+// A list View's selection keeps the Resource's canonical id type: recipe ids stay numbers.
+declare const recipeList: ListViewState<typeof recipes>;
+const selected: number[] = recipeList.selection.ids;
+recipeList.selection.toggle(1);
+recipeList.selection.setAll([1, 2], true);
+// @ts-expect-error a recipe id is a number, so '1' can't be selected
+recipeList.selection.toggle('1');
+// @ts-expect-error nor can a page of string ids
+recipeList.selection.setAll(['1', '2'], true);
+// @ts-expect-error the selected ids are numbers, not strings
+const selectedText: string[] = recipeList.selection.ids;
+void selected;
+void selectedText;
+
+// A Resource with string ids gets a selection of strings.
+const slugged = defineResource({
+	name: 'pages',
+	label: 'Pages',
+	schema: z.object({ id: z.string() })
+});
+declare const pageList: ListViewState<typeof slugged>;
+const pageSelection: ListSelection<string> = pageList.selection;
+// @ts-expect-error a page id is a string
+pageList.selection.has(1);
+void pageSelection;
+void slugged;

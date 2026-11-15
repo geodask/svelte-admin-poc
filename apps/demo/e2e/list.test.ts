@@ -27,7 +27,9 @@ test.describe('the recipes list View', () => {
 	}) => {
 		await page.goto('/admin/recipes');
 
+		// The first header cell names the selection checkboxes below it.
 		await expect(page.getByRole('columnheader')).toHaveText([
+			'Select',
 			'ID',
 			'Name',
 			'Cuisine',
@@ -55,6 +57,8 @@ test.describe('the recipes list View', () => {
 
 		const rows = page.getByRole('table').getByRole('row');
 		await expect(rows.nth(1).getByRole('cell')).toHaveText([
+			// The selection checkbox.
+			'',
 			'1',
 			'Classic Margherita Pizza',
 			'Italian',
@@ -70,10 +74,10 @@ test.describe('the recipes list View', () => {
 			'dj-1'
 		]);
 		// A long list is cut to three items and "+N".
-		await expect(rows.nth(2).getByRole('cell').nth(8)).toHaveText('Vegetarian, Quick, Vegan +2');
+		await expect(rows.nth(2).getByRole('cell').nth(9)).toHaveText('Vegetarian, Quick, Vegan +2');
 		// No and an empty optional Field.
-		await expect(rows.nth(3).getByRole('cell').nth(7)).toHaveText('No');
-		await expect(rows.nth(3).getByRole('cell').nth(6)).toHaveText('');
+		await expect(rows.nth(3).getByRole('cell').nth(8)).toHaveText('No');
+		await expect(rows.nth(3).getByRole('cell').nth(7)).toHaveText('');
 	});
 
 	test.describe('in a browser far from UTC, with another language', () => {

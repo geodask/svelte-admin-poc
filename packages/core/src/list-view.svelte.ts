@@ -1,6 +1,7 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { untrack } from 'svelte';
+import { SvelteSet } from 'svelte/reactivity';
 import { hasPathSegment, idPathSegment } from './ids.ts';
 import type { ListParams } from './provider.ts';
 import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
@@ -23,10 +24,16 @@ const SEARCH_DEBOUNCE_MS = 300;
  * The URL holds the list params. A bad value or an unknown param in it is dropped, and with
  * JavaScript the URL is rewritten in place (`replace`, so no history entry is added). On a
  * searchable Resource, typing a search writes it to the URL after a short pause, also in place,
- * and starts again at page 1. Until then the typed text is the only state outside the URL.
+ * and starts again at page 1. Until then the typed text and the selection are the only state
+ * outside the URL.
+ *
+ * The selection belongs to the Resource the list View was made for: it holds that Resource's
+ * ids, with their canonical type, and a list View for another Resource starts with none. It
+ * lasts while the list View does, across pages and searches, and is never in the URL.
  *
  * Call it during component setup. In a component whose Resource can change, wrap the call in
- * `$derived`, so the list View follows the Resource.
+ * `$derived`, so the list View follows the Resource: each Resource then gets a new list View,
+ * with a selection of its own that starts empty.
  *
  * @example
  * const view = createListView(recipes, remote);
@@ -79,6 +86,8 @@ export function createListView<R extends Resource>(
 	$effect(() => () => clearTimeout(debounce));
 
 	const searchText = () => draft ?? params.search ?? '';
+
+	const selection = createSelection<IdOf<R>>();
 
 	/** Write a search to the URL now, in place, at page 1 of the current page size. */
 	function writeSearch(text: string) {
@@ -154,6 +163,8 @@ export function createListView<R extends Resource>(
 		submitSearch() {
 			writeSearch(searchText());
 		},
+		/** The rows selected in this Resource's list, by id. See `createSelection`. */
+		selection,
 		/**
 		 * The GET form the search box sits in, so search works without JavaScript too: where it
 		 * goes, the name of its search box, and the params it keeps as hidden inputs (a page size
@@ -166,6 +177,60 @@ export function createListView<R extends Resource>(
 		}
 	};
 }
+
+/**
+ * A list View's selection: the ids of the rows a person has checked, for one Resource. Each
+ * list View makes its own for the Resource it was made for, so the ids in it always belong to
+ * that Resource, and they keep its id type (a number id stays a number). "On the page" means
+ * the ids of the records the list View shows now, which the caller passes in, since the page is
+ * loaded by `query`.
+ */
+function createSelection<Id extends string | number>() {
+	const ids = new SvelteSet<Id>();
+
+	/** Select every row given, or clear every one of them. */
+	function setAll(pageIds: readonly Id[], selected: boolean) {
+		for (const id of pageIds) {
+			if (selected) ids.add(id);
+			else ids.delete(id);
+		}
+	}
+
+	return {
+		/** Whether a row is selected. */
+		has(id: Id): boolean {
+			return ids.has(id);
+		},
+		/** Select a row, or clear it: `selected` defaults to the opposite of what it is now. */
+		toggle(id: Id, selected = !ids.has(id)) {
+			setAll([id], selected);
+		},
+		/** Select every row on the page, or clear every one of them. Other pages keep theirs. */
+		setAll,
+		/** Whether the page has rows and every one of them is selected. */
+		allSelected(pageIds: readonly Id[]): boolean {
+			return pageIds.length > 0 && pageIds.every((id) => ids.has(id));
+		},
+		/** Whether some rows on the page are selected, but not all: the select-all mixed state. */
+		someSelected(pageIds: readonly Id[]): boolean {
+			const count = pageIds.filter((id) => ids.has(id)).length;
+			return count > 0 && count < pageIds.length;
+		},
+		/** How many rows are selected, on every page. */
+		get size(): number {
+			return ids.size;
+		},
+		/** The selected ids, in the order they were selected, e.g. for a bulk action. */
+		get ids(): Id[] {
+			return [...ids];
+		}
+	};
+}
+
+/** A list View's selection, for a Resource with ids of type `Id`. */
+export type ListSelection<Id extends string | number = string | number> = ReturnType<
+	typeof createSelection<Id>
+>;
 
 /** What `createListView` returns. */
 export type ListViewState<R extends Resource = Resource> = ReturnType<typeof createListView<R>>;
