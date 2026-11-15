@@ -12,6 +12,20 @@ function asTitle(value: unknown): string | undefined {
 }
 
 /**
+ * The Fields that may name a record, in the order they are tried before the id: the one a
+ * `recordTitle` key names (`defineResource` has checked that it is shown), else the shown ones
+ * of `name` and `title`. A function setting names no Field, so it gets the default ones, which
+ * the list View still links by.
+ */
+export function titleKeys(resource: Resource): readonly string[] {
+	const setting = resource.recordTitle;
+	if (typeof setting === 'string') return [setting];
+	return TITLE_KEYS.filter((key) =>
+		resource.fields.some((field) => field.key === key && field.detail)
+	);
+}
+
+/**
  * The Record title: the text that names one record, e.g. as the detail View's heading. With
  * the Resource's `recordTitle` setting, it is the value of the Field that setting names, or the
  * function's result. Without it, the default rule takes the `name` Field, else the `title`
@@ -22,15 +36,13 @@ function asTitle(value: unknown): string | undefined {
 export function recordTitle<R extends Resource>(resource: R, record: RecordOf<R>): string {
 	const values = record as Record<string, unknown>;
 	const setting = resource.recordTitle;
-	if (typeof setting === 'function') return asTitle(setting(record)) ?? String(values.id);
-	if (setting !== undefined) return asTitle(values[setting]) ?? String(values.id);
-
-	for (const key of TITLE_KEYS) {
-		const shown = resource.fields.some((field) => field.key === key && field.detail);
-		const title = shown ? asTitle(values[key]) : undefined;
-		if (title !== undefined) return title;
-	}
-	return String(values.id);
+	const title =
+		typeof setting === 'function'
+			? asTitle(setting(record))
+			: titleKeys(resource)
+					.map((key) => asTitle(values[key]))
+					.find((text) => text !== undefined);
+	return title ?? String(values.id);
 }
 
 /**

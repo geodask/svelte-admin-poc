@@ -5,7 +5,6 @@ export {
 	defineResource,
 	type IdOf,
 	type RecordOf,
-	type RecordTitleSetting,
 	type Resource,
 	type ResourceIcon,
 	type ResourceSchema

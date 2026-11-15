@@ -5,7 +5,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
 import type { ListParams } from './provider.ts';
 import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
-import { TITLE_KEYS } from './record-title.ts';
+import { titleKeys } from './record-title.ts';
 import type { ResourceRemote } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -49,11 +49,9 @@ export function createListView<R extends Resource>(
 	const url = $derived(new URL(page.url.href));
 	const params = $derived(readListParams(url, resource));
 	const fields = resource.fields.filter((field) => field.list);
-	// The Field a `recordTitle` key names, else the Fields that name a record (as the Record
-	// title's default rule tries them), then the id, whichever the list shows first.
-	const titleKey = typeof resource.recordTitle === 'string' ? [resource.recordTitle] : [];
+	// The Fields that name a record, as the Record title tries them, then the id.
 	const linkField =
-		[...titleKey, ...TITLE_KEYS, 'id']
+		[...titleKeys(resource), 'id']
 			.map((key) => fields.find((field) => field.key === key))
 			.find(Boolean) ?? fields[0];
 
@@ -128,8 +126,8 @@ export function createListView<R extends Resource>(
 		},
 		/**
 		 * The Field whose cell links each row to its record's detail View: the Field the
-		 * Resource's `recordTitle` key names, else `name`, else `title`, else the id, else the
-		 * first Field shown, taking the first of these the list shows.
+		 * Resource's `recordTitle` key names (or, without a key, `name`, else `title`), else the
+		 * id, else the first Field shown, taking the first of these the list shows.
 		 */
 		linkField,
 		/**
