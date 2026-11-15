@@ -10,7 +10,9 @@
 
 	The record loads inside a boundary with a `failed` snippet but no `pending` one, so the server
 	renders the form, or "not found" with a link back to the list for a record that doesn't
-	exist, or Retry for any other failure.
+	exist, or Retry for any other failure. When a save finds the record deleted meanwhile, the
+	form says "This record no longer exists" at its top; without JavaScript the page is rendered
+	again and the record can't load, so the "not found" message says it instead.
 -->
 <script lang="ts">
 	import type { Resource, ResourceRemote } from '@svelte-admin/core';
@@ -42,6 +44,7 @@
 				retry={() => view.refresh().then(reset, reset)}
 				listViewHref={view.listViewHref}
 				target="record"
+				reasons={view.formIssues.map((issue) => issue.message)}
 			/>
 		{/snippet}
 	</svelte:boundary>

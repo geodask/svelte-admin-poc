@@ -12,7 +12,14 @@ export {
 export { idFromParam, idPathSegment, recordPath } from './ids.ts';
 export { recordTitle } from './record-title.ts';
 export type { ListParams, ListResult, Provider, ProviderContext } from './provider.ts';
-export { ConflictError, InvalidInputError, NotFoundError, ProviderError } from './errors.ts';
+export {
+	ConflictError,
+	FieldError,
+	InvalidInputError,
+	NotFoundError,
+	ProviderError,
+	type FieldIssue
+} from './errors.ts';
 export { DEFAULT_PER_PAGE, MAX_PER_PAGE, listParamsSchema } from './list-params.ts';
 export { listHref, listUrlRewrite, readListParams } from './list-url.ts';
 export {

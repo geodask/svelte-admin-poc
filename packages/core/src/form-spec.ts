@@ -65,7 +65,7 @@ export type FormReadOnlySpec = FormFieldBase & { kind: 'readOnly'; field: Field 
 export type FormFieldSpec = FormInputSpec | FormReadOnlySpec;
 
 /** Whether a spec is an input, which the form submits, rather than read-only text. */
-const isInputSpec = (spec: FormFieldSpec): spec is FormInputSpec => spec.kind !== 'readOnly';
+export const isInputSpec = (spec: FormFieldSpec): spec is FormInputSpec => spec.kind !== 'readOnly';
 
 /** The input-specific part of a spec: what `inputFor` adds to the Field's own details. */
 type InputOf = FormInputSpec extends infer S

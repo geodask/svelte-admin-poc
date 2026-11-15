@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
 	ConflictError,
 	defineResource,
+	FieldError,
 	InvalidInputError,
 	NotFoundError,
 	type ProviderContext
@@ -304,6 +305,61 @@ describe('the bundled REST Provider, when the backend answers with an error stat
 
 			expect(failure.message).not.toContain('api.test');
 			expect(failure.message).not.toContain('shard 3');
+		});
+	});
+});
+
+describe('the bundled REST Provider, when the backend answers a write with a 422', () => {
+	const saves = {
+		create: (fetch: typeof globalThis.fetch) =>
+			restProvider('http://api.test').for(recipes).create(context(fetch), { name: 'Pad See Ew' }),
+		update: (fetch: typeof globalThis.fetch) =>
+			restProvider('http://api.test')
+				.for(recipes)
+				.update(context(fetch), { id: 7, data: { name: 'Pad Thai' } })
+	};
+
+	describe.each(Object.entries(saves))('%s', (_name, save) => {
+		it('maps a body with issues to a FieldError carrying their paths and messages', async () => {
+			const issues = [
+				{ path: ['name'], message: 'A recipe with this name already exists' },
+				{ path: ['ingredients', 2, 'name'], message: 'Unknown ingredient' }
+			];
+			const { fetch } = fakeFetch({ issues }, { status: 422 });
+
+			const failure = await save(fetch).catch((error: unknown) => error);
+
+			expect(failure).toBeInstanceOf(FieldError);
+			expect((failure as FieldError).issues).toEqual(issues);
+			expect((failure as FieldError).status).toBe(422);
+		});
+
+		it.each([
+			['no issues', { message: 'Unprocessable' }],
+			['an empty list of issues', { issues: [] }],
+			['issues without a path', { issues: [{ message: 'Nope' }] }],
+			['issues without a message', { issues: [{ path: ['name'] }] }],
+			['a path that is not keys', { issues: [{ path: [{ key: 'name' }], message: 'Nope' }] }],
+			['a body that is only text', 'Unprocessable Entity']
+		])('maps a body with %s to InvalidInputError', async (_case, body) => {
+			const { fetch } = fakeFetch(body, { status: 422 });
+
+			const failure = await save(fetch).catch((error: unknown) => error);
+
+			expect(failure).toBeInstanceOf(InvalidInputError);
+			expect(failure).not.toBeInstanceOf(FieldError);
+		});
+
+		it('keeps a 400 with issues an InvalidInputError', async () => {
+			const { fetch } = fakeFetch(
+				{ issues: [{ path: ['name'], message: 'Taken' }] },
+				{ status: 400 }
+			);
+
+			const failure = await save(fetch).catch((error: unknown) => error);
+
+			expect(failure).toBeInstanceOf(InvalidInputError);
+			expect(failure).not.toBeInstanceOf(FieldError);
 		});
 	});
 });

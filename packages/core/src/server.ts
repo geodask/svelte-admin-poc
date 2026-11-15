@@ -1,10 +1,17 @@
 // The core's server-only entry point. It imports `$app/server`, so only `.remote.ts` files and
 // server-only modules may import it. The shared entry (`@svelte-admin/core`) never re-exports it.
 import { form, getRequestEvent, query, requested } from '$app/server';
-import { error, redirect } from '@sveltejs/kit';
+import { error, invalid, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
-import { ProviderError } from './errors.ts';
-import { formSchema, type CreateData, type EditData } from './form-spec.ts';
+import { FieldError, NotFoundError, ProviderError } from './errors.ts';
+import {
+	formSchema,
+	isInputSpec,
+	toFormSpec,
+	type CreateData,
+	type EditData,
+	type FormMode
+} from './form-spec.ts';
 import {
 	decodeSegment,
 	detailPathOfEditView,
@@ -30,10 +37,14 @@ const MAX_REFRESHED_LISTS = 25;
  *   refreshes the list queries the client asks for and redirects with a 303 to the new record's
  *   detail View.
  *
- * A Provider error becomes an HTTP error with its message: `NotFoundError` a 404,
- * `InvalidInputError` a 400 and `ConflictError` a 409. Anything else it throws is an unexpected
- * error, which Kit masks as a 500 (and the core's `handleError` logs). So is a record the
- * Provider returns that doesn't match the schema.
+ * From a read, a Provider error becomes an HTTP error with its message: `NotFoundError` a 404,
+ * `InvalidInputError` a 400 and `ConflictError` a 409. From a save, it keeps the user on the
+ * form with what they typed, as a schema issue would: each issue of a `FieldError` shows under
+ * the input its path names (or at the top of the form when it names none), and any other
+ * Provider error shows its message at the top of the form. On edit, a `NotFoundError` reads
+ * "This record no longer exists". Anything else a Provider throws is an unexpected error, which
+ * Kit masks as a 500 (and the core's `handleError` logs). So is a record the Provider returns
+ * that doesn't match the schema.
  *
  * **Where a save redirects to.** Inside a remote form, Kit's `getRequestEvent().url` is the URL
  * of the page the form was submitted from, with JavaScript (Kit sends the page's path with the
@@ -53,6 +64,10 @@ export function serveResource<R extends Resource>(
 	provider: Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>>
 ) {
 	const records = z.array(resource.schema);
+	const save = {
+		create: formSaver(resource, 'create'),
+		edit: formSaver(resource, 'edit', { notFound: NO_LONGER_EXISTS })
+	};
 
 	const getList = query(
 		listParamsSchema(resource),
@@ -86,7 +101,7 @@ export function serveResource<R extends Resource>(
 		if (listPath === undefined) {
 			throw new Error(`A create form was submitted from ${pathname}, which is no create View`);
 		}
-		const saved = await served(() => provider.create(providerContext(), data));
+		const saved = await save.create(() => provider.create(providerContext(), data));
 		// Like a read, a record that doesn't match the schema is an unexpected error.
 		const record = resource.schema.parse(saved) as RecordOf<R>;
 		const id = (record as { id: IdOf<R> }).id;
@@ -108,7 +123,7 @@ export function serveResource<R extends Resource>(
 				`An edit form for the id ${String(id)} was submitted from ${pathname}, not its edit View`
 			);
 		}
-		const saved = await served(() =>
+		const saved = await save.edit(() =>
 			provider.update(providerContext(), { id, data: data as EditData<R> })
 		);
 		// Like a read, a record that doesn't match the schema, or another record than the one
@@ -134,6 +149,41 @@ async function served<T>(call: () => Promise<T>): Promise<T> {
 		if (failure instanceof ProviderError) error(failure.status, failure.message);
 		throw failure;
 	}
+}
+
+/** What the edit form says when the record was deleted while it was being edited. */
+const NO_LONGER_EXISTS = 'This record no longer exists';
+
+/**
+ * The runner of a save in `mode`: it runs a Provider call, turning a Provider error into form
+ * issues, so the user stays on the form with what they typed. A `FieldError`'s issues go under
+ * the inputs their paths name; one whose first key names no input the form shows goes to the
+ * top of the form, so it is never lost. Any other Provider error is one issue at the top of the form, with its message, or
+ * `notFound` for a `NotFoundError` when given.
+ */
+function formSaver(resource: Resource, mode: FormMode, { notFound }: { notFound?: string } = {}) {
+	const inputs = new Set(
+		toFormSpec(resource, mode)
+			.filter(isInputSpec)
+			.map((spec) => spec.key)
+	);
+	return async <T>(call: () => Promise<T>): Promise<T> => {
+		try {
+			return await call();
+		} catch (failure) {
+			if (failure instanceof FieldError) {
+				invalid(
+					...failure.issues.map(({ path, message }) => ({
+						message,
+						path: typeof path[0] === 'string' && inputs.has(path[0]) ? path : []
+					}))
+				);
+			}
+			if (failure instanceof NotFoundError && notFound !== undefined) invalid(notFound);
+			if (failure instanceof ProviderError) invalid(failure.message);
+			throw failure;
+		}
+	};
 }
 
 function providerContext(): ProviderContext {

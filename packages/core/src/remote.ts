@@ -46,6 +46,11 @@ export type RemoteFormLike = {
 	/** Whether the form has been submitted at least once. */
 	readonly submitted: boolean;
 	readonly fields: { readonly [key: string]: RemoteFormField } & {
+		/**
+		 * The issues of the form as a whole, which belong to no input: e.g. a conflict the
+		 * backend reported for a save.
+		 */
+		issues(): RemoteFormIssue[] | undefined;
 		allIssues(): RemoteFormIssue[] | undefined;
 		/**
 		 * Set every input's value, e.g. the edit form's prefill. Kit leaves a submitted form's
