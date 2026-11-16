@@ -2,6 +2,7 @@ import type { Component } from 'svelte';
 import type { z } from 'zod';
 import { describeFields, type Field } from './fields.ts';
 import { assertFormInputs } from './form-spec.ts';
+import { assertRecordTitle } from './record-title.ts';
 
 /** Any Zod object schema. `defineResource` checks that it has a usable `id` Field. */
 export type ResourceSchema = z.ZodObject;
@@ -13,6 +14,21 @@ export type ResourceSchema = z.ZodObject;
  * time, where a `.svelte` file can't load. The Theme renders it with a `class`.
  */
 export type ResourceIcon = () => Promise<{ default: Component<{ class?: string }> }>;
+
+/**
+ * The function form of the `recordTitle` setting. Declared as a method, whose parameter is
+ * checked bivariantly, so a Resource with a narrower record type still counts as a `Resource`.
+ */
+type RecordTitleFunction<S extends ResourceSchema> = {
+	bivariant(record: z.output<S>): string;
+}['bivariant'];
+
+/**
+ * Which text names a record of a Resource, its Record title: the key of one of its Fields, or a
+ * function of the record.
+ */
+export type RecordTitleSetting<S extends ResourceSchema = ResourceSchema> =
+	(keyof S['shape'] & string) | RecordTitleFunction<S>;
 
 /**
  * A Resource: a named kind of record the admin manages. It holds metadata only, so the
@@ -31,6 +47,10 @@ export type Resource<N extends string = string, S extends ResourceSchema = Resou
 	readonly searchable: boolean;
 	/** Its Fields in schema key order, with labels, Kinds and where each one shows. */
 	readonly fields: readonly Field[];
+	/** Which text names a record, if the default rule isn't wanted: see `recordTitle()`. */
+	// The key is kept as a plain string here: `keyof` the schema's shape would make `Resource`
+	// invariant in its schema, so no Resource would count as a `Resource` any more.
+	readonly recordTitle?: string | RecordTitleFunction<S>;
 };
 
 /** The type of one record of a Resource. */
@@ -82,10 +102,20 @@ export function defineResource<const N extends string, S extends ResourceSchema>
 	 * box, and only then does `getList` accept a search: for any other Resource it is rejected.
 	 */
 	searchable?: boolean;
+	/**
+	 * Which text names a record wherever the admin shows one (the detail View's heading, the
+	 * breadcrumb, the row checkbox labels): the key of a Field, such as `'sku'`, or a function
+	 * of the record, such as `(order) => \`Order #${order.number}\``. When it is a key, the list
+	 * View links that Field's cell to the detail View. Without it, a record is named by its
+	 * `name` Field, else its `title` Field, else its id. A key must name a Field that isn't
+	 * hidden, or `defineResource` throws.
+	 */
+	recordTitle?: NoInfer<RecordTitleSetting<S>>;
 }): Resource<N, S> {
-	const { name, label, icon, group, schema, searchable = false } = definition;
+	const { name, label, icon, group, schema, searchable = false, recordTitle } = definition;
 	const fields = describeFields(schema);
 	// Fail at startup, not on a form that could never be saved.
 	assertFormInputs(name, fields, schema);
-	return { name, label, icon, group, schema, searchable, fields };
+	assertRecordTitle(name, fields, recordTitle);
+	return { name, label, icon, group, schema, searchable, fields, recordTitle };
 }

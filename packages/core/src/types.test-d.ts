@@ -2,7 +2,15 @@
 // fails the check if the line below it stops being a type error.
 import type { Component } from 'svelte';
 import { z } from 'zod';
-import { defineAdmin, defineResource, type Provider } from '@svelte-admin/core';
+import {
+	defineAdmin,
+	defineResource,
+	type IdOf,
+	type Provider,
+	type RecordOf,
+	type Resource,
+	type ResourceRemote
+} from '@svelte-admin/core';
 import { serveResource } from '@svelte-admin/core/server';
 import {
 	createListView,
@@ -206,3 +214,49 @@ void slugged;
 const replacedView = createListView(recipes, recipesRemote);
 const anyList: ListViewState = replacedView;
 void anyList;
+
+// `recordTitle` as a key must name one of the schema's Fields.
+const products = defineResource({
+	name: 'products',
+	label: 'Products',
+	schema: z.object({ id: z.number(), sku: z.string(), price: z.number().optional() }),
+	recordTitle: 'sku'
+});
+defineResource({
+	name: 'products',
+	label: 'Products',
+	schema: z.object({ id: z.number(), sku: z.string() }),
+	// @ts-expect-error products have no `name` Field
+	recordTitle: 'name'
+});
+
+// As a function, it gets the record's own type and must return text.
+defineResource({
+	name: 'products',
+	label: 'Products',
+	schema: z.object({ id: z.number(), sku: z.string(), price: z.number().optional() }),
+	recordTitle: (product) => {
+		const sku: string = product.sku;
+		const price: number | undefined = product.price;
+		// @ts-expect-error a product has no `name`
+		void product.name;
+		void price;
+		return sku;
+	}
+});
+defineResource({
+	name: 'products',
+	label: 'Products',
+	schema: z.object({ id: z.number(), sku: z.string() }),
+	// @ts-expect-error a Record title is text, not a number
+	recordTitle: (product) => product.id
+});
+
+// A Resource with a `recordTitle` still counts as a Resource, so the admin and the helpers take it.
+const anyResource: Resource = products;
+const productList: ListViewState = createListView(
+	products,
+	{} as ResourceRemote<RecordOf<typeof products>, IdOf<typeof products>>
+);
+void anyResource;
+void productList;
