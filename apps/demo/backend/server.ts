@@ -11,8 +11,8 @@
 //   POST /{resource}                  create a record from the JSON body, with the next id (the
 //                                     highest plus one) and the Fields only the backend sets
 //                                     (recipes' sourceId, reviewCount and internalNotes, posts'
-//                                     viewCount), whatever
-//                                     the body says; answers 201 with the created record. A user
+//                                     viewCount), whatever the body says; answers 201 with the
+//                                     created record. A user
 //                                     whose email is already taken is a 422 with an issue on email
 //   PUT  /{resource}/{id}             replace a record's editable Fields with the JSON body, keeping
 //                                     its id and the Fields no edit can set (the backend's own, and

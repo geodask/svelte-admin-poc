@@ -69,10 +69,10 @@ export {
 	type EditData,
 	type FormFieldSpec,
 	type FormInput,
-	type FormValues,
 	type FormInputSpec,
 	type FormMode,
 	type FormOutput,
-	type FormReadOnlySpec
+	type FormReadOnlySpec,
+	type FormValues
 } from './form-spec.ts';
 export type { StandardSchemaV1 } from './standard-schema.ts';

@@ -10,7 +10,7 @@
 	renders itself, such as the title, and has none for a Field no form sets.
 -->
 <script lang="ts">
-	import { isInputSpec, type FormInputSpec } from '@svelte-admin/core';
+	import { isInputSpec, type FormInput, type FormInputSpec } from '@svelte-admin/core';
 	import { createFormView } from '@svelte-admin/core/views';
 	import { FieldInput, FieldIssues, FormActions } from '@svelte-admin/theme-shadcn';
 	import { posts } from '#lib/resources/posts.ts';
@@ -24,7 +24,7 @@
 
 	const specs = view.spec.filter(isInputSpec);
 	/** The input spec of one of the Fields this View lays out through the Theme's `FieldInput`. */
-	const specOf = (key: string): FormInputSpec => {
+	const specOf = (key: keyof FormInput<typeof posts, 'create'>): FormInputSpec => {
 		const spec = specs.find((candidate) => candidate.key === key);
 		if (spec === undefined) throw new Error(`The posts create form has no input for ${key}`);
 		return spec;

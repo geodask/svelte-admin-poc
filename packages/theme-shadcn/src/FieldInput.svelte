@@ -42,11 +42,11 @@
 	import FieldInput from './FieldInput.svelte';
 	import FieldIssues from './FieldIssues.svelte';
 
-	let { spec, field: input, labelHidden = false }: FieldInputProps = $props();
+	let { spec, field: given, labelHidden = false }: FieldInputProps = $props();
 
 	// Every input of a remote form is one at runtime, typed or not: read its items, its Fields
 	// and its attributes untyped, as for any Field.
-	const field = $derived(input as RemoteFormField);
+	const field = $derived(given as RemoteFormField);
 
 	type ListSpec = Extract<FormInputSpec, { kind: 'list' }>;
 	type RowsSpec = Extract<FormInputSpec, { kind: 'rows' }>;

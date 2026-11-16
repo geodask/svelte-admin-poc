@@ -41,7 +41,7 @@ export type Provider<T, Id = IdOfRecord<T>, Create = Omit<T, 'id'>, Edit = Creat
 	 * to the backend and fills in what the backend owns. Return the record the backend saved, with
 	 * the id it assigned.
 	 */
-	// A property, not a method, so its parameter is checked strictly: a `create` that expects
+	// A function-typed member, not a method, so its parameter is checked strictly: a `create` that expects
 	// more than the form gives (a read-only Field, say) is rejected.
 	create: (ctx: ProviderContext, data: Create) => Promise<T>;
 	/**
@@ -51,7 +51,7 @@ export type Provider<T, Id = IdOfRecord<T>, Create = Omit<T, 'id'>, Edit = Creat
 	 * Keep the Fields `data` leaves out as they are. There are no partial patches. Return the
 	 * record the backend saved, with the same id.
 	 */
-	// A property, for the same strict check as `create`.
+	// Function-typed, for the same strict check as `create`.
 	update: (ctx: ProviderContext, input: { id: Id; data: Edit }) => Promise<T>;
 	/**
 	 * Delete one record by its id, which arrives with the schema's id type. Throw

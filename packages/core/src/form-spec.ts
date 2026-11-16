@@ -313,13 +313,7 @@ type FieldInputOf<S> = InputOfType<UnwrappedSchema<S>, FieldBrandOf<S, 'input'>>
 type InputOfType<T, Choice> = T extends z.ZodEnum
 	? string
 	: T extends z.ZodArray<infer E>
-		? UnwrappedSchema<E> extends z.ZodObject<infer Shape>
-			? ObjectInput<Shape>[]
-			: Choice extends 'lines'
-				? InputOfType<UnwrappedSchema<E>, undefined> extends string
-					? string
-					: InputOfType<UnwrappedSchema<E>, undefined>[]
-				: InputOfType<UnwrappedSchema<E>, undefined>[]
+		? ListInput<UnwrappedSchema<E>, Choice>
 		: T extends z.ZodObject<infer Shape>
 			? ObjectInput<Shape>
 			: z.output<T> extends boolean
@@ -327,6 +321,19 @@ type InputOfType<T, Choice> = T extends z.ZodEnum
 				: z.output<T> extends number
 					? number
 					: string;
+
+/**
+ * What an array sends, by its unwrapped element type: rows of objects for objects; for scalars
+ * one value per item, or one text for a list of text in lines.
+ */
+type ListInput<E, Choice> =
+	E extends z.ZodObject<infer Shape>
+		? ObjectInput<Shape>[]
+		: InputOfType<E, undefined> extends infer Item
+			? [Choice, Item] extends ['lines', string]
+				? string
+				: Item[]
+			: never;
 
 /**
  * What a Resource's create or edit form sends from the browser, typed from its schema: the
