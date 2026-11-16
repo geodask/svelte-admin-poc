@@ -7,6 +7,9 @@ export { createFormView, type FormView, type FormViewState } from './form-view.s
 export {
 	createListView,
 	type BulkDeleteResult,
+	type FilterControl,
+	type FilterOption,
+	type KeptForm,
 	type ListSelection,
 	type ListViewState
 } from './list-view.svelte.ts';

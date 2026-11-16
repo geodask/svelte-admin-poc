@@ -13,7 +13,7 @@ export const posts = defineResource({
 		title: field(z.string(), { sortable: true }),
 		// A plain number for now; it becomes a Reference to users in M4.
 		userId: field(z.number(), { label: 'Author ID' }),
-		status: z.enum(['draft', 'published']),
+		status: field(z.enum(['draft', 'published']), { filterable: true }),
 		tags: z.array(z.string()),
 		body: field(z.string(), { list: false }),
 		// Counted by the backend: it starts at 0, and no form can set it. Sortable, though the list

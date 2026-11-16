@@ -15,8 +15,8 @@ export const users = defineResource({
 		email: field(z.email(), { readOnly: 'afterCreate', placeholder: 'name@example.com' }),
 		// Optional, so clearing it on the edit View removes it.
 		phone: z.string().optional(),
-		role: z.enum(['admin', 'editor', 'viewer']),
-		active: z.boolean(),
+		role: field(z.enum(['admin', 'editor', 'viewer']), { filterable: true }),
+		active: field(z.boolean(), { filterable: true }),
 		joinedAt: field(z.iso.datetime(), { sortable: true })
 	}),
 	// The list opens in name order, with nothing in the URL.

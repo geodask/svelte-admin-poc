@@ -1,6 +1,15 @@
 import { z } from 'zod';
-import { pageParamSchemas, sortableKeys, type ListSchemaResource } from './list-params.ts';
-import type { ListParams, ListSort, SortOrder } from './provider.ts';
+import type { Field } from './fields.ts';
+import {
+	canonicalValues,
+	filterableFields,
+	filterValueKey,
+	MAX_IN_VALUES,
+	pageParamSchemas,
+	sortableKeys,
+	type ListSchemaResource
+} from './list-params.ts';
+import type { FilterValue, ListFilter, ListParams, ListSort, SortOrder } from './provider.ts';
 import type { Resource } from './resource.ts';
 
 /**
@@ -65,10 +74,68 @@ function readSort(
 }
 
 /**
+ * One filter value as the list URL writes it, read into the Field's type, or `undefined` when it
+ * is empty or malformed: an enum member as written (any other text is no member), and a boolean
+ * as `true` or `false`. Values of the other Kinds can't be read from the URL yet.
+ */
+function readFilterValue(field: Field, text: string): FilterValue | undefined {
+	if (field.kind === 'enum') return field.options.find((option) => String(option) === text);
+	if (field.kind === 'boolean')
+		return text === 'true' ? true : text === 'false' ? false : undefined;
+	return undefined;
+}
+
+/** A filter value as the list URL writes it: a date as an ISO string, anything else as text. */
+function writeFilterValue(value: FilterValue): string {
+	return value instanceof Date ? value.toISOString() : String(value);
+}
+
+/**
+ * The filters a list View's URL names, in their canonical form, or `undefined` for none. A bare
+ * param is `eq`, and a repeated one `in` (with one distinct value, `eq`); any other operator is a
+ * suffix, as in `name.contains`. Only a filterable Field's params are read, with the operators it
+ * allows, and empty or malformed values are dropped. A repeated param on a Field without `in`
+ * keeps its first good value, and an `in` its first 100.
+ */
+function readFilters(
+	searchParams: URLSearchParams,
+	resource: Pick<ListSchemaResource, 'fields'>
+): ListFilter[] | undefined {
+	const filters: ListFilter[] = [];
+	for (const field of filterableFields(resource)) {
+		const { key, filterOperators: operators } = field;
+		const read = (text: string) => readFilterValue(field, text);
+		const values = [
+			...new Map(
+				searchParams
+					.getAll(key)
+					.map(read)
+					.filter((value) => value !== undefined)
+					.map((value) => [filterValueKey(value), value])
+			).values()
+		];
+		const [first] = values;
+		if (values.length > 1 && operators.includes('in')) {
+			const value = canonicalValues(field, values.slice(0, MAX_IN_VALUES));
+			filters.push({ field: key, operator: 'in', value });
+		} else if (first !== undefined && operators.includes('eq')) {
+			filters.push({ field: key, operator: 'eq', value: first });
+		}
+		for (const operator of operators) {
+			if (operator === 'eq' || operator === 'in') continue;
+			const value = read(searchParams.get(`${key}.${operator}`) ?? '');
+			if (value !== undefined) filters.push({ field: key, operator, value });
+		}
+	}
+	return filters.length > 0 ? filters : undefined;
+}
+
+/**
  * The list params a list View's URL names, with defaults for what it leaves out: page 1, the
  * Resource's page size, and its default sort if it has one. The search is read from `q`, and
  * only for a searchable Resource. The sort is read from `sort` and `order`, and only on a
- * sortable Field.
+ * sortable Field. The filters are read from their Fields' own params, and only on filterable
+ * Fields (see `readFilters`).
  */
 export function readListParams<R extends ListUrlResource>(url: URL, resource: R): ListParams<R> {
 	const { searchParams } = url;
@@ -86,14 +153,20 @@ export function readListParams<R extends ListUrlResource>(url: URL, resource: R)
 	if (search !== undefined) params.search = search;
 	const sort = readSort(searchParams, resource) ?? defaults.sort;
 	if (sort !== undefined) params.sort = { ...sort };
-	// A search only for a searchable Resource, and a sort only on a sortable Field, as its type says.
+	const filters = readFilters(searchParams, resource);
+	if (filters !== undefined) params.filters = filters;
+	// A search only for a searchable Resource, a sort only on a sortable Field, and filters only on
+	// filterable ones, as its type says.
 	return params as ListParams<R>;
 }
 
 /**
  * The one encoding of list params as search params, shared by the list URL and the bundled REST
- * Provider so the two can't drift: `page`, `perPage`, the sort as `sort` and `order`, then the
- * search as `q`. A blank search is never written, nor an `order` without a sort. Given
+ * Provider so the two can't drift: `page`, `perPage`, the sort as `sort` and `order`, the search
+ * as `q`, then each filter in the order given: `eq` as a bare param (`difficulty=Easy`), `in` as
+ * a repeated one (`difficulty=Easy&difficulty=Hard`), and any other operator as a suffix
+ * (`name.contains=piz`). Booleans are `true` and `false`, and a `Date` an ISO string. A blank
+ * search is never written, nor an `order` without a sort, nor an empty list of filters. Given
  * `defaults`, a param at its default is left out too, as the list URL does (so `order=asc` is
  * never in it, nor the default sort); without them every other param is written, as the REST
  * Provider does, so a backend never has to know the defaults. `readListParams` reads it back.
@@ -111,6 +184,13 @@ export function encodeListParams(
 	}
 	const q = nonBlank(params.search);
 	if (q !== undefined) encoded.set('q', q);
+	for (const { field, operator, value } of params.filters ?? []) {
+		if (operator === 'in') {
+			for (const item of value) encoded.append(field, writeFilterValue(item));
+		} else {
+			encoded.append(operator === 'eq' ? field : `${field}.${operator}`, writeFilterValue(value));
+		}
+	}
 	return encoded;
 }
 
@@ -129,9 +209,10 @@ export function listHref(url: URL, params: ListParams, resource: ListSettings): 
 /**
  * Where a list URL should be rewritten to, or `undefined` when it is already clean. A URL is
  * clean when it names only known params with good values that differ from their defaults (the
- * Resource's page size and default sort included); the order they are written in doesn't
- * matter. `q` is known only for a searchable Resource, and `sort` only on a sortable Field, with
- * `order` only beside it and only as `desc`. The rewrite keeps the path and the hash.
+ * Resource's page size and default sort included), each filter in its canonical form; the order
+ * the params are written in doesn't matter. `q` is known only for a searchable Resource, `sort`
+ * only on a sortable Field, with `order` only beside it and only as `desc`, and a filter only on
+ * a filterable Field, with an operator it allows. The rewrite keeps the path and the hash.
  */
 export function listUrlRewrite(url: URL, resource: ListUrlResource): string | undefined {
 	const clean = listHref(url, readListParams(url, resource), resource);

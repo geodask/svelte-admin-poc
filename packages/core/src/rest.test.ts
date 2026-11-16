@@ -31,6 +31,18 @@ const sortableRecipes = defineResource({
 	searchable: true
 });
 
+const filterableRecipes = defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	schema: z.object({
+		id: z.number(),
+		name: field(z.string(), { sortable: true }),
+		difficulty: field(z.enum(['Easy', 'Medium', 'Hard']), { filterable: true }),
+		vegetarian: field(z.boolean(), { filterable: true })
+	}),
+	searchable: true
+});
+
 const users = defineResource({
 	name: 'users',
 	label: 'Users',
@@ -148,6 +160,42 @@ describe('the bundled REST Provider', () => {
 				.getList(context(fetch), { page: 1, perPage: 25, search: 'pasta' });
 
 			expect(requests).toEqual(['http://api.test/recipes?page=1&perPage=25&q=pasta']);
+		});
+
+		it('sends eq filters as bare params and in filters as repeated ones, after q', async () => {
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+			const provider = restProvider('http://api.test').for(filterableRecipes);
+
+			await provider.getList(context(fetch), {
+				page: 1,
+				perPage: 25,
+				filters: [{ field: 'difficulty', operator: 'eq', value: 'Easy' }]
+			});
+			await provider.getList(context(fetch), {
+				page: 2,
+				perPage: 10,
+				search: 'pasta',
+				sort: { field: 'name', order: 'desc' },
+				filters: [
+					{ field: 'difficulty', operator: 'in', value: ['Easy', 'Medium'] },
+					{ field: 'vegetarian', operator: 'eq', value: false }
+				]
+			});
+
+			expect(requests).toEqual([
+				'http://api.test/recipes?page=1&perPage=25&difficulty=Easy',
+				'http://api.test/recipes?page=2&perPage=10&sort=name&order=desc&q=pasta&difficulty=Easy&difficulty=Medium&vegetarian=false'
+			]);
+		});
+
+		it('sends no filter params for a call with no filters, as before filters', async () => {
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+
+			await restProvider('http://api.test')
+				.for(filterableRecipes)
+				.getList(context(fetch), { page: 1, perPage: 25 });
+
+			expect(requests).toEqual(['http://api.test/recipes?page=1&perPage=25']);
 		});
 
 		it('keeps a path in the base URL and ignores a trailing slash', async () => {

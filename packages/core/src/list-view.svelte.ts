@@ -3,7 +3,8 @@ import { page } from '$app/state';
 import { untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
-import type { ListParams, SortableKey, SortOrder } from './provider.ts';
+import type { Field } from './fields.ts';
+import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
 import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
 import { titleKeys } from './record-title.ts';
 import type { DeleteFailure, ResourceRemote } from './remote.ts';
@@ -31,9 +32,42 @@ const BULK_DELETE_FAILED = "Couldn't delete the selected records.";
 export type BulkDeleteResult =
 	{ ok: true; deleted: number } | ({ ok: false; deleted: number } & DeleteFailure);
 
+/** One choice of a list View's filter control: a checkbox or a radio button. */
+export type FilterOption = {
+	/** The value the control sends for it, as the list URL writes it. Empty for "Any". */
+	value: string;
+	label: string;
+	/** Whether the list is filtered by it now. */
+	checked: boolean;
+};
+
+/**
+ * A GET form that keeps some list params as hidden inputs: where it goes, and each hidden input's
+ * name and value.
+ */
+export type KeptForm = { action: string; hidden: [name: string, value: string][] };
+
+/**
+ * The filter control of one filterable Field, in a list View's filter form. Its inputs are named
+ * by the Field's key, as the list URL names the filter.
+ *
+ * - `checkboxes`: one per option, any number of them checked, for an enum Field that allows
+ *   `in`. One checked option filters with `eq`, several with `in`, none not at all.
+ * - `radio`: one of the options, the first of which is "Any" (no filter, an empty value), for a
+ *   boolean Field (Any / Yes / No) or an enum Field that allows only `eq`. It filters with `eq`.
+ */
+export type FilterControl = {
+	field: Field;
+	type: 'checkboxes' | 'radio';
+	/** The name of each of its inputs. */
+	name: string;
+	options: FilterOption[];
+};
+
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
- * the hrefs that change page, page size and sort, each record's href, and the search box's state.
+ * the hrefs that change page, page size and sort, each record's href, the search box's state, and
+ * the filter controls and form.
  * The Theme's list View is built on it, and so can a replaced View. It takes the Resource as an
  * argument, not from context.
  *
@@ -45,7 +79,8 @@ export type BulkDeleteResult =
  *
  * The selection belongs to the Resource the list View was made for: it holds that Resource's
  * ids, with their canonical type, and a list View for another Resource starts with none. It
- * lasts while the list View does, across pages, searches and sorts, and is never in the URL.
+ * lasts while the list View does, across pages, searches, sorts and filters, and is never in the
+ * URL.
  *
  * Call it during component setup. In a component whose Resource can change, wrap the call in
  * `$derived`, so the list View follows the Resource: each Resource then gets a new list View,
@@ -113,9 +148,56 @@ export function createListView<R extends Resource>(
 	// `sort`.
 	const looseParams = $derived(params satisfies ListParams as ListParams);
 	const urlSearch = $derived(looseParams.search);
+	const filterCount = $derived(looseParams.filters?.length ?? 0);
 	const searchText = () => draft ?? urlSearch ?? '';
 
 	const selection = createSelection<IdOf<R>>();
+
+	/** The values the list is filtered by a Field with, by `eq` or `in`, as the URL writes them. */
+	function filteredValues(key: string): string[] {
+		const values: FilterValue[] = [];
+		for (const filter of looseParams.filters ?? []) {
+			if (filter.field !== key) continue;
+			if (filter.operator === 'eq') values.push(filter.value);
+			if (filter.operator === 'in') values.push(...filter.value);
+		}
+		return values.map(String);
+	}
+
+	/** The filter control of a filterable Field, or `undefined` when no stock control fits it. */
+	function filterControl(field: Field): FilterControl | undefined {
+		const values = filteredValues(field.key);
+		const option = (value: string, label: string): FilterOption => ({
+			value,
+			label,
+			checked: value === '' ? values.length === 0 : values.includes(value)
+		});
+		const radio = (options: FilterOption[]): FilterControl => ({
+			field,
+			type: 'radio',
+			name: field.key,
+			options: [option('', 'Any'), ...options]
+		});
+		if (field.kind === 'boolean') return radio([option('true', 'Yes'), option('false', 'No')]);
+		if (field.kind !== 'enum') return undefined;
+		const options = field.options.map((value) => option(String(value), String(value)));
+		if (field.filterOperators.includes('in')) {
+			return { field, type: 'checkboxes', name: field.key, options };
+		}
+		return radio(options);
+	}
+
+	// One control per filterable Field the list View shows anywhere (`detail`: not hidden).
+	const filterControls = $derived(
+		resource.fields
+			.filter((field) => field.detail && field.filterOperators.length > 0)
+			.map(filterControl)
+			.filter((control) => control !== undefined)
+	);
+	const controlledKeys = $derived(
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
+		new Set(filterControls.map((control) => control.field.key))
+	);
 
 	function sortState(key: SortableKey<R>): SortOrder | undefined {
 		const sort = looseParams.sort;
@@ -142,9 +224,10 @@ export function createListView<R extends Resource>(
 		/** The Fields the list View shows, in schema order. */
 		fields,
 		/**
-		 * The page, page size, sort and search in the URL, with defaults for what it leaves out (the
-		 * Resource's own page size and default sort), typed from the Resource: a search only for a
-		 * searchable one, and a sort only for one with a sortable Field.
+		 * The page, page size, sort, search and filters in the URL, with defaults for what it leaves
+		 * out (the Resource's own page size and default sort), typed from the Resource: a search only
+		 * for a searchable one, a sort only for one with a sortable Field, and filters only for one
+		 * with a filterable Field.
 		 */
 		get params(): ListParams<R> {
 			return params;
@@ -180,12 +263,16 @@ export function createListView<R extends Resource>(
 			return `${url.pathname}/${CREATE_SEGMENT}`;
 		},
 		/**
-		 * What to say when the page has no records: that none match the search, that the page is
-		 * past the last one, or that the Resource has none yet.
+		 * What to say when the page has no records: that none match the search, the filters, or
+		 * both, that the page is past the last one, or that the Resource has none yet.
 		 */
 		get emptyMessage(): string {
 			const records = resource.label.toLowerCase();
+			if (urlSearch !== undefined && filterCount > 0) {
+				return `No ${records} match “${urlSearch}” and the filters.`;
+			}
 			if (urlSearch !== undefined) return `No ${records} match “${urlSearch}”.`;
+			if (filterCount > 0) return `No ${records} match the filters.`;
 			return `No ${records} ${params.page > 1 ? 'on this page' : 'yet'}.`;
 		},
 		/**
@@ -203,16 +290,16 @@ export function createListView<R extends Resource>(
 		 * descending once it is sorted ascending, then back to the Resource's default sort (or no
 		 * sort, without one) once it is sorted descending. The default sort's own Field toggles
 		 * between the two orders instead, so the list is never left unsorted. It starts again at
-		 * page 1 and keeps the search and the page size.
+		 * page 1 and keeps the search, the filters and the page size.
 		 */
 		sortHref(key: SortableKey<R>): string {
-			const { perPage, search } = looseParams;
+			const { perPage, search, filters } = looseParams;
 			const order = sortState(key);
 			if (order === 'desc' && key !== resource.defaultSort?.field) {
-				return hrefOf({ page: 1, perPage, search });
+				return hrefOf({ page: 1, perPage, search, filters });
 			}
 			const next: SortOrder = order === 'asc' ? 'desc' : 'asc';
-			return hrefOf({ page: 1, perPage, search, sort: { field: key, order: next } });
+			return hrefOf({ page: 1, perPage, search, filters, sort: { field: key, order: next } });
 		},
 		/**
 		 * The page sizes to offer, as plain links, smallest first: 10, 25, 50 and 100, plus the
@@ -223,7 +310,7 @@ export function createListView<R extends Resource>(
 		pageHref(target: number): string {
 			return hrefOf({ ...params, page: target });
 		},
-		/** The href of the first page at another page size, keeping the search and the sort. */
+		/** The href of the first page at another page size, keeping the search, sort and filters. */
 		perPageHref(perPage: number): string {
 			return hrefOf({ ...params, page: 1, perPage });
 		},
@@ -272,15 +359,68 @@ export function createListView<R extends Resource>(
 		/**
 		 * The GET form the search box sits in, so search works without JavaScript too: where it
 		 * goes, the name of its search box, and the params it keeps as hidden inputs (a page size
-		 * and a sort that aren't the Resource's defaults, never the page). The form names no empty param.
+		 * and a sort that aren't the Resource's defaults, and the filters, never the page). The form
+		 * names no empty param.
 		 */
-		get searchForm(): { action: string; name: 'q'; hidden: [name: string, value: string][] } {
-			const { perPage, sort } = looseParams;
+		get searchForm(): KeptForm & { name: 'q' } {
+			const { perPage, sort, filters } = looseParams;
+			return { ...keptForm({ page: 1, perPage, sort, filters }), name: 'q' };
+		},
+		/**
+		 * The filter controls to offer: one per filterable Field that isn't hidden, in schema order,
+		 * for the Fields a stock control fits (an enum, a boolean). Filters on other Fields, and with
+		 * operators no control offers, still work from the URL.
+		 */
+		get filterControls(): FilterControl[] {
+			return filterControls;
+		},
+		/** How many filters the list is filtered by now. */
+		get filterCount(): number {
+			return filterCount;
+		},
+		/**
+		 * The GET form the filter controls sit in, so filters work without JavaScript too: where it
+		 * goes, and the params it keeps as hidden inputs (the search, a sort and a page size that
+		 * aren't the Resource's defaults, and the filters no control sends, such as one on a hidden
+		 * Field; never the page, so it starts again at page 1). Without JavaScript it sends its empty
+		 * controls too, which the list URL ignores; with it, submit through `applyFilters`, which
+		 * leaves them out.
+		 */
+		get filterForm(): KeptForm {
+			const { perPage, sort, search, filters } = looseParams;
+			// A control sends its Field's bare params, so `eq` and `in`; keep every other filter.
+			const uncontrolled = filters?.filter(
+				({ field, operator }) =>
+					!controlledKeys.has(field) || (operator !== 'eq' && operator !== 'in')
+			);
+			return keptForm({ page: 1, perPage, sort, search, filters: uncontrolled });
+		},
+		/** The href of the list with no filters, at page 1, keeping the search, sort and page size. */
+		get clearFiltersHref(): string {
+			return hrefOf({ ...looseParams, page: 1, filters: undefined });
+		},
+		/**
+		 * Filter the list by what the filter form holds (its controls and hidden inputs): go to the
+		 * clean href it names, with no empty param, at page 1. A navigation that adds a history
+		 * entry, so Back undoes it; the scroll and focus stay where they are.
+		 */
+		applyFilters(formData: FormData): Promise<void> {
+			const entries = [...formData].filter(
+				(entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== ''
+			);
 			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
-			const kept = new URL(hrefOf({ page: 1, perPage, sort }), url);
-			return { action: kept.pathname, name: 'q', hidden: [...kept.searchParams] };
+			const target = new URL(`${url.pathname}?${new URLSearchParams(entries)}`, url);
+			const next = { ...readListParams(target, resource), page: 1 };
+			return goto(hrefOf(next), { reset: false });
 		}
 	};
+
+	/** A GET form's action and the hidden inputs that keep `kept`, leaving out their defaults. */
+	function keptForm(kept: ListParams): KeptForm {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
+		const target = new URL(hrefOf(kept), url);
+		return { action: target.pathname, hidden: [...target.searchParams] };
+	}
 }
 
 /**

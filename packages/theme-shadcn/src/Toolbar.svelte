@@ -2,7 +2,8 @@
 	The toolbar above a list View. On a searchable Resource it holds a search box in a GET form:
 	without JavaScript, submitting the form opens the search at page 1 and keeps the page size;
 	with JavaScript, the list follows typing and the URL is updated in place, so the browser
-	history doesn't fill up. Beside it, a count of the selected rows, once any are selected, with
+	history doesn't fill up. Next, on a Resource with a filterable Field, the filter panel
+	(`FilterPanel`). Beside them, a count of the selected rows, once any are selected, with
 	"Delete selected (N)", which opens the delete dialog for them; and at the end a "New" link to
 	the create View. Bulk delete needs JavaScript, so its button appears only after hydration. The row is there on every Resource, so the content
 	below doesn't move when the count appears.
@@ -20,6 +21,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import DeleteDialog from './DeleteDialog.svelte';
+	import FilterPanel from './FilterPanel.svelte';
 
 	let { view }: ToolbarProps = $props();
 
@@ -48,7 +50,7 @@
 				view.submitSearch();
 			}}
 		>
-			{#each form.hidden as [name, value] (name)}
+			{#each form.hidden as [name, value], index (`${name}-${index}`)}
 				<input type="hidden" {name} {value} />
 			{/each}
 			<label for={searchId} class="sr-only">Search {view.resource.label.toLowerCase()}</label>
@@ -70,6 +72,8 @@
 			</button>
 		</form>
 	{/if}
+
+	<FilterPanel {view} />
 
 	<!-- Always in the page, so a screen reader announces the count as it changes. -->
 	<p aria-live="polite" class="text-sm text-muted-foreground">

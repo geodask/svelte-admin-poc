@@ -1,16 +1,21 @@
 // The demo backend: a small REST server over in-memory seed data, speaking the convention of
 // the bundled REST Provider. Start it with `bun backend/server.ts` from `apps/demo`.
 //
-//   GET  /{resource}?page=&perPage=&sort=&order=&q=
+//   GET  /{resource}?page=&perPage=&sort=&order=&q=&{field}=
 //                                     one page: { data, total }, or { data, hasNextPage } for
-//                                     posts, which stand in for a backend that can't count. sort
+//                                     posts, which stand in for a backend that can't count. Any
+//                                     other param filters any Resource by the Field it names:
+//                                     bare, the Field's value written as text equals it (eq);
+//                                     repeated, equals one of them (in). A param with an
+//                                     operator suffix (`name.contains`) is a 400 for now. Every
+//                                     filter must match (AND). sort
 //                                     names any Field to sort by, with order asc (the default) or
 //                                     desc (anything else is a 400): numbers as numbers, text and
 //                                     ISO dates with a locale compare, stable, and records without
 //                                     a value last either way. q searches recipes by their text
 //                                     Fields and users by name and email; posts can't be
-//                                     searched, and q for them is a 400. The sort applies before
-//                                     the search and the paging
+//                                     searched, and q for them is a 400. The filters and the sort
+//                                     apply before the search and the paging
 //   GET  /{resource}/{id}             one record, or a 404. The id is one path segment, decoded,
 //                                     and matched against each record's id written as text
 //   POST /{resource}                  create a record from the JSON body, with the next id (the
@@ -136,6 +141,29 @@ function sortBy(records: Records, key: string, order: 'asc' | 'desc'): Records {
 	});
 }
 
+/** The list query's own params; any other names a filter. */
+const listQueryKeys = new Set(['page', 'perPage', 'sort', 'order', 'q']);
+
+/**
+ * The records that match every filter in the query, or `undefined` when a filter has an operator
+ * suffix, which this backend can't do yet (the caller answers 400). For each Field a filter names,
+ * the record's value written as text must be one of the values given (one for `eq`, several for
+ * `in`).
+ */
+function matchingFilters(records: Records, query: URLSearchParams): Records | undefined {
+	const filters = new Map<string, string[]>();
+	for (const key of new Set(query.keys())) {
+		if (listQueryKeys.has(key)) continue;
+		if (key.includes('.')) return undefined;
+		filters.set(key, query.getAll(key));
+	}
+	return records.filter((record) =>
+		[...filters].every(([key, values]) =>
+			values.includes(String((record as Record<string, unknown>)[key]))
+		)
+	);
+}
+
 let db = fresh();
 let faults: Fault[] = [];
 const requests: string[] = [];
@@ -205,7 +233,10 @@ const server = Bun.serve({
 
 		if (request.method === 'GET' && segments.length === 1 && Object.hasOwn(db, segments[0])) {
 			const name = segments[0];
-			let records = db[name];
+			let records = matchingFilters(db[name], url.searchParams);
+			if (records === undefined) {
+				return json({ message: 'Only eq and in filters are supported' }, 400);
+			}
 			const sort = url.searchParams.get('sort');
 			const order = url.searchParams.get('order') ?? 'asc';
 			if (order !== 'asc' && order !== 'desc') {

@@ -89,6 +89,28 @@ The list URL writes the sort as `sort=<field>`, plus `order=desc` to reverse it:
 
 The bundled REST Provider sends the sort in the same encoding, but always with its order: `GET {base}/{resource}?page=1&perPage=25&sort=name&order=asc`, so a backend never has to know the default. A backend that can't do a declared sort should answer 400. The demo backend sorts any Resource by any Field: numbers as numbers, text and ISO dates with a locale compare, stable, with records that have no value last in both orders.
 
+### Filtering
+
+Mark a Field `filterable` with `field()` when the backend can filter by it: `difficulty: field(z.enum(['Easy', 'Medium', 'Hard']), { filterable: true })`. `true` allows every operator of the Field's Kind; a non-empty list allows only those, such as `filterable: ['eq', 'in']` on a text Field for a backend that can only match it exactly. Fields are not filterable unless they say so. The operators per Kind are:
+
+| Kind    | Operators                      |
+| ------- | ------------------------------ |
+| text    | `eq`, `in`, `contains`         |
+| number  | `eq`, `lt`, `lte`, `gt`, `gte` |
+| date    | `eq`, `lt`, `lte`, `gt`, `gte` |
+| enum    | `eq`, `in`                     |
+| boolean | `eq`                           |
+
+`defineResource` throws at startup for a filterable list, object or unknown Field, an operator the Field's Kind doesn't have, an empty list, and a filterable Field whose key the list URL uses for itself (`page`, `perPage`, `sort`, `order`, `q`) or holds a `.`. TypeScript rejects those keys too. Like `sortable`, the setting is in the schema's type, so write it inline (or `as const`). A hidden Field may be filterable: it gets no control, but the URL can still filter by it.
+
+`getList` then receives `filters?: ListFilter<R>[]`: a flat list of `{ field, operator, value }`, combined with AND, never empty and absent when there are none. Each value is typed by its Field (an enum member, a boolean, a number, a string, or the Field's own date type), and `in` takes an array of 2 to 100 distinct values. The filters come in a canonical form: at most one per Field and operator, ordered by the Fields' schema order, then by operator. A Resource with no filterable Field has no `filters` in its `ListParams` at all, and the server rejects a filter on any other Field, with another operator, with a value of the wrong type, or an `in` out of bounds before the Provider runs.
+
+The list View's toolbar has a "Filters" disclosure (the Theme's `FilterPanel`) showing how many filters are on. It holds a GET form with one control per filterable Field that isn't hidden: a checkbox per option for an enum (one ticked filters with `eq`, several with `in`), and Any / Yes / No for a boolean. "Apply" starts again at page 1 and keeps the search, the sort and the page size; "Clear filters" goes back to the whole list. It works without JavaScript; with it, the form leaves out empty controls, so the URL stays clean. Pager, page-size, sort and search links keep the filters, and the selection is unchanged. An empty list says that no records match the filters (and the search, if there is one). A replaced list View reads `createListView(...).filterControls`, `filterForm`, `filterCount`, `clearFiltersHref` and `applyFilters(formData)`. Controls for text, number and date Fields come later.
+
+The list URL writes a filter by its Field's key: a bare param means `eq` and a repeated one `in` (`?difficulty=Easy&difficulty=Medium`); booleans are `true` and `false`. The other operators will be suffixes, such as `name.contains=piz` or `prepTimeMinutes.gte=10`: the shared encoder writes them already, and reading them (with text, number and date values) comes with their controls. Params for an unknown or non-filterable Field, empty or malformed values, and operators the Field doesn't allow are dropped when the URL is read, and with JavaScript the URL is cleaned in place.
+
+The bundled REST Provider sends the filters in the same encoding, after `q`: `GET {base}/{resource}?page=1&perPage=25&difficulty=Easy&difficulty=Hard&vegetarian=true`. A backend that can't do a declared filter should answer 400. The demo backend filters any Resource by `eq` and `in` before searching and paging. In the demo, recipes filter by difficulty and vegetarian, users by role and active, and posts by status.
+
 ### Default sort and page size
 
 A Resource can choose the order its list opens in and how many rows a page holds:

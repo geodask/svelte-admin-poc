@@ -297,3 +297,101 @@ describe('sortable Fields', () => {
 		).toThrow(/Resource "things".*"value".*sortable/);
 	});
 });
+
+describe('filterable Fields', () => {
+	it('are not filterable unless they say so', () => {
+		expect(firstField({ name: z.string() }).filterOperators).toEqual([]);
+	});
+
+	it.each([
+		['text', z.string(), ['eq', 'in', 'contains']],
+		['number', z.number(), ['eq', 'lt', 'lte', 'gt', 'gte']],
+		['date', z.iso.datetime(), ['eq', 'lt', 'lte', 'gt', 'gte']],
+		['date (a Date)', z.date(), ['eq', 'lt', 'lte', 'gt', 'gte']],
+		['enum', z.enum(['a', 'b']), ['eq', 'in']],
+		['boolean', z.boolean(), ['eq']]
+	])('allow every operator of the Kind %s with `filterable: true`', (_, schema, operators) => {
+		expect(firstField({ value: field(schema, { filterable: true }) }).filterOperators).toEqual(
+			operators
+		);
+	});
+
+	it('find `filterable` inside or outside a wrapper', () => {
+		expect(
+			firstField({ done: field(z.boolean(), { filterable: true }).optional() }).filterOperators
+		).toEqual(['eq']);
+		expect(
+			firstField({ done: field(z.boolean().nullable(), { filterable: true }) }).filterOperators
+		).toEqual(['eq']);
+	});
+
+	it('allow only the operators a list names, in the canonical order', () => {
+		expect(
+			firstField({ cuisine: field(z.string(), { filterable: ['in', 'eq'] }) }).filterOperators
+		).toEqual(['eq', 'in']);
+	});
+
+	const things =
+		(value: z.ZodType, key = 'value') =>
+		() =>
+			defineResource({
+				name: 'things',
+				label: 'Things',
+				schema: z.object({ id: z.number(), [key]: value })
+			});
+
+	it.each([
+		['a list', z.array(z.string())],
+		['an object', z.object({ grams: z.number() })],
+		['an unknown Field', z.union([z.string(), z.number()])]
+	])('make defineResource throw for %s, naming the Resource and the Field', (_, schema) => {
+		expect(things(field(schema, { filterable: true, readOnly: true }))).toThrow(
+			/Resource "things".*"value".*filterable/
+		);
+		expect(things(field(schema, { filterable: ['eq'], readOnly: true }))).toThrow(
+			/Resource "things".*"value".*filterable/
+		);
+	});
+
+	it('make defineResource throw for an operator the Kind does not have', () => {
+		expect(things(field(z.boolean(), { filterable: ['eq', 'in'] }))).toThrow(
+			/Resource "things".*"value".*"in".*boolean/
+		);
+		expect(things(field(z.enum(['a', 'b']), { filterable: ['contains'] }))).toThrow(
+			/Resource "things".*"value".*"contains".*enum/
+		);
+	});
+
+	it('make defineResource throw for an empty list of operators', () => {
+		expect(things(field(z.boolean(), { filterable: [] }))).toThrow(
+			/Resource "things".*"value".*empty/
+		);
+	});
+
+	it.each(['page', 'perPage', 'sort', 'order', 'q'])(
+		'make defineResource throw for the reserved key %s',
+		(key) => {
+			// Cast: TypeScript rejects a reserved filterable key; this checks the runtime backstop.
+			expect(things(field(z.boolean(), { filterable: true }) as z.ZodType, key)).toThrow(
+				new RegExp(`Resource "things".*"${key}".*reserved`)
+			);
+		}
+	);
+
+	it('make defineResource throw for a key with a dot, which the list URL cannot hold', () => {
+		expect(things(field(z.boolean(), { filterable: true }) as z.ZodType, 'is.active')).toThrow(
+			/Resource "things".*"is\.active".*\./
+		);
+	});
+
+	it('may use a reserved key when they are not filterable', () => {
+		expect(things(z.number(), 'page')).not.toThrow();
+		expect(things(field(z.number(), { sortable: true }), 'order')).not.toThrow();
+	});
+
+	it('may be hidden', () => {
+		expect(
+			firstField({ secret: field(z.boolean(), { hidden: true, filterable: true }) }).filterOperators
+		).toEqual(['eq']);
+	});
+});

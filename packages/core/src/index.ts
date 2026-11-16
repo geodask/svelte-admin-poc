@@ -12,6 +12,9 @@ export {
 export { idFromParam, idPathSegment, recordPath } from './ids.ts';
 export { recordTitle } from './record-title.ts';
 export type {
+	FilterableKey,
+	FilterValue,
+	ListFilter,
 	ListParams,
 	ListParamsResource,
 	ListResult,
@@ -68,6 +71,7 @@ export {
 	fieldRegistry,
 	type DetectedKind,
 	type Field,
+	type FilterOperator,
 	type FieldInputChoice,
 	type FieldMeta,
 	type FieldReadOnly,

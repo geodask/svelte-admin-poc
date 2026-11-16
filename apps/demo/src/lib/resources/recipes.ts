@@ -14,13 +14,15 @@ export const recipes = defineResource({
 		// The demo backend can sort by any Field; these four are offered as the list's sort.
 		name: field(z.string(), { placeholder: 'e.g. Classic Margherita Pizza', sortable: true }),
 		cuisine: field(z.string(), { placeholder: 'e.g. Italian' }),
-		difficulty: z.enum(['Easy', 'Medium', 'Hard']),
+		// Filtered with a checkbox per difficulty: one gives `eq`, several `in`.
+		difficulty: field(z.enum(['Easy', 'Medium', 'Hard']), { filterable: true }),
 		prepTimeMinutes: field(z.number(), { label: 'Prep time (min)', sortable: true }),
 		servings: z.number(),
 		// Metadata set before `.optional()` still applies. Some recipes have no calorie count,
 		// and those come last in either order.
 		caloriesPerServing: field(z.number(), { label: 'Calories', sortable: true }).optional(),
-		vegetarian: z.boolean(),
+		// Filtered with Any / Yes / No.
+		vegetarian: field(z.boolean(), { filterable: true }),
 		// Edited as one textarea, one tag per line. Posts' tags keep one input per tag.
 		tags: field(z.array(z.string()), { input: 'lines' }),
 		// An array of objects: edited as one fieldset per ingredient, and never left empty.

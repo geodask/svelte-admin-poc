@@ -2,8 +2,8 @@
 	The list View: one page of a Resource's records in a table, with a pager. It takes the
 	Resource and its remote functions as props, so a route passes them from admin.ts. It shows
 	each Field the Resource puts on the list, in schema order, by its Kind, and each row links to
-	its record's detail View. The page, page size, sort and search live in the URL, through the core's
-	headless `createListView`.
+	its record's detail View. The page, page size, sort, search and filters live in the URL,
+	through the core's headless `createListView`.
 
 	The records load inside a boundary with a `failed` snippet but no `pending` one, so the server
 	renders the records (or the failure) and a refresh keeps the old rows until the new ones come.
