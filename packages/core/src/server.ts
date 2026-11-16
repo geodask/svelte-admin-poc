@@ -22,10 +22,15 @@ import {
 } from './ids.ts';
 import { listParamsSchema } from './list-params.ts';
 import type { ListResult, Provider, ProviderContext } from './provider.ts';
+import type { DeleteManyReport, ServedFailure } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
+import { describeUnexpected, UNEXPECTED_MESSAGE } from './unexpected.ts';
 
 /** How many of the client's list queries a write refreshes at most. */
 const MAX_REFRESHED_LISTS = 25;
+
+/** How many ids one bulk delete takes at most. */
+const MAX_BULK_DELETE = 1000;
 
 /**
  * Build a Resource's remote functions from its Provider. The app's `.remote.ts` re-exports
@@ -39,6 +44,12 @@ const MAX_REFRESHED_LISTS = 25;
  * - `update` is the edit form, likewise, redirecting to the record's detail View.
  * - `deleteOne` is a remote command, so it needs JavaScript. It takes the typed id, and after
  *   the delete refreshes the list queries the client asks for (`deleteOne(id).updates(getList)`).
+ * - `deleteMany` is a remote command too. It takes one to 1,000 typed ids (anything else is
+ *   invalid input) and ignores duplicates. It calls the Provider's `deleteMany` when there is
+ *   one; otherwise it calls `deleteOne` for each id in turn, stopping at the first failure. It
+ *   reports how many ids were deleted and, when it stopped, why (a Provider error's status and
+ *   message, or a logged unexpected error as a generic 500), instead of throwing, so the list
+ *   queries the client asks for are refreshed either way (`deleteMany(ids).updates(getList)`).
  *
  * From a read or a delete, a Provider error becomes an HTTP error with its message:
  * `NotFoundError` a 404, `InvalidInputError` a 400 and `ConflictError` a 409. From a save, it
@@ -60,7 +71,7 @@ const MAX_REFRESHED_LISTS = 25;
  * from any other page it is refused before the Provider is called.
  *
  * @example
- * export const { getList, getOne, create, update, deleteOne } = serveResource(
+ * export const { getList, getOne, create, update, deleteOne, deleteMany } = serveResource(
  * 	recipes,
  * 	backend.for(recipes)
  * );
@@ -150,7 +161,47 @@ export function serveResource<R extends Resource>(
 		await requested(getList, MAX_REFRESHED_LISTS).refreshAll();
 	});
 
-	return { getList, getOne, create, update, deleteOne };
+	// One to 1,000 ids of the same type as `getOne`'s, each counted once, in the order sent.
+	const idsSchema = z
+		.array(idSchema)
+		.min(1)
+		.max(MAX_BULK_DELETE)
+		.transform((ids) => [...new Set(ids)]);
+
+	const deleteMany = command(idsSchema, async (ids): Promise<DeleteManyReport> => {
+		let deleted = 0;
+		let failure: ServedFailure | undefined;
+		try {
+			if (provider.deleteMany) {
+				// All or nothing: the Provider either deleted them all or none.
+				await provider.deleteMany(providerContext(), ids);
+				deleted = ids.length;
+			} else {
+				for (const id of ids) {
+					await provider.deleteOne(providerContext(), id);
+					deleted++;
+				}
+			}
+		} catch (thrown) {
+			failure = bulkDeleteFailure(thrown, resource.name);
+		}
+		// Even after a failure, since some records may be gone.
+		await requested(getList, MAX_REFRESHED_LISTS).refreshAll();
+		return failure ? { deleted, failure } : { deleted };
+	});
+
+	return { getList, getOne, create, update, deleteOne, deleteMany };
+}
+
+/**
+ * Why a bulk delete stopped, reported rather than thrown: a Provider error keeps its status and
+ * message; anything else is logged, as the core's `handleError` would, and reads as a generic
+ * 500.
+ */
+function bulkDeleteFailure(thrown: unknown, resourceName: string): ServedFailure {
+	if (thrown instanceof ProviderError) return { status: thrown.status, message: thrown.message };
+	console.error(`Bulk delete of ${resourceName} failed: ${describeUnexpected(thrown)}`);
+	return { status: 500, message: UNEXPECTED_MESSAGE };
 }
 
 /** Run a Provider call, turning a Provider error into the HTTP error with its status. */

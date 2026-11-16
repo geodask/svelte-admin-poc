@@ -1,9 +1,7 @@
 // The core's hooks for an app's `hooks.server.ts`. Nothing here imports `$app/server`, so this
 // entry is plain functions an app (or a test) can call.
 import type { HandleServerError } from '@sveltejs/kit/hooks';
-
-/** What the user sees for an unexpected error, whatever it was. */
-const UNEXPECTED_MESSAGE = 'An unexpected error occurred.';
+import { describeUnexpected, UNEXPECTED_MESSAGE } from './unexpected.ts';
 
 /**
  * The server `handleError` hook. It logs unexpected errors (with their causes) and remote
@@ -33,15 +31,3 @@ export const handleError: HandleServerError = ({ kind, error, issues, remote }) 
 	}
 	return { status: error.status, message: error.message };
 };
-
-/** An error's stack (or message) and those of its causes, or the thrown value as text. */
-function describeUnexpected(error: unknown): string {
-	const parts: string[] = [];
-	let current = error;
-	while (current instanceof Error) {
-		parts.push(current.stack ?? `${current.name}: ${current.message}`);
-		current = current.cause;
-	}
-	if (current !== undefined) parts.push(String(current));
-	return parts.join('\nCaused by: ');
-}

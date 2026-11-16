@@ -6,7 +6,8 @@ import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
 import type { ListParams } from './provider.ts';
 import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
 import { titleKeys } from './record-title.ts';
-import type { ResourceRemote } from './remote.ts';
+import type { DeleteFailure, ResourceRemote } from './remote.ts';
+import { readDeleteFailure } from './delete-failure.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /** The page sizes a list View offers. Any size from 1 to the cap still works from the URL. */
@@ -14,6 +15,18 @@ const PER_PAGE_OPTIONS: readonly number[] = [10, 25, 50, 100];
 
 /** How long typing must pause before a search is written to the URL. */
 const SEARCH_DEBOUNCE_MS = 300;
+
+/** What a bulk delete reports when the failure carries no message of its own (e.g. no network). */
+const BULK_DELETE_FAILED = "Couldn't delete the selected records.";
+
+/**
+ * How a bulk delete of the selected rows ended: every one is gone, or it failed (perhaps
+ * partway) with a message that is safe to show and, when the server answered, its HTTP status.
+ * Either way `deleted` is how many records were deleted; those are no longer selected, and the
+ * rest still are.
+ */
+export type BulkDeleteResult =
+	{ ok: true; deleted: number } | ({ ok: false; deleted: number } & DeleteFailure);
 
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
@@ -180,6 +193,30 @@ export function createListView<R extends Resource>(
 		},
 		/** The rows selected in this Resource's list, by id. See `createSelection`. */
 		selection,
+		/**
+		 * Delete every selected row, on every page, through the remote `deleteMany`, which
+		 * refreshes the list queries along with it. On success the selection is cleared. If it
+		 * fails partway, only the deleted rows leave the selection, so the rest are ready to try
+		 * again. It needs JavaScript, so render its control only after hydration. It never
+		 * rejects: a failure is reported with its message, so a dialog can show it.
+		 *
+		 * The selection only ever holds this Resource's ids, so it can't delete another's records.
+		 */
+		async deleteSelected(): Promise<BulkDeleteResult> {
+			const ids = selection.ids;
+			if (ids.length === 0) return { ok: true, deleted: 0 };
+			let report;
+			try {
+				report = await remote.deleteMany(ids).updates(remote.getList);
+			} catch (failure) {
+				return { ok: false, deleted: 0, ...readDeleteFailure(failure, BULK_DELETE_FAILED) };
+			}
+			// The deleted ids are the first ones sent, in order.
+			selection.setAll(ids.slice(0, report.deleted), false);
+			return 'failure' in report
+				? { ok: false, deleted: report.deleted, ...report.failure }
+				: { ok: true, deleted: report.deleted };
+		},
 		/**
 		 * The GET form the search box sits in, so search works without JavaScript too: where it
 		 * goes, the name of its search box, and the params it keeps as hidden inputs (a page size

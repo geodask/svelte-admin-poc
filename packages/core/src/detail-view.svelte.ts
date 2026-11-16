@@ -2,7 +2,8 @@ import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { EDIT_SEGMENT, recordPath } from './ids.ts';
 import { recordTitle } from './record-title.ts';
-import type { ResourceRemote } from './remote.ts';
+import type { DeleteFailure, ResourceRemote } from './remote.ts';
+import { readDeleteFailure } from './delete-failure.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /**
@@ -11,9 +12,6 @@ import type { IdOf, RecordOf, Resource } from './resource.ts';
  * record that was already deleted).
  */
 export type DeleteResult = { ok: true } | ({ ok: false } & DeleteFailure);
-
-/** Why a delete failed: a message safe to show, and the HTTP status when the server answered. */
-export type DeleteFailure = { status?: number; message: string };
 
 /** What a delete reports when the failure carries no message of its own (e.g. no network). */
 const DELETE_FAILED = "Couldn't delete this record.";
@@ -79,7 +77,7 @@ export function createDetailView<R extends Resource>(
 			try {
 				await remote.deleteOne(id).updates(remote.getList);
 			} catch (failure) {
-				return { ok: false, ...readFailure(failure) };
+				return { ok: false, ...readDeleteFailure(failure, DELETE_FAILED) };
 			}
 			// The delete succeeded whatever happens to the navigation: one the user started
 			// meanwhile may supersede it, and that is theirs to keep.
@@ -91,16 +89,3 @@ export function createDetailView<R extends Resource>(
 
 /** What `createDetailView` returns. */
 export type DetailViewState<R extends Resource = Resource> = ReturnType<typeof createDetailView<R>>;
-
-/**
- * The status and message of a failed remote call: Kit rejects with `{ status, body }`, whose
- * body is the server's safe `{ message }`.
- */
-function readFailure(failure: unknown): DeleteFailure {
-	const { status, body } = (failure ?? {}) as { status?: unknown; body?: { message?: unknown } };
-	const message = body?.message;
-	return {
-		...(typeof status === 'number' ? { status } : {}),
-		message: typeof message === 'string' && message ? message : DELETE_FAILED
-	};
-}
