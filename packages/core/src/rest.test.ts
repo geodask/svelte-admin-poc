@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
 	ConflictError,
 	defineResource,
+	encodeListParams,
 	FieldError,
 	InvalidInputError,
 	NotFoundError,
@@ -13,7 +14,9 @@ import { restProvider } from '@svelte-admin/core/rest';
 const recipes = defineResource({
 	name: 'recipes',
 	label: 'Recipes',
-	schema: z.object({ id: z.number(), name: z.string() })
+	schema: z.object({ id: z.number(), name: z.string() }),
+	// Searchable, so its `getList` takes a search.
+	searchable: true
 });
 
 const users = defineResource({
@@ -82,6 +85,18 @@ describe('the bundled REST Provider', () => {
 			await provider.getList(context(fetch), { page: 1, perPage: 25, search: undefined });
 
 			expect(requests).toEqual(['http://api.test/recipes?page=1&perPage=25']);
+		});
+
+		it.each([
+			{ page: 1, perPage: 25 },
+			{ page: 3, perPage: 100 },
+			{ page: 1, perPage: 25, search: 'pasta & co' }
+		])('sends the list URL encoding of %j, with every param written', async (params) => {
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+
+			await restProvider('http://api.test').for(recipes).getList(context(fetch), params);
+
+			expect(requests).toEqual([`http://api.test/recipes?${encodeListParams(params)}`]);
 		});
 
 		it('keeps a path in the base URL and ignores a trailing slash', async () => {

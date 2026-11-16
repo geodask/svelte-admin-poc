@@ -1,5 +1,5 @@
 import type { FormValues } from './form-spec.ts';
-import type { ListParams, ListResult } from './provider.ts';
+import type { ListResult } from './provider.ts';
 import type { StandardSchemaV1 } from './standard-schema.ts';
 
 /**
@@ -96,9 +96,10 @@ export type RemoteFormLike = {
  * a `<form>`, which is all the shared entry relies on, so it needs nothing from `$app/server`,
  * not even types.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- any record and id type fit by default
-export type ResourceRemote<T = any, Id = any> = {
-	getList: (params: ListParams) => RemoteRead<ListResult<T>>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- any record, id and list params fit by default
+export type ResourceRemote<T = any, Id = any, List = any> = {
+	/** One page of records. `List` is the Resource's `ListParams`, as `serveResource` types it. */
+	getList: (params: List) => RemoteRead<ListResult<T>>;
 	getOne: (id: Id) => RemoteRead<T>;
 	/** The create form: it saves a new record and redirects to its detail View. */
 	create: RemoteFormLike;

@@ -54,7 +54,7 @@ export type BulkDeleteResult =
  */
 export function createListView<R extends Resource>(
 	resource: R,
-	remote: ResourceRemote<RecordOf<R>, IdOf<R>>
+	remote: ResourceRemote<RecordOf<R>, IdOf<R>, ListParams<R>>
 ) {
 	// Kit 3 types `page.url` as a read-only URL, so the helpers take a plain copy. Nothing mutates
 	// it: a new copy is derived whenever `page.url` changes.
@@ -99,14 +99,20 @@ export function createListView<R extends Resource>(
 	// Leaving the list (or switching Resource) drops a search that was still waiting.
 	$effect(() => () => clearTimeout(debounce));
 
-	const searchText = () => draft ?? params.search ?? '';
+	// The search in the URL, if any. Read through the loose `ListParams`, since a Resource that
+	// isn't searchable has no `search` in its own.
+	const urlSearch = (): string | undefined => {
+		const loose: ListParams = params;
+		return loose.search;
+	};
+	const searchText = () => draft ?? urlSearch() ?? '';
 
 	const selection = createSelection<IdOf<R>>();
 
 	/** Write a search to the URL now, in place, at page 1 of the current page size. */
 	function writeSearch(text: string) {
 		clearTimeout(debounce);
-		const href = listHref(url, { page: 1, perPage: params.perPage, search: text });
+		const href = listHref(url, { ...params, page: 1, search: text });
 		if (href === listHref(url, params)) {
 			draft = undefined;
 			return;
@@ -122,8 +128,11 @@ export function createListView<R extends Resource>(
 		resource,
 		/** The Fields the list View shows, in schema order. */
 		fields,
-		/** The page, page size and search in the URL, with defaults for what it leaves out. */
-		get params(): ListParams {
+		/**
+		 * The page, page size and search in the URL, with defaults for what it leaves out, typed
+		 * from the Resource: a search only for a searchable one.
+		 */
+		get params(): ListParams<R> {
 			return params;
 		},
 		/** The current page of records. Await it: `$derived(await view.query)`. */
@@ -162,7 +171,8 @@ export function createListView<R extends Resource>(
 		 */
 		get emptyMessage(): string {
 			const records = resource.label.toLowerCase();
-			if (params.search !== undefined) return `No ${records} match “${params.search}”.`;
+			const search = urlSearch();
+			if (search !== undefined) return `No ${records} match “${search}”.`;
 			return `No ${records} ${params.page > 1 ? 'on this page' : 'yet'}.`;
 		},
 		/** The page sizes to offer, as plain links. */
@@ -173,7 +183,7 @@ export function createListView<R extends Resource>(
 		},
 		/** The href of the first page at another page size, keeping the search. */
 		perPageHref(perPage: number): string {
-			return listHref(url, { page: 1, perPage, search: params.search });
+			return listHref(url, { ...params, page: 1, perPage });
 		},
 		/** Whether to offer a search box: only on a searchable Resource. */
 		searchable: resource.searchable,

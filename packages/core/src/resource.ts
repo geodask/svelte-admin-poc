@@ -35,7 +35,11 @@ export type RecordTitleSetting<S extends ResourceSchema = ResourceSchema> =
  * module that defines it is safe to import in the browser. Its data operations are wired on
  * the server with `serveResource` from `@svelte-admin/core/server`.
  */
-export type Resource<N extends string = string, S extends ResourceSchema = ResourceSchema> = {
+export type Resource<
+	N extends string = string,
+	S extends ResourceSchema = ResourceSchema,
+	Searchable extends boolean = boolean
+> = {
 	readonly name: N;
 	readonly label: string;
 	/** The icon the sidebar shows beside the label, if any. */
@@ -43,8 +47,11 @@ export type Resource<N extends string = string, S extends ResourceSchema = Resou
 	/** The sidebar group the Resource is listed under, e.g. "Content". None: listed ungrouped. */
 	readonly group?: string;
 	readonly schema: S;
-	/** Whether the list View offers a search box and `getList` accepts a search. */
-	readonly searchable: boolean;
+	/**
+	 * Whether the list View offers a search box and `getList` accepts a search. Kept in the type
+	 * too, so a Resource's `ListParams` have a search only when it is searchable.
+	 */
+	readonly searchable: Searchable;
 	/** Its Fields in schema key order, with labels, Kinds and where each one shows. */
 	readonly fields: readonly Field[];
 	/** Which text names a record, if the default rule isn't wanted: see `recordTitle()`. */
@@ -76,7 +83,11 @@ type IdRequired = {
 	'A Resource schema needs an `id` Field of string or number type, with no coercion': true;
 };
 
-export function defineResource<const N extends string, S extends ResourceSchema>(definition: {
+export function defineResource<
+	const N extends string,
+	S extends ResourceSchema,
+	const Searchable extends boolean = false
+>(definition: {
 	/** The Resource's name, also its URL segment and its key in `admin.ts`. */
 	name: N;
 	/** The plural label shown in headings and the sidebar, e.g. "Recipes". */
@@ -101,7 +112,7 @@ export function defineResource<const N extends string, S extends ResourceSchema>
 	 * Whether the backend can search this Resource. Only then does the list View show a search
 	 * box, and only then does `getList` accept a search: for any other Resource it is rejected.
 	 */
-	searchable?: boolean;
+	searchable?: Searchable;
 	/**
 	 * Which text names a record wherever the admin shows one (the detail View's heading, the
 	 * breadcrumb, the row checkbox labels): the key of a Field, such as `'sku'`, or a function
@@ -111,8 +122,10 @@ export function defineResource<const N extends string, S extends ResourceSchema>
 	 * hidden, or `defineResource` throws.
 	 */
 	recordTitle?: NoInfer<RecordTitleSetting<S>>;
-}): Resource<N, S> {
-	const { name, label, icon, group, schema, searchable = false, recordTitle } = definition;
+}): Resource<N, S, Searchable> {
+	const { name, label, icon, group, schema, recordTitle } = definition;
+	// Left out, it is `false`, as the type parameter's default says.
+	const searchable = (definition.searchable ?? false) as Searchable;
 	const fields = describeFields(schema);
 	// Fail at startup, not on a form that could never be saved.
 	assertFormInputs(name, fields, schema);

@@ -1,5 +1,6 @@
 // `App.Locals` is declared by SvelteKit, which the core peer-depends on.
 /// <reference types="@sveltejs/kit" />
+import type { Resource } from './resource.ts';
 
 /**
  * What every Provider method receives first: the current request's `fetch` and `locals`.
@@ -9,10 +10,17 @@
 export type ProviderContext = { fetch: typeof fetch; locals: App.Locals };
 
 /**
- * The validated params `getList` receives. A search comes only for a searchable Resource, never
- * blank and without the spaces around it. Sort and filters come later.
+ * The validated params a Resource's `getList` receives, typed from the Resource as `CreateData`
+ * and `EditData` are: a 1-based page and a page size, plus, only for a searchable Resource, an
+ * optional search, never blank and without the spaces around it. A Resource that isn't
+ * searchable has no `search` at all. Without a Resource (or for one whose searchability
+ * TypeScript can't see), a search may come or not. Sort and filters come later.
  */
-export type ListParams = { page: number; perPage: number; search?: string };
+// Only whether the Resource is searchable matters so far, so that is all it asks of `R`.
+export type ListParams<R extends Pick<Resource, 'searchable'> = Resource> =
+	true extends R['searchable']
+		? { page: number; perPage: number; search?: string }
+		: { page: number; perPage: number };
 
 /** One page of records, with a total when the backend can count, or else `hasNextPage`. */
 export type ListResult<T> = { data: T[]; total: number } | { data: T[]; hasNextPage: boolean };
@@ -23,13 +31,21 @@ type IdOfRecord<T> = T extends { id: infer Id } ? Id : never;
 /**
  * The adapter that carries out a Resource's data operations against a backend. Its record
  * type must be the Resource schema's output type, and its ids the schema's id type. `Create` is
- * what `create` receives, and `Edit` what `update` receives as its `data`. For a Resource,
- * `serveResource` takes `Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>>`, which
- * leave out the Fields no form sets; the defaults suit a Resource without read-only or hidden
- * Fields.
+ * what `create` receives, `Edit` what `update` receives as its `data`, and `List` what `getList`
+ * receives. For a Resource, `serveResource` takes
+ * `Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>, ListParams<R>>`, which leave out
+ * the Fields no form sets and the params the Resource doesn't take; the defaults suit a Resource
+ * without read-only or hidden Fields, and a `getList` written against the loose `ListParams`
+ * fits any Resource.
  */
-export type Provider<T, Id = IdOfRecord<T>, Create = Omit<T, 'id'>, Edit = Create> = {
-	getList(ctx: ProviderContext, params: ListParams): Promise<ListResult<T>>;
+export type Provider<
+	T,
+	Id = IdOfRecord<T>,
+	Create = Omit<T, 'id'>,
+	Edit = Create,
+	List = ListParams
+> = {
+	getList(ctx: ProviderContext, params: List): Promise<ListResult<T>>;
 	/**
 	 * One record by its id. The id arrives with the schema's id type, never coerced. Build any
 	 * URL from it with `idPathSegment`, so a crafted id can't reach a different record.

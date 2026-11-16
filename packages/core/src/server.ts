@@ -32,7 +32,7 @@ import {
 	recordPath
 } from './ids.ts';
 import { listParamsSchema } from './list-params.ts';
-import type { ListResult, Provider, ProviderContext } from './provider.ts';
+import type { ListParams, ListResult, Provider, ProviderContext } from './provider.ts';
 import type { DeleteManyReport, ServedFailure } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 import type { StandardSchemaV1 } from './standard-schema.ts';
@@ -90,7 +90,7 @@ const MAX_BULK_DELETE = 1000;
  */
 export function serveResource<R extends Resource>(
 	resource: R,
-	provider: Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>>
+	provider: Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>, ListParams<R>>
 ) {
 	const records = z.array(resource.schema);
 	const save = {

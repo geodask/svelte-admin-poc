@@ -23,10 +23,17 @@ const searchableListParams = pageParams.extend({ search: z.string().trim().min(1
  * The input schema of a Resource's `getList` query: a page and a page size, plus a search only
  * when the Resource is searchable. It is strict: an undeclared key (a search included, for a
  * Resource that isn't searchable) is invalid input, so a Provider never sees one, and nothing is
- * coerced.
+ * coerced. Its input and output are the Resource's `ListParams`, so the remote `getList` built
+ * from it is typed from the Resource.
  */
-export function listParamsSchema(resource: Pick<Resource, 'searchable'>): z.ZodType<ListParams> {
-	return resource.searchable ? searchableListParams : pageParams;
+export function listParamsSchema<R extends Pick<Resource, 'searchable'>>(
+	resource: R
+): z.ZodType<ListParams<R>, ListParams<R>> {
+	// The runtime check matches the type: a search only when the Resource is searchable.
+	return (resource.searchable ? searchableListParams : pageParams) as unknown as z.ZodType<
+		ListParams<R>,
+		ListParams<R>
+	>;
 }
 
 /** The schemas of the page and the page size, for reading them from a URL. */
