@@ -167,19 +167,22 @@ export type KindName =
 export type DetectedKind =
 	{ kind: Exclude<KindName, 'enum'> } | { kind: 'enum'; options: readonly (string | number)[] };
 
-const SCALAR_KINDS: ReadonlySet<KindName> = new Set(['text', 'number', 'boolean', 'date', 'enum']);
-
-/** The Kinds a Field can be sorted and filtered by: the scalar ones. */
-export type ScalarKindName = 'text' | 'number' | 'boolean' | 'date' | 'enum';
-
-/** The operators a filter on a Field of each scalar Kind can use, in the canonical order. */
+/**
+ * The operators a filter on a Field of each scalar Kind can use, in the canonical order. Its keys
+ * are the scalar Kinds: the ones a Field can be sorted and filtered by.
+ */
 export const KIND_OPERATORS = {
 	text: ['eq', 'in', 'contains'],
 	number: ['eq', 'lt', 'lte', 'gt', 'gte'],
 	date: ['eq', 'lt', 'lte', 'gt', 'gte'],
 	enum: ['eq', 'in'],
 	boolean: ['eq']
-} as const satisfies Record<ScalarKindName, readonly FilterOperator[]>;
+} as const satisfies Partial<Record<KindName, readonly FilterOperator[]>>;
+
+/** The Kinds a Field can be sorted and filtered by: text, number, date, enum and boolean. */
+export type ScalarKindName = keyof typeof KIND_OPERATORS;
+
+const SCALAR_KINDS: ReadonlySet<KindName> = new Set(Object.keys(KIND_OPERATORS) as KindName[]);
 
 /** The list URL's own params, which no filterable Field's key may be. */
 export const RESERVED_LIST_KEYS = ['page', 'perPage', 'sort', 'order', 'q'] as const;

@@ -142,17 +142,18 @@ function sortBy(records: Records, key: string, order: 'asc' | 'desc'): Records {
 }
 
 /** The list query's own params; any other names a filter. */
-const listParams = new Set(['page', 'perPage', 'sort', 'order', 'q']);
+const listQueryKeys = new Set(['page', 'perPage', 'sort', 'order', 'q']);
 
 /**
- * The records that match every filter in the query: for each Field it names, the record's value
- * written as text must be one of the values given (one for `eq`, several for `in`). `undefined`
- * when a filter has an operator suffix, which this backend can't do yet.
+ * The records that match every filter in the query, or `undefined` when a filter has an operator
+ * suffix, which this backend can't do yet (the caller answers 400). For each Field a filter names,
+ * the record's value written as text must be one of the values given (one for `eq`, several for
+ * `in`).
  */
-function filter(records: Records, query: URLSearchParams): Records | undefined {
+function matchingFilters(records: Records, query: URLSearchParams): Records | undefined {
 	const filters = new Map<string, string[]>();
 	for (const key of new Set(query.keys())) {
-		if (listParams.has(key)) continue;
+		if (listQueryKeys.has(key)) continue;
 		if (key.includes('.')) return undefined;
 		filters.set(key, query.getAll(key));
 	}
@@ -232,7 +233,7 @@ const server = Bun.serve({
 
 		if (request.method === 'GET' && segments.length === 1 && Object.hasOwn(db, segments[0])) {
 			const name = segments[0];
-			let records = filter(db[name], url.searchParams);
+			let records = matchingFilters(db[name], url.searchParams);
 			if (records === undefined) {
 				return json({ message: 'Only eq and in filters are supported' }, 400);
 			}

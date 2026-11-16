@@ -280,7 +280,7 @@ test.describe('the getList remote function with filters', () => {
 			[{ field: 'cuisine', operator: 'eq', value: 'Italian' }],
 			// A boolean has no `in`.
 			[{ field: 'vegetarian', operator: 'in', value: [true, false] }],
-			// An `in` of 101 values.
+			// An `in` of 101 values (the core's unit tests check the bound with distinct ones).
 			[
 				{
 					field: 'difficulty',

@@ -30,8 +30,10 @@ const searchableListParams = pageParams.extend({ search: z.string().trim().min(1
 /** The directions a sort can take, as `getList` and the list URL name them. */
 const sortOrder = z.enum(['asc', 'desc']) satisfies z.ZodType<SortOrder>;
 
-/** The fewest and the most values an `in` filter carries. */
+/** The fewest values an `in` filter carries: with one, it is an `eq`. */
 export const MIN_IN_VALUES = 2;
+
+/** The most values an `in` filter carries, so a crafted URL can't make an unbounded request. */
 export const MAX_IN_VALUES = 100;
 
 /** What `listParamsSchema` asks of a Resource: what `ListParams` does, and its described Fields. */
@@ -96,8 +98,8 @@ export function filterValueKey(value: FilterValue): string {
 function compareFilterValues(a: FilterValue, b: FilterValue): number {
 	const [x, y] = [a, b].map((value) => (value instanceof Date ? value.getTime() : value));
 	if (typeof x === 'number' && typeof y === 'number') return x - y;
-	const [p, q] = [String(x), String(y)];
-	return p < q ? -1 : p > q ? 1 : 0;
+	const [left, right] = [String(x), String(y)];
+	return left < right ? -1 : left > right ? 1 : 0;
 }
 
 /** An `in` filter's values in their canonical order: an enum's in its options' order. */

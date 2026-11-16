@@ -42,6 +42,12 @@ export type FilterOption = {
 };
 
 /**
+ * A GET form that keeps some list params as hidden inputs: where it goes, and each hidden input's
+ * name and value.
+ */
+export type KeptForm = { action: string; hidden: [name: string, value: string][] };
+
+/**
  * The filter control of one filterable Field, in a list View's filter form. Its inputs are named
  * by the Field's key, as the list URL names the filter.
  *
@@ -180,6 +186,18 @@ export function createListView<R extends Resource>(
 		}
 		return radio(options);
 	}
+
+	// One control per filterable Field the list View shows anywhere (`detail`: not hidden).
+	const filterControls = $derived(
+		resource.fields
+			.filter((field) => field.detail && field.filterOperators.length > 0)
+			.map(filterControl)
+			.filter((control) => control !== undefined)
+	);
+	const controlledKeys = $derived(
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
+		new Set(filterControls.map((control) => control.field.key))
+	);
 
 	function sortState(key: SortableKey<R>): SortOrder | undefined {
 		const sort = looseParams.sort;
@@ -344,7 +362,7 @@ export function createListView<R extends Resource>(
 		 * and a sort that aren't the Resource's defaults, and the filters, never the page). The form
 		 * names no empty param.
 		 */
-		get searchForm(): { action: string; name: 'q'; hidden: [name: string, value: string][] } {
+		get searchForm(): KeptForm & { name: 'q' } {
 			const { perPage, sort, filters } = looseParams;
 			return { ...keptForm({ page: 1, perPage, sort, filters }), name: 'q' };
 		},
@@ -354,10 +372,7 @@ export function createListView<R extends Resource>(
 		 * operators no control offers, still work from the URL.
 		 */
 		get filterControls(): FilterControl[] {
-			return resource.fields
-				.filter((field) => field.detail && field.filterOperators.length > 0)
-				.map(filterControl)
-				.filter((control) => control !== undefined);
+			return filterControls;
 		},
 		/** How many filters the list is filtered by now. */
 		get filterCount(): number {
@@ -365,14 +380,20 @@ export function createListView<R extends Resource>(
 		},
 		/**
 		 * The GET form the filter controls sit in, so filters work without JavaScript too: where it
-		 * goes, and the params it keeps as hidden inputs (the search, and a sort and a page size
-		 * that aren't the Resource's defaults, never the page, so it starts again at page 1).
-		 * Without JavaScript it sends its empty controls too, which the list URL ignores; with it,
-		 * submit through `applyFilters`, which leaves them out.
+		 * goes, and the params it keeps as hidden inputs (the search, a sort and a page size that
+		 * aren't the Resource's defaults, and the filters no control sends, such as one on a hidden
+		 * Field; never the page, so it starts again at page 1). Without JavaScript it sends its empty
+		 * controls too, which the list URL ignores; with it, submit through `applyFilters`, which
+		 * leaves them out.
 		 */
-		get filterForm(): { action: string; hidden: [name: string, value: string][] } {
-			const { perPage, sort, search } = looseParams;
-			return keptForm({ page: 1, perPage, sort, search });
+		get filterForm(): KeptForm {
+			const { perPage, sort, search, filters } = looseParams;
+			// A control sends its Field's bare params, so `eq` and `in`; keep every other filter.
+			const uncontrolled = filters?.filter(
+				({ field, operator }) =>
+					!controlledKeys.has(field) || (operator !== 'eq' && operator !== 'in')
+			);
+			return keptForm({ page: 1, perPage, sort, search, filters: uncontrolled });
 		},
 		/** The href of the list with no filters, at page 1, keeping the search, sort and page size. */
 		get clearFiltersHref(): string {
@@ -395,7 +416,7 @@ export function createListView<R extends Resource>(
 	};
 
 	/** A GET form's action and the hidden inputs that keep `kept`, leaving out their defaults. */
-	function keptForm(kept: ListParams): { action: string; hidden: [name: string, value: string][] } {
+	function keptForm(kept: ListParams): KeptForm {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
 		const target = new URL(hrefOf(kept), url);
 		return { action: target.pathname, hidden: [...target.searchParams] };

@@ -9,6 +9,7 @@ export {
 	type BulkDeleteResult,
 	type FilterControl,
 	type FilterOption,
+	type KeptForm,
 	type ListSelection,
 	type ListViewState
 } from './list-view.svelte.ts';
