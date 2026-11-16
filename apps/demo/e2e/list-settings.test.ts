@@ -6,6 +6,8 @@ import {
 	columnHeader,
 	dataRows,
 	pager,
+	sortArrow,
+	sortLink,
 	uniquePage
 } from './list-helpers.ts';
 
@@ -15,16 +17,6 @@ import {
 /** The ID cell of each data row: the second cell, after the selection checkbox. */
 const ids = (page: Page) => dataRows(page).locator('td:nth-child(2)');
 
-/** The link in a sortable Field's column header, which sorts the list by it. */
-const sortLink = (page: Page, label: string) =>
-	columnHeader(page, label).getByRole('link', { name: label, exact: true });
-
-/** The arrow a sorted column's header shows for its direction. */
-const arrow = (page: Page, label: string, order: 'asc' | 'desc') =>
-	columnHeader(page, label).locator(
-		order === 'asc' ? 'svg.lucide-arrow-up' : 'svg.lucide-arrow-down'
-	);
-
 /** Check that the posts list is sorted by id, as the ID header says. */
 async function expectSortedById(page: Page, order: 'asc' | 'desc', first: string) {
 	await expect(ids(page).first()).toHaveText(first);
@@ -32,7 +24,7 @@ async function expectSortedById(page: Page, order: 'asc' | 'desc', first: string
 		'aria-sort',
 		order === 'asc' ? 'ascending' : 'descending'
 	);
-	await expect(arrow(page, 'ID', order)).toBeVisible();
+	await expect(sortArrow(page, 'ID', order)).toBeVisible();
 	await expect(page.locator('th[aria-sort]')).toHaveCount(1);
 }
 
@@ -136,6 +128,17 @@ test.describe("a Resource's default sort", () => {
 		await expectSortedById(page, 'desc', '60');
 	});
 
+	test("its own Field's header sorts ascending first when another Field is sorted", async ({
+		page
+	}) => {
+		await page.goto('/admin/posts?sort=title');
+
+		await sortLink(page, 'ID').click();
+
+		await expect(page).toHaveURL('/admin/posts?sort=id');
+		await expectSortedById(page, 'asc', '1');
+	});
+
 	test('is given to the Provider when getList is asked for no sort @js', async ({
 		page,
 		request
@@ -192,17 +195,27 @@ test.describe("a Resource's own page size", () => {
 
 test.describe('a list URL that writes out a default', () => {
 	const urls = [
-		['the default sort', '/admin/posts?sort=id&order=desc', '/admin/posts', '60'],
-		['its own page size', '/admin/posts?perPage=20', '/admin/posts', '60'],
-		[
-			'both, beside a page',
-			'/admin/posts?perPage=20&sort=id&order=desc&page=2',
-			'/admin/posts?page=2',
-			'40'
-		]
-	] as const;
+		{
+			what: 'the default sort',
+			url: '/admin/posts?sort=id&order=desc',
+			clean: '/admin/posts',
+			first: '60'
+		},
+		{
+			what: 'its own page size',
+			url: '/admin/posts?perPage=20',
+			clean: '/admin/posts',
+			first: '60'
+		},
+		{
+			what: 'both, beside a page',
+			url: '/admin/posts?perPage=20&sort=id&order=desc&page=2',
+			clean: '/admin/posts?page=2',
+			first: '40'
+		}
+	];
 
-	for (const [what, url, , first] of urls) {
+	for (const { what, url, first } of urls) {
 		test(`still renders the right list for ${what}`, async ({ page }) => {
 			await page.goto(url);
 
@@ -212,9 +225,9 @@ test.describe('a list URL that writes out a default', () => {
 	}
 
 	test('is cleaned in place @js', async ({ page }) => {
-		for (const [, url, clean] of [
+		for (const { url, clean } of [
 			...urls,
-			['an ascending default sort', '/admin/users?sort=name&order=asc', '/admin/users']
+			{ url: '/admin/users?sort=name&order=asc', clean: '/admin/users' }
 		]) {
 			await page.goto(url);
 			await expect(page).toHaveURL(clean);

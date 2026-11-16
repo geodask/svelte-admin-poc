@@ -64,6 +64,8 @@ export function createListView<R extends Resource>(
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
 	const url = $derived(new URL(page.url.href));
 	const params = $derived(readListParams(url, resource));
+	/** The href of this list with `next` params, leaving out the Resource's defaults. */
+	const hrefOf = (next: ListParams) => listHref(url, next, resource);
 	const fields = resource.fields.filter((field) => field.list);
 	// The stock page sizes, with the Resource's own in its place among them.
 	const perPageOptions: readonly number[] = PER_PAGE_OPTIONS.includes(resource.perPage)
@@ -90,10 +92,10 @@ export function createListView<R extends Resource>(
 	// The list href a search last navigated to, and the one the URL held when last checked.
 	// Untracked, so the caller's `$derived` doesn't follow the URL.
 	let searchHref: string | undefined;
-	let currentHref = untrack(() => listHref(url, params, resource));
+	let currentHref = untrack(() => hrefOf(params));
 
 	$effect(() => {
-		const href = listHref(url, params, resource);
+		const href = hrefOf(params);
 		if (href === currentHref) return;
 		currentHref = href;
 		// Any other navigation (a pager or page-size link, Back) drops a search still waiting to be
@@ -123,8 +125,8 @@ export function createListView<R extends Resource>(
 	/** Write a search to the URL now, in place, at page 1 of the current page size. */
 	function writeSearch(text: string) {
 		clearTimeout(debounce);
-		const href = listHref(url, { ...params, page: 1, search: text }, resource);
-		if (href === listHref(url, params, resource)) {
+		const href = hrefOf({ ...params, page: 1, search: text });
+		if (href === hrefOf(params)) {
 			draft = undefined;
 			return;
 		}
@@ -207,14 +209,10 @@ export function createListView<R extends Resource>(
 			const { perPage, search } = looseParams;
 			const order = sortState(key);
 			if (order === 'desc' && key !== resource.defaultSort?.field) {
-				return listHref(url, { page: 1, perPage, search }, resource);
+				return hrefOf({ page: 1, perPage, search });
 			}
 			const next: SortOrder = order === 'asc' ? 'desc' : 'asc';
-			return listHref(
-				url,
-				{ page: 1, perPage, search, sort: { field: key, order: next } },
-				resource
-			);
+			return hrefOf({ page: 1, perPage, search, sort: { field: key, order: next } });
 		},
 		/**
 		 * The page sizes to offer, as plain links, smallest first: 10, 25, 50 and 100, plus the
@@ -223,11 +221,11 @@ export function createListView<R extends Resource>(
 		perPageOptions,
 		/** The href of another page, at the same page size. */
 		pageHref(target: number): string {
-			return listHref(url, { ...params, page: target }, resource);
+			return hrefOf({ ...params, page: target });
 		},
 		/** The href of the first page at another page size, keeping the search and the sort. */
 		perPageHref(perPage: number): string {
-			return listHref(url, { ...params, page: 1, perPage }, resource);
+			return hrefOf({ ...params, page: 1, perPage });
 		},
 		/** Whether to offer a search box: only on a searchable Resource. */
 		searchable: resource.searchable,
@@ -279,7 +277,7 @@ export function createListView<R extends Resource>(
 		get searchForm(): { action: string; name: 'q'; hidden: [name: string, value: string][] } {
 			const { perPage, sort } = looseParams;
 			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
-			const kept = new URL(listHref(url, { page: 1, perPage, sort }, resource), url);
+			const kept = new URL(hrefOf({ page: 1, perPage, sort }), url);
 			return { action: kept.pathname, name: 'q', hidden: [...kept.searchParams] };
 		}
 	};

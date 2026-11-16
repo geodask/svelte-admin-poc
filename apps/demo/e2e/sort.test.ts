@@ -9,21 +9,13 @@ import {
 	dataRows,
 	pager,
 	selectedCount,
+	sortArrow,
+	sortLink,
 	uniquePage
 } from './list-helpers.ts';
 
 /** The Name cell of each data row: the third cell, after the selection checkbox and the ID. */
 const names = (page: Page) => dataRows(page).locator('td:nth-child(3)');
-
-/** The arrow a sorted column's header shows for its direction. */
-const arrow = (page: Page, label: string, order: 'asc' | 'desc') =>
-	columnHeader(page, label).locator(
-		order === 'asc' ? 'svg.lucide-arrow-up' : 'svg.lucide-arrow-down'
-	);
-
-/** The link in a sortable Field's column header, which sorts the list by it. */
-const sortLink = (page: Page, label: string) =>
-	columnHeader(page, label).getByRole('link', { name: label, exact: true });
 
 test.describe('sorting recipes by a Field, from its column header', () => {
 	test('a header sorts the whole list on the server, across pages', async ({ page, request }) => {
@@ -77,20 +69,20 @@ test.describe('sorting recipes by a Field, from its column header', () => {
 		await sortLink(page, 'Name').click();
 		await expect(page).toHaveURL('/admin/recipes?sort=name');
 		await expect(header).toHaveAttribute('aria-sort', 'ascending');
-		await expect(arrow(page, 'Name', 'asc')).toBeVisible();
+		await expect(sortArrow(page, 'Name', 'asc')).toBeVisible();
 		await expect(page.locator('th[aria-sort]')).toHaveCount(1);
 
 		await sortLink(page, 'Name').click();
 		await expect(page).toHaveURL('/admin/recipes?sort=name&order=desc');
 		await expect(header).toHaveAttribute('aria-sort', 'descending');
-		await expect(arrow(page, 'Name', 'desc')).toBeVisible();
-		await expect(arrow(page, 'Name', 'asc')).toHaveCount(0);
+		await expect(sortArrow(page, 'Name', 'desc')).toBeVisible();
+		await expect(sortArrow(page, 'Name', 'asc')).toHaveCount(0);
 		await expect(names(page).first()).toHaveText('Vietnamese Pho');
 
 		await sortLink(page, 'Name').click();
 		await expect(page).toHaveURL('/admin/recipes');
 		await expect(header).not.toHaveAttribute('aria-sort');
-		await expect(arrow(page, 'Name', 'desc')).toHaveCount(0);
+		await expect(sortArrow(page, 'Name', 'desc')).toHaveCount(0);
 		await expect(names(page).first()).toHaveText('Classic Margherita Pizza');
 	});
 
@@ -129,7 +121,7 @@ test.describe('sorting recipes by a Field, from its column header', () => {
 			['desc', 'Mapo Tofu']
 		] as const) {
 			await sortLink(page, 'Calories').click();
-			await expect(arrow(page, 'Calories', order)).toBeVisible();
+			await expect(sortArrow(page, 'Calories', order)).toBeVisible();
 			await expect(names(page).first()).toHaveText(first);
 			const calories = await (await columnCells(page, 'Calories')).allInnerTexts();
 			expect(calories).toHaveLength(55);

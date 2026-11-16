@@ -23,16 +23,16 @@ export type ListParamDefaults = {
 };
 
 /** What the list URL asks of a Resource: what `listParamsSchema` does, and its list settings. */
-export type ListUrlResource = ListSchemaResource & ListHrefResource;
+export type ListUrlResource = ListSchemaResource & ListSettings;
 
-/** The list settings `listHref` leaves out of a URL: a Resource's page size and default sort. */
-export type ListHrefResource = Pick<Resource, 'perPage' | 'defaultSort'>;
+/** A Resource's list settings, which `listHref` leaves out of a URL: its page size and default sort. */
+export type ListSettings = Pick<Resource, 'perPage' | 'defaultSort'>;
 
 /**
  * The defaults a Resource's list URL falls back to when it leaves a param out, and so leaves
  * out: page 1, the Resource's page size and its default sort, and an ascending order.
  */
-function urlDefaults(resource: ListHrefResource): ListParamDefaults {
+function urlDefaults(resource: ListSettings): ListParamDefaults {
 	const { perPage, defaultSort } = resource;
 	return { page: 1, perPage, order: 'asc', sort: defaultSort };
 }
@@ -95,8 +95,8 @@ export function readListParams<R extends ListUrlResource>(url: URL, resource: R)
  * Provider so the two can't drift: `page`, `perPage`, the sort as `sort` and `order`, then the
  * search as `q`. A blank search is never written, nor an `order` without a sort. Given
  * `defaults`, a param at its default is left out too, as the list URL does (so `order=asc` is
- * never in it, nor the default sort); without them every other param is written, as the REST Provider does, so a
- * backend never has to know the defaults. `readListParams` reads it back.
+ * never in it, nor the default sort); without them every other param is written, as the REST
+ * Provider does, so a backend never has to know the defaults. `readListParams` reads it back.
  */
 export function encodeListParams(
 	params: ListParams,
@@ -121,7 +121,7 @@ export function encodeListParams(
  * and default sort included, and a blank search is none), and every other search param is
  * dropped. Params with no sort read back with the Resource's default sort.
  */
-export function listHref(url: URL, params: ListParams, resource: ListHrefResource): string {
+export function listHref(url: URL, params: ListParams, resource: ListSettings): string {
 	const query = encodeListParams(params, urlDefaults(resource)).toString();
 	return query ? `${url.pathname}?${query}` : url.pathname;
 }

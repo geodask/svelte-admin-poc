@@ -26,6 +26,16 @@ export const openInSidebar = (page: Page, label: string) =>
 export const columnHeader = (page: Page, label: string) =>
 	page.getByRole('columnheader', { name: label, exact: true });
 
+/** The link in a sortable Field's column header, which sorts the list by it. */
+export const sortLink = (page: Page, label: string) =>
+	columnHeader(page, label).getByRole('link', { name: label, exact: true });
+
+/** The arrow a sorted column's header shows for its direction. */
+export const sortArrow = (page: Page, label: string, order: 'asc' | 'desc') =>
+	columnHeader(page, label).locator(
+		order === 'asc' ? 'svg.lucide-arrow-up' : 'svg.lucide-arrow-down'
+	);
+
 /** The cells of one column of the list View's table, by its header's label, in row order. */
 export async function columnCells(page: Page, label: string) {
 	const labels = await page.getByRole('columnheader').allInnerTexts();
