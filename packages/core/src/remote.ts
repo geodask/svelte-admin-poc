@@ -82,4 +82,19 @@ export type ResourceRemote<T = any, Id = any> = {
 	 * Fields and redirects to its detail View.
 	 */
 	update: RemoteFormLike & { for(id: Id): RemoteFormLike };
+	/**
+	 * Delete one record. A remote command, so it runs only with JavaScript: call
+	 * `deleteOne(id).updates(getList)`, so the server refreshes the list queries the client has.
+	 * It rejects with `{ status, body: { message } }` when the delete fails.
+	 */
+	deleteOne: (id: Id) => RemoteCommandCall;
+};
+
+/**
+ * One call of a remote command: a promise of its completion, and `updates` to name the queries
+ * the server refreshes along with it (e.g. a Resource's `getList`, for all its instances).
+ */
+export type RemoteCommandCall = Promise<void> & {
+	// A method, so Kit's stricter parameter type fits it.
+	updates(...queries: unknown[]): Promise<void>;
 };

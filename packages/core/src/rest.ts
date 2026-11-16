@@ -31,6 +31,8 @@ const listResponse = z.union([
  * - `PUT {base}/{resource}/{id}` with the whole editable record (without its id) as JSON
  *   replaces it, and returns the saved record. An optional Field missing from the body was
  *   cleared.
+ * - `DELETE {base}/{resource}/{id}` deletes the record, and answers with no content (usually a
+ *   204). Any body it sends is ignored.
  * - A failing status becomes a Provider error: 404 is `NotFoundError`, 400 is
  *   `InvalidInputError`, 409 is `ConflictError`. A 422 whose body is
  *   `{ issues: [{ path, message }] }` is a `FieldError` with those issues, so each message
@@ -82,6 +84,13 @@ export function restProvider(baseUrl: string) {
 				async update({ fetch }, { id, data }) {
 					const url = `${resourceUrl}/${idPathSegment(id)}`;
 					return (await requestJson(fetch, 'PUT', url, data)) as RecordOf<R>;
+				},
+
+				async deleteOne({ fetch }, id) {
+					const url = `${resourceUrl}/${idPathSegment(id)}`;
+					const response = await request(fetch, 'DELETE', url);
+					// Nothing is read from the response, so free its body.
+					await response.body?.cancel();
 				}
 			};
 		}
@@ -107,6 +116,19 @@ async function requestJson(
 	url: string,
 	body?: unknown
 ): Promise<unknown> {
+	return (await request(fetch, method, url, body)).json();
+}
+
+/**
+ * Send a request, with `body` as JSON when there is one, and return its successful response.
+ * A failing status becomes the Provider error it means, or an unexpected error.
+ */
+async function request(
+	fetch: typeof globalThis.fetch,
+	method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+	url: string,
+	body?: unknown
+): Promise<Response> {
 	const response = await fetch(url, {
 		method,
 		headers:
@@ -129,5 +151,5 @@ async function requestJson(
 			`REST Provider: ${method} ${url} failed with ${response.status}${said ? `: ${said}` : ''}`
 		);
 	}
-	return response.json();
+	return response;
 }

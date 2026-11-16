@@ -33,35 +33,49 @@ const recipeProvider: Provider<Recipe> = {
 	// `create` gets the record without its id, and returns it with the id the backend assigned.
 	create: async (_ctx, data) => ({ id: 2, ...data }),
 	// `update` gets the typed id and every editable Field, and returns the saved record.
-	update: async (_ctx, { id, data }) => ({ id, ...data })
+	update: async (_ctx, { id, data }) => ({ id, ...data }),
+	// `deleteOne` gets the typed id, and returns nothing.
+	deleteOne: async () => {}
 };
 
 const userProvider: Provider<{ id: number; email: string }> = {
 	getList: async () => ({ data: [], hasNextPage: false }),
 	getOne: async (_ctx, id) => ({ id, email: 'ada@example.com' }),
 	create: async (_ctx, data) => ({ id: 1, ...data }),
-	update: async (_ctx, { id, data }) => ({ id, ...data })
+	update: async (_ctx, { id, data }) => ({ id, ...data }),
+	deleteOne: async () => {}
 };
 
 // @ts-expect-error a Provider must be able to read one record
 const listOnlyProvider: Provider<Recipe> = {
 	getList: async () => ({ data: [], total: 0 }),
 	create: async (_ctx, data) => ({ id: 2, ...data }),
-	update: async (_ctx, { id, data }) => ({ id, ...data })
+	update: async (_ctx, { id, data }) => ({ id, ...data }),
+	deleteOne: async () => {}
 };
 
 // @ts-expect-error a Provider must be able to create a record
 const readOnlyProvider: Provider<Recipe> = {
 	getList: async () => ({ data: [], total: 0 }),
 	getOne: async (_ctx, id) => ({ id, name: 'Classic Margherita Pizza' }),
-	update: async (_ctx, { id, data }) => ({ id, ...data })
+	update: async (_ctx, { id, data }) => ({ id, ...data }),
+	deleteOne: async () => {}
 };
 
 // @ts-expect-error a Provider must be able to update a record
 const createOnlyProvider: Provider<Recipe> = {
 	getList: async () => ({ data: [], total: 0 }),
 	getOne: async (_ctx, id) => ({ id, name: 'Classic Margherita Pizza' }),
-	create: async (_ctx, data) => ({ id: 2, ...data })
+	create: async (_ctx, data) => ({ id: 2, ...data }),
+	deleteOne: async () => {}
+};
+
+// @ts-expect-error a Provider must be able to delete a record
+const undeletableProvider: Provider<Recipe> = {
+	getList: async () => ({ data: [], total: 0 }),
+	getOne: async (_ctx, id) => ({ id, name: 'Classic Margherita Pizza' }),
+	create: async (_ctx, data) => ({ id: 2, ...data }),
+	update: async (_ctx, { id, data }) => ({ id, ...data })
 };
 
 const sneakyProvider: Provider<Recipe> = {
@@ -70,7 +84,8 @@ const sneakyProvider: Provider<Recipe> = {
 	// @ts-expect-error `create` never receives an id: the backend assigns it
 	create: async (_ctx, data) => ({ id: data.id, name: data.name }),
 	// @ts-expect-error `update` gets the id beside the data, never inside it
-	update: async (_ctx, { data }) => ({ id: data.id, name: data.name })
+	update: async (_ctx, { data }) => ({ id: data.id, name: data.name }),
+	deleteOne: async () => {}
 };
 
 const textIdUpdate: Provider<Recipe> = {
@@ -81,8 +96,20 @@ const textIdUpdate: Provider<Recipe> = {
 	update: async (_ctx, { id, data }: { id: string; data: { name: string } }) => ({
 		id: Number(id),
 		...data
-	})
+	}),
+	deleteOne: async () => {}
 };
+
+const textIdDelete: Provider<Recipe> = {
+	getList: async () => ({ data: [], total: 0 }),
+	getOne: async (_ctx, id) => ({ id, name: 'Classic Margherita Pizza' }),
+	create: async (_ctx, data) => ({ id: 2, ...data }),
+	update: async (_ctx, { id, data }) => ({ id, ...data }),
+	// @ts-expect-error a recipe id arrives as a number, never as text
+	deleteOne: async (_ctx, id: string) => void id.trim()
+};
+void undeletableProvider;
+void textIdDelete;
 void readOnlyProvider;
 void createOnlyProvider;
 void sneakyProvider;
@@ -93,7 +120,8 @@ const stringIdProvider: Provider<Recipe, string> = {
 	getList: async () => ({ data: [], total: 0 }),
 	getOne: async (_ctx, id) => ({ id: Number(id), name: 'Coerced' }),
 	create: async (_ctx, data) => ({ id: 2, ...data }),
-	update: async (_ctx, { id, data }) => ({ id: Number(id), ...data })
+	update: async (_ctx, { id, data }) => ({ id: Number(id), ...data }),
+	deleteOne: async () => {}
 };
 
 // A Provider whose records match the schema is accepted, and what it serves fits admin.ts.
@@ -116,6 +144,12 @@ serveResource(recipes, stringIdProvider);
 const recipe: Promise<Recipe> = recipesRemote.getOne(1);
 // @ts-expect-error a recipe id is a number, so '1' is not one
 void recipesRemote.getOne('1');
+
+// The remote deleteOne takes the canonical id type too, and fits the remote the Views take.
+const recipesDelete: ResourceRemote<Recipe, number>['deleteOne'] = recipesRemote.deleteOne;
+void recipesDelete(1);
+// @ts-expect-error a recipe id is a number, so '1' is not one
+void recipesRemote.deleteOne('1');
 void recipe;
 void listOnlyProvider;
 

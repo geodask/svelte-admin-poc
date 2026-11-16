@@ -21,6 +21,9 @@ export {
 	type SelectionCheckboxProps
 } from './SelectionCheckbox.svelte';
 
+// Parts for a replaced detail View, driven by the core's `createDetailView`.
+export { default as DeleteDialog, type DeleteDialogProps } from './DeleteDialog.svelte';
+
 // The Field display: a Field's value by its Kind, in a list View cell or on the detail View.
 export { default as FieldCell, type FieldCellProps } from './FieldCell.svelte';
 export { default as FieldValue, type FieldValueProps } from './FieldValue.svelte';

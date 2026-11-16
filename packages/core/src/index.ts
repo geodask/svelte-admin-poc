@@ -32,6 +32,7 @@ export {
 	type SidebarItem
 } from './admin.ts';
 export type {
+	RemoteCommandCall,
 	RemoteFormField,
 	RemoteFormInputType,
 	RemoteFormIssue,

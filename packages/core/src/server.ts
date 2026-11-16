@@ -1,6 +1,6 @@
 // The core's server-only entry point. It imports `$app/server`, so only `.remote.ts` files and
 // server-only modules may import it. The shared entry (`@svelte-admin/core`) never re-exports it.
-import { form, getRequestEvent, query, requested } from '$app/server';
+import { command, form, getRequestEvent, query, requested } from '$app/server';
 import { error, invalid, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { FieldError, NotFoundError, ProviderError } from './errors.ts';
@@ -36,8 +36,11 @@ const MAX_REFRESHED_LISTS = 25;
  *   browser also runs as its preflight. It works without JavaScript too. After a save it
  *   refreshes the list queries the client asks for and redirects with a 303 to the new record's
  *   detail View.
+ * - `update` is the edit form, likewise, redirecting to the record's detail View.
+ * - `deleteOne` is a remote command, so it needs JavaScript. It takes the typed id, and after
+ *   the delete refreshes the list queries the client asks for (`deleteOne(id).updates(getList)`).
  *
- * From a read, a Provider error becomes an HTTP error with its message: `NotFoundError` a 404,
+ * From a read or a delete, a Provider error becomes an HTTP error with its message: `NotFoundError` a 404,
  * `InvalidInputError` a 400 and `ConflictError` a 409. From a save, it keeps the user on the
  * form with what they typed, as a schema issue would: each issue of a `FieldError` shows under
  * the input its path names (or at the top of the form when it names none), and any other
@@ -57,7 +60,10 @@ const MAX_REFRESHED_LISTS = 25;
  * from any other page it is refused before the Provider is called.
  *
  * @example
- * export const { getList, getOne, create, update } = serveResource(recipes, backend.for(recipes));
+ * export const { getList, getOne, create, update, deleteOne } = serveResource(
+ * 	recipes,
+ * 	backend.for(recipes)
+ * );
  */
 export function serveResource<R extends Resource>(
 	resource: R,
@@ -138,7 +144,13 @@ export function serveResource<R extends Resource>(
 		redirect(303, detailPath);
 	});
 
-	return { getList, getOne, create, update };
+	// The same id schema as `getOne`: `deleteOne('1')` is invalid input for a number id.
+	const deleteOne = command(idSchema, async (id): Promise<void> => {
+		await served(() => provider.deleteOne(providerContext(), id));
+		await requested(getList, MAX_REFRESHED_LISTS).refreshAll();
+	});
+
+	return { getList, getOne, create, update, deleteOne };
 }
 
 /** Run a Provider call, turning a Provider error into the HTTP error with its status. */
