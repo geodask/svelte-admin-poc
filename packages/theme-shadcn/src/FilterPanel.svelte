@@ -26,7 +26,7 @@
 
 	const form = $derived(view.filterForm);
 	const controls = $derived(view.filterControls);
-	const ids = $props.id();
+	const idPrefix = $props.id();
 
 	const inputClass =
 		'h-9 w-full min-w-0 rounded-md border bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50';
@@ -37,13 +37,19 @@
 	}
 </script>
 
-{#snippet utc(input: FilterInputType)}
+{#snippet utcNote(input: FilterInputType)}
 	{#if input === 'datetime'}<span class="font-normal text-muted-foreground">(UTC)</span>{/if}
 {/snippet}
 
-{#snippet filterInput(input: FilterInputType, { name, value }: FilterInput, id: string)}
+{#snippet valueInput(
+	input: FilterInputType,
+	{ name, value }: FilterInput,
+	id: string,
+	label?: string
+)}
 	<input
 		{id}
+		aria-label={label}
 		type={htmlType(input)}
 		{name}
 		{value}
@@ -85,26 +91,34 @@
 			{/each}
 
 			{#each controls as control (control.field.key)}
-				{@const id = `${ids}-${control.field.key}`}
+				{@const id = `${idPrefix}-${control.field.key}`}
 				{#if control.type === 'input'}
 					<div class="flex flex-col gap-1.5">
 						<label for={id} class="text-sm font-medium">
 							{control.field.label}
-							{@render utc(control.input)}
+							{@render utcNote(control.input)}
 						</label>
-						{@render filterInput(control.input, control.value, id)}
+						{#each control.values as value, index (index)}
+							<!-- Each box after the first is labelled by its place, as the label names the first. -->
+							{@render valueInput(
+								control.input,
+								value,
+								index === 0 ? id : `${id}-${index}`,
+								index === 0 ? undefined : `${control.field.label} ${index + 1}`
+							)}
+						{/each}
 					</div>
 				{:else if control.type === 'range'}
 					<fieldset class="flex flex-col gap-2">
 						<legend class="mb-1 text-sm font-medium">
 							{control.field.label}
-							{@render utc(control.input)}
+							{@render utcNote(control.input)}
 						</legend>
 						<div class="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-1.5">
 							<label for="{id}-from" class="text-sm text-muted-foreground">From</label>
-							{@render filterInput(control.input, control.from, `${id}-from`)}
+							{@render valueInput(control.input, control.from, `${id}-from`)}
 							<label for="{id}-to" class="text-sm text-muted-foreground">To</label>
-							{@render filterInput(control.input, control.to, `${id}-to`)}
+							{@render valueInput(control.input, control.to, `${id}-to`)}
 						</div>
 					</fieldset>
 				{:else}

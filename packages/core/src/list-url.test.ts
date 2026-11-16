@@ -703,10 +703,14 @@ describe('the list URL helper', () => {
 
 		it.each([
 			['a number that is not a number', '?prepTimeMinutes.gte=abc'],
-			['a number in exponent form', '?prepTimeMinutes.gte=1e3'],
+			['a number with a plus sign', '?prepTimeMinutes.gte=%2B5'],
+			['a number with a trailing dot', '?prepTimeMinutes.gte=5.'],
 			['a number in hex', '?prepTimeMinutes=0x10'],
 			['a number with spaces', '?prepTimeMinutes.lte=%2010'],
-			['a number that is not finite', '?prepTimeMinutes.lt=Infinity&prepTimeMinutes.gt=NaN'],
+			[
+				'a number that is not finite',
+				'?prepTimeMinutes.lt=Infinity&prepTimeMinutes.gt=NaN&prepTimeMinutes.gte=1e999'
+			],
 			['an empty number', '?prepTimeMinutes.gte=&prepTimeMinutes.lte='],
 			['blank text', '?name.contains=&name=%20%20'],
 			['contains on a Field narrowed to eq and in', '?cuisine.contains=Ital'],
@@ -817,6 +821,11 @@ describe('the list URL helper', () => {
 				'a number in a longer form',
 				'?prepTimeMinutes.gte=010.50',
 				'/admin/recipes?prepTimeMinutes.gte=10.5'
+			],
+			[
+				'numbers as a number input may send them',
+				'?prepTimeMinutes.gte=.5&prepTimeMinutes.lte=1e3',
+				'/admin/recipes?prepTimeMinutes.lte=1000&prepTimeMinutes.gte=0.5'
 			],
 			[
 				'a datetime with zero seconds',

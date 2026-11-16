@@ -5,7 +5,7 @@ import {
 	readDateInput,
 	readDatetimeInput
 } from './date-input.ts';
-import { unwrap, type Field } from './fields.ts';
+import { unwrap, type Field, type FilterOperator } from './fields.ts';
 import {
 	canonicalValues,
 	filterableFields,
@@ -37,6 +37,9 @@ export type ListParamDefaults = {
 	order: SortOrder;
 	sort?: ListSort;
 };
+
+/** What reading or writing a filter value asks of a Resource: its described Fields and its schema. */
+export type FilterFieldsResource = Pick<ListSchemaResource, 'fields' | 'schema'>;
 
 /** What the list URL asks of a Resource: what `listParamsSchema` does, and its list settings. */
 export type ListUrlResource = ListSchemaResource & ListSettings;
@@ -80,8 +83,11 @@ function readSort(
 	return { field, order: searchParams.get('order') === 'desc' ? 'desc' : 'asc' };
 }
 
-/** A number as the list URL writes it: a plain decimal, such as `15`, `-5` or `45.5`. */
-const PLAIN_DECIMAL = /^-?\d+(\.\d+)?$/;
+/**
+ * A number as a number input may send it: an HTML floating-point number, such as `15`, `-5`,
+ * `45.5`, `.5` or `1e3`. The list URL writes it back as a plain decimal.
+ */
+const INPUT_NUMBER = /^-?(\d+(\.\d+)?|\.\d+)([eE][-+]?\d+)?$/;
 
 /**
  * Which type a date Field holds: an ISO datetime string, an ISO date string, or a `Date`. The
@@ -95,13 +101,13 @@ function dateType(schema: z.ZodType): 'datetime' | 'date' | 'Date' {
 }
 
 /** The schema of a Resource's Field, by its key. */
-function schemaOf(resource: Pick<ListSchemaResource, 'schema'>, field: Field): z.ZodType {
+function schemaOf(resource: Pick<FilterFieldsResource, 'schema'>, field: Field): z.ZodType {
 	return resource.schema.shape[field.key] as z.ZodType;
 }
 
 /**
  * One filter value as the list URL writes it, read into the Field's type, or `undefined` when it
- * is empty, blank or malformed: text as written; a number as a plain decimal; a boolean as `true`
+ * is empty, blank or malformed: text as written; a number as a number input sends it; a boolean as `true`
  * or `false`; an enum member as written (any other text is no member); and a date as the filter
  * input sends it, with the rules the forms use: a datetime as `YYYY-MM-DDTHH:mm` (seconds
  * optional) in UTC, becoming an ISO datetime string, and a date as `YYYY-MM-DD`, becoming an ISO
@@ -123,7 +129,7 @@ function urlValue(field: Field, schema: z.ZodType, text: string): FilterValue | 
 		case 'boolean':
 			return text === 'true' ? true : text === 'false' ? false : undefined;
 		case 'number':
-			return PLAIN_DECIMAL.test(text) ? Number(text) : undefined;
+			return INPUT_NUMBER.test(text) ? Number(text) : undefined;
 		case 'date': {
 			const type = dateType(schema);
 			if (type === 'datetime') return readDatetimeInput(text);
@@ -140,8 +146,8 @@ function urlValue(field: Field, schema: z.ZodType, text: string): FilterValue | 
  * input sends: a datetime as a `datetime-local` input does, in UTC (`2024-03-01T10:30`), a `Date`
  * as a `date` input does (`2024-03-01`), and anything else as text.
  */
-export function urlFilterValue(
-	resource: Pick<ListSchemaResource, 'fields' | 'schema'>,
+export function filterInputValue(
+	resource: FilterFieldsResource,
 	key: string,
 	value: FilterValue
 ): string {
@@ -155,18 +161,23 @@ export function urlFilterValue(
  * The input a date filter on a Resource's Field `key` uses: `datetime` (a `datetime-local` input,
  * in UTC) for an ISO datetime Field, else `date`.
  */
-export function dateInputType(
-	resource: Pick<ListSchemaResource, 'fields' | 'schema'>,
-	key: string
-): 'date' | 'datetime' {
+export function dateInputType(resource: FilterFieldsResource, key: string): 'date' | 'datetime' {
 	const field = resource.fields.find((candidate) => candidate.key === key);
 	if (field?.kind !== 'date') return 'date';
 	return dateType(schemaOf(resource, field)) === 'datetime' ? 'datetime' : 'date';
 }
 
 /** A filter value as the shared encoder writes it: a `Date` as an ISO string, anything else as text. */
-function writeFilterValue(value: FilterValue): string {
+function encodedFilterValue(value: FilterValue): string {
 	return value instanceof Date ? value.toISOString() : String(value);
+}
+
+/**
+ * The list URL's param for a filter on the Field `key` with `operator`: the key itself for `eq`
+ * and `in` (bare, or repeated), and a suffix for any other (`name.contains`).
+ */
+export function filterParamName(key: string, operator: FilterOperator): string {
+	return operator === 'eq' || operator === 'in' ? key : `${key}.${operator}`;
 }
 
 /**
@@ -178,7 +189,7 @@ function writeFilterValue(value: FilterValue): string {
  */
 function readFilters(
 	searchParams: URLSearchParams,
-	resource: Pick<ListSchemaResource, 'fields' | 'schema'>
+	resource: FilterFieldsResource
 ): ListFilter[] | undefined {
 	const filters: ListFilter[] = [];
 	for (const field of filterableFields(resource)) {
@@ -203,7 +214,7 @@ function readFilters(
 		}
 		for (const operator of operators) {
 			if (operator === 'eq' || operator === 'in') continue;
-			const value = read(searchParams.get(`${key}.${operator}`) ?? '');
+			const value = read(searchParams.get(filterParamName(key, operator)) ?? '');
 			if (value !== undefined) filters.push({ field: key, operator, value });
 		}
 	}
@@ -266,16 +277,16 @@ export function encodeListParams(
 	if (q !== undefined) encoded.set('q', q);
 	for (const { field, operator, value } of params.filters ?? []) {
 		if (operator === 'in') {
-			for (const item of value) encoded.append(field, writeFilterValue(item));
+			for (const item of value) encoded.append(field, encodedFilterValue(item));
 		} else {
-			encoded.append(operator === 'eq' ? field : `${field}.${operator}`, writeFilterValue(value));
+			encoded.append(filterParamName(field, operator), encodedFilterValue(value));
 		}
 	}
 	return encoded;
 }
 
 /** What `listHref` asks of a Resource: its list settings, and its Fields to write filter values by. */
-export type ListHrefResource = ListSettings & Pick<ListSchemaResource, 'fields' | 'schema'>;
+export type ListHrefResource = ListSettings & FilterFieldsResource;
 
 /**
  * The href of the list at `url`'s path with `params`, for pager, page-size and search links.
@@ -288,7 +299,7 @@ export type ListHrefResource = ListSettings & Pick<ListSchemaResource, 'fields' 
  */
 export function listHref(url: URL, params: ListParams, resource: ListHrefResource): string {
 	const filters = params.filters?.map((filter): ListFilter => {
-		const write = (value: FilterValue) => urlFilterValue(resource, filter.field, value);
+		const write = (value: FilterValue) => filterInputValue(resource, filter.field, value);
 		return filter.operator === 'in'
 			? { ...filter, value: filter.value.map(write) }
 			: { ...filter, value: write(filter.value) };

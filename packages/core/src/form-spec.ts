@@ -415,8 +415,6 @@ function inputValue(spec: FormInputSpec, value: unknown): unknown {
 		case 'date':
 			return value instanceof Date ? dateInputValue(value) : String(value);
 		case 'datetime':
-			// `2024-03-01T23:30:15.250Z` is written `2024-03-01T23:30:15.250`, and without the
-			// seconds and milliseconds when they are zero.
 			return datetimeInputValue(String(value));
 		case 'list': {
 			if (!Array.isArray(value)) return undefined;

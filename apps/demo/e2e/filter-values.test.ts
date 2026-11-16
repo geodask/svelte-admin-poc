@@ -2,54 +2,24 @@
 // and the list URL's operator suffixes (`name.contains`, `prepTimeMinutes.gte`).
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { backendRequestsDuring, columnCells, dataRows } from './list-helpers.ts';
-
-/** The Name cell of each data row: the third cell, after the selection checkbox and the ID. */
-const names = (page: Page) => dataRows(page).locator('td:nth-child(3)');
-
-/** The toolbar's "Filters" disclosure. */
-const filtersToggle = (page: Page) => page.locator('summary', { hasText: 'Filters' });
-
-/** The filter panel's form. */
-const filterForm = (page: Page) => page.getByRole('form', { name: 'Filters' });
-
-/** Open the filter panel, unless it is open already (with JavaScript it stays open after Apply). */
-async function openFilters(page: Page) {
-	if (!(await filterForm(page).isVisible())) await filtersToggle(page).click();
-	await expect(filterForm(page)).toBeVisible();
-}
-
-/** Open the filter panel, set its controls with `choose`, and apply them. */
-async function applyFilters(
-	page: Page,
-	choose: (form: ReturnType<typeof filterForm>) => Promise<void>
-) {
-	await openFilters(page);
-	await choose(filterForm(page));
-	await filterForm(page).getByRole('button', { name: 'Apply' }).click();
-}
+import {
+	applyFilters,
+	backendRequestsDuring,
+	columnCells,
+	dataRows,
+	expectLanded,
+	filterForm,
+	filtersToggle,
+	isJs,
+	names,
+	openFilters
+} from './list-helpers.ts';
 
 /** A from-to range in the filter panel, by its Field's label (with "(UTC)" for a datetime). */
 const range = (page: Page, label: string) => {
 	const group = filterForm(page).getByRole('group', { name: label });
 	return { from: group.getByLabel('From'), to: group.getByLabel('To') };
 };
-
-const isJs = () => test.info().project.name === 'js';
-
-/**
- * Expect the URL a filter form lands on: with JavaScript, the clean one; without, the same params
- * plus the empty ones the form posts for the controls left blank, wherever they fall.
- */
-async function expectLanded(page: Page, clean: string) {
-	if (isJs()) return expect(page).toHaveURL(clean);
-	const sorted = (url: URL) => {
-		const params = new URLSearchParams([...url.searchParams].filter(([, value]) => value !== ''));
-		params.sort();
-		return `${url.pathname}?${params}`;
-	};
-	await expect(page).toHaveURL((url) => sorted(url) === sorted(new URL(clean, url)));
-}
 
 /** The values of a column, as numbers. */
 async function numbersIn(page: Page, label: string): Promise<number[]> {
@@ -88,7 +58,7 @@ test.describe('a text filter', () => {
 	}) => {
 		const perPage = isJs() ? 83 : 84;
 		await page.goto(`/admin/recipes?perPage=${perPage}`);
-		const cuisine = filterForm(page).getByRole('textbox', { name: 'Cuisine' });
+		const cuisine = filterForm(page).getByRole('textbox', { name: 'Cuisine', exact: true });
 
 		const log = await backendRequestsDuring(request, async () => {
 			await applyFilters(page, () => cuisine.fill('Italian'));
@@ -105,7 +75,7 @@ test.describe('a text filter', () => {
 		await expect(page.getByText('No recipes match the filters.')).toBeVisible();
 	});
 
-	test('the URL takes repeated cuisine params as in', async ({ page }) => {
+	test('the URL takes repeated cuisine params as in, one box per value', async ({ page }) => {
 		await page.goto('/admin/recipes?cuisine=Thai&cuisine=Italian');
 
 		await expect(names(page)).toHaveText([
@@ -118,6 +88,24 @@ test.describe('a text filter', () => {
 			'Pad Thai'
 		]);
 		await expect(filtersToggle(page)).toHaveText(/^\s*Filters\s*1\s*$/);
+
+		// The cuisine control shows one box per value, so clearing one leaves the other as eq.
+		await openFilters(page);
+		await expect(
+			filterForm(page).getByRole('textbox', { name: 'Cuisine', exact: true })
+		).toHaveValue('Italian');
+		const thai = filterForm(page).getByRole('textbox', { name: 'Cuisine 2' });
+		await expect(thai).toHaveValue('Thai');
+		await applyFilters(page, () => thai.fill(''));
+		await expectLanded(page, '/admin/recipes?cuisine=Italian');
+		await expect(dataRows(page)).toHaveCount(5);
+
+		// Typing in the one box left replaces the filter.
+		await applyFilters(page, () =>
+			filterForm(page).getByRole('textbox', { name: 'Cuisine', exact: true }).fill('Thai')
+		);
+		await expectLanded(page, '/admin/recipes?cuisine=Thai');
+		await expect(names(page)).toHaveText(['Thai Green Curry', 'Pad Thai']);
 	});
 
 	test('the URL drops contains on the narrowed cuisine, and the backend never gets it', async ({

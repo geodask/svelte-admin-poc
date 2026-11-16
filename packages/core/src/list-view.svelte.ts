@@ -7,10 +7,11 @@ import type { Field, FilterOperator } from './fields.ts';
 import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
 import {
 	dateInputType,
+	filterParamName,
 	listHref,
 	listUrlRewrite,
 	readListParams,
-	urlFilterValue
+	filterInputValue
 } from './list-url.ts';
 import { titleKeys } from './record-title.ts';
 import type { DeleteFailure, ResourceRemote } from './remote.ts';
@@ -77,8 +78,9 @@ export type FilterInputType = 'text' | 'number' | 'date' | 'datetime';
  * - `radio`: one of the options, the first of which is "Any" (no filter, an empty value), for a
  *   boolean Field (Any / Yes / No) or an enum Field that allows only `eq`. It filters with `eq`.
  * - `input`: one input. For a text Field a text box, filtering with `contains` when the Field
- *   allows it, else with `eq`; for a number or date Field that doesn't allow a range, its one
- *   value, filtering with `eq`. Empty, it filters nothing.
+ *   allows it, else with `eq` (and, when the list is filtered by an `in` from the URL, one box
+ *   per value, so the control owns the `in` too); for a number or date Field that doesn't allow a
+ *   range, its one value, filtering with `eq`. Empty, it filters nothing.
  * - `range`: a from and a to input, for a number or date Field that allows `gte` and `lte`.
  *   Either may be left empty, to filter one side only.
  */
@@ -89,7 +91,16 @@ export type FilterControl = { field: Field; operators: readonly FilterOperator[]
 			name: string;
 			options: FilterOption[];
 	  }
-	| { type: 'input'; input: FilterInputType; value: FilterInput }
+	| {
+			type: 'input';
+			input: FilterInputType;
+			/**
+			 * Its inputs: one, or for an exact-match text box on a Field that allows `in`, one per value
+			 * the list is filtered by. They share a name, so they send an `in` while more than one is
+			 * filled, and clearing one leaves the others.
+			 */
+			values: FilterInput[];
+	  }
 	| { type: 'range'; input: Exclude<FilterInputType, 'text'>; from: FilterInput; to: FilterInput }
 );
 
@@ -190,7 +201,7 @@ export function createListView<R extends Resource>(
 			if (filter.operator === 'eq') values.push(filter.value);
 			if (filter.operator === 'in') values.push(...filter.value);
 		}
-		return values.map((value) => urlFilterValue(resource, key, value));
+		return values.map((value) => filterInputValue(resource, key, value));
 	}
 
 	/** The input of a Field's filter with one operator, and its value now as the URL writes it. */
@@ -199,11 +210,11 @@ export function createListView<R extends Resource>(
 			(candidate) => candidate.field === field.key && candidate.operator === operator
 		);
 		return {
-			name: operator === 'eq' ? field.key : `${field.key}.${operator}`,
+			name: filterParamName(field.key, operator),
 			value:
 				filter === undefined || filter.operator === 'in'
 					? ''
-					: urlFilterValue(resource, field.key, filter.value)
+					: filterInputValue(resource, field.key, filter.value)
 		};
 	}
 
@@ -234,8 +245,16 @@ export function createListView<R extends Resource>(
 			case 'text': {
 				const operator = allows('contains') ? 'contains' : allows('eq') ? 'eq' : undefined;
 				if (operator === undefined) return undefined;
-				const value = filterInput(field, operator);
-				return { field, operators: [operator], type: 'input', input: 'text', value };
+				if (operator === 'contains' || !allows('in')) {
+					const values = [filterInput(field, operator)];
+					return { field, operators: [operator], type: 'input', input: 'text', values };
+				}
+				// Exact matches on a Field that allows `in`: one box per value, so an `in` from the URL
+				// shows, and is replaced rather than added to.
+				const name = filterParamName(field.key, 'eq');
+				const current = filteredValues(field.key).map((value) => ({ name, value }));
+				const values = current.length > 0 ? current : [{ name, value: '' }];
+				return { field, operators: ['eq', 'in'], type: 'input', input: 'text', values };
 			}
 			case 'number':
 			case 'date': {
@@ -245,8 +264,8 @@ export function createListView<R extends Resource>(
 					return { field, operators: ['lte', 'gte'], type: 'range', input, from, to };
 				}
 				if (!allows('eq')) return undefined;
-				const value = filterInput(field, 'eq');
-				return { field, operators: ['eq'], type: 'input', input, value };
+				const values = [filterInput(field, 'eq')];
+				return { field, operators: ['eq'], type: 'input', input, values };
 			}
 			default:
 				return undefined;

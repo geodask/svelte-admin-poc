@@ -39,6 +39,8 @@ export {
 	listHref,
 	listUrlRewrite,
 	readListParams,
+	type FilterFieldsResource,
+	type ListHrefResource,
 	type ListParamDefaults
 } from './list-url.ts';
 export {
