@@ -34,6 +34,7 @@ export {
 	type FieldIssue
 } from './errors.ts';
 export { DEFAULT_PER_PAGE, MAX_PER_PAGE, listParamsSchema } from './list-params.ts';
+export { activeFilters, type ActiveFilter } from './active-filters.ts';
 export {
 	encodeListParams,
 	listHref,

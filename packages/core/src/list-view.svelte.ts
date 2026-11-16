@@ -2,6 +2,7 @@ import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import { untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
+import { activeFilters, type ActiveFilter } from './active-filters.ts';
 import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
 import type { Field, FilterOperator } from './fields.ts';
 import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
@@ -107,7 +108,7 @@ export type FilterControl = { field: Field; operators: readonly FilterOperator[]
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
  * the hrefs that change page, page size and sort, each record's href, the search box's state, and
- * the filter controls and form.
+ * the filter controls, form and active filters.
  * The Theme's list View is built on it, and so can a replaced View. It takes the Resource as an
  * argument, not from context.
  *
@@ -189,6 +190,7 @@ export function createListView<R extends Resource>(
 	const looseParams = $derived(params satisfies ListParams as ListParams);
 	const urlSearch = $derived(looseParams.search);
 	const filterCount = $derived(looseParams.filters?.length ?? 0);
+	const activeFilterList = $derived(activeFilters(url, resource));
 	const searchText = () => draft ?? urlSearch ?? '';
 
 	const selection = createSelection<IdOf<R>>();
@@ -483,6 +485,16 @@ export function createListView<R extends Resource>(
 				({ field, operator }) => !controlled.has(`${field}.${operator}`)
 			);
 			return keptForm({ page: 1, perPage, sort, search, filters: uncontrolled });
+		},
+		/**
+		 * Each filter the list is filtered by now, for the chips under the toolbar: whatever its
+		 * operator (including ones no filter control offers) and whether or not its Field is hidden,
+		 * with a readable label ("Prep time (min) ≥ 10", "Difficulty: Easy, Medium") and the href of
+		 * the list without it, which starts again at page 1 and keeps the search, the sort, the page
+		 * size and every other filter. Empty while no filter is on.
+		 */
+		get activeFilters(): ActiveFilter[] {
+			return activeFilterList;
 		},
 		/** The href of the list with no filters, at page 1, keeping the search, sort and page size. */
 		get clearFiltersHref(): string {

@@ -6,7 +6,8 @@
 	(`FilterPanel`). Beside them, a count of the selected rows, once any are selected, with
 	"Delete selected (N)", which opens the delete dialog for them; and at the end a "New" link to
 	the create View. Bulk delete needs JavaScript, so its button appears only after hydration. The row is there on every Resource, so the content
-	below doesn't move when the count appears.
+	below doesn't move when the count appears. Under the row, while any filter is on, a chip per
+	filter that removes it (`ActiveFilters`).
 	A Theme part, exported for a replaced list View: give it the core's `createListView` helper.
 -->
 <script module lang="ts">
@@ -20,6 +21,7 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import ActiveFilters from './ActiveFilters.svelte';
 	import DeleteDialog from './DeleteDialog.svelte';
 	import FilterPanel from './FilterPanel.svelte';
 
@@ -108,3 +110,5 @@
 		New
 	</a>
 </div>
+
+<ActiveFilters {view} />

@@ -15,7 +15,8 @@ export {
 	type ListSelection,
 	type ListViewState
 } from './list-view.svelte.ts';
-// Also on the shared entry; here too, so a Theme imports what its delete dialog takes from one place.
+// Also on the shared entry; here too, so a Theme imports what its parts take from one place.
+export type { ActiveFilter } from './active-filters.ts';
 export type { DeleteFailure } from './remote.ts';
 export {
 	createShell,
