@@ -1,8 +1,8 @@
 <!--
 	A replaced View: users as a card grid instead of the stock list View. A route at a Resource's
 	list path wins over the admin's `[resource]` route. It keeps the list's URL state, search,
-	paging and selection through the core's `createListView`, and matches the admin through the
-	Theme's exported parts. It has no sort control: the cards come in the Resource's default
+	paging, filters and selection through the core's `createListView`, and matches the admin
+	through the Theme's exported parts. It has no sort control: the cards come in the Resource's default
 	order, by name. To stay short it leaves out the stock View's Retry boundary and refresh
 	indicator: a failed load shows the app's error page.
 -->

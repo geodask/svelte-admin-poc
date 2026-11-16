@@ -1,9 +1,22 @@
 import { z } from 'zod';
 
 /**
+ * The operators a list filter can use, in their canonical order: the order a Field's
+ * `filterOperators` and a list's filters on one Field are kept in.
+ */
+export const FILTER_OPERATORS = ['eq', 'in', 'contains', 'lt', 'lte', 'gt', 'gte'] as const;
+
+/**
+ * One way a list filter compares a Field's value: equal to one value (`eq`), equal to any of
+ * several (`in`), containing some text (`contains`), or below or above a bound (`lt`, `lte`,
+ * `gt`, `gte`).
+ */
+export type FilterOperator = (typeof FILTER_OPERATORS)[number];
+
+/**
  * The metadata a Field can carry, attached with `field()`: `label`, `description`, `hidden` (in
- * no View), `list: false` (left off the list View only), `readOnly`, `placeholder`, `input` and
- * `sortable`.
+ * no View), `list: false` (left off the list View only), `readOnly`, `placeholder`, `input`,
+ * `sortable` and `filterable`.
  */
 export type FieldMeta = {
 	label?: string;
@@ -38,6 +51,17 @@ export type FieldMeta = {
 	 * throws for any other. Write it inline (or `as const`), so `ListParams` sees it.
 	 */
 	sortable?: true;
+	/**
+	 * Whether the backend can filter the list by this Field, so the list View offers a filter
+	 * control for it and `getList` accepts filters on it. `true` allows every operator of the
+	 * Field's Kind (text `eq`, `in`, `contains`; number and date `eq`, `lt`, `lte`, `gt`, `gte`;
+	 * enum `eq`, `in`; boolean `eq`). A non-empty list allows only those, such as `['eq', 'in']`
+	 * for a backend that can't match part of a text. Fields are not filterable unless they say
+	 * so. Only a scalar Kind can be, its key can't be one the list URL uses (`page`, `perPage`,
+	 * `sort`, `order`, `q`) or hold a `.`, and a list may name only its Kind's operators:
+	 * `defineResource` throws otherwise. Write it inline (or `as const`), so `ListParams` sees it.
+	 */
+	filterable?: true | readonly FilterOperator[];
 };
 
 /** Who may set a Field the backend owns: never (`true`), or only on create. See `FieldMeta.readOnly`. */
@@ -62,6 +86,7 @@ export type FieldBrand = {
 	hidden: boolean | undefined;
 	input: FieldInputChoice | undefined;
 	sortable: true | undefined;
+	filterable: true | readonly FilterOperator[] | undefined;
 };
 
 /** One key of the metadata as a literal type, or `undefined` when it isn't set. */
@@ -71,9 +96,9 @@ type MetaValue<M, K extends keyof FieldBrand> = M extends { readonly [P in K]: i
 
 /**
  * A Field's schema as `field()` returns it: the same Zod type, branded in its type with the
- * metadata the forms' and the list's types depend on (`readOnly`, `hidden`, `input` and
- * `sortable`), so `FormInput`, `CreateData` and `EditData` can leave out the Fields no form sets,
- * and `ListParams` can name the sortable ones. The brand survives
+ * metadata the forms' and the list's types depend on (`readOnly`, `hidden`, `input`, `sortable`
+ * and `filterable`), so `FormInput`, `CreateData` and `EditData` can leave out the Fields no form
+ * sets, and `ListParams` can name the sortable and filterable ones. The brand survives
  * `.optional()`, `.nullable()` and `.default()`, which keep the schema's type inside them.
  */
 export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
@@ -82,6 +107,7 @@ export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
 		hidden: MetaValue<M, 'hidden'>;
 		input: MetaValue<M, 'input'>;
 		sortable: MetaValue<M, 'sortable'>;
+		filterable: MetaValue<M, 'filterable'>;
 	};
 };
 
@@ -89,9 +115,10 @@ export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
  * Attach metadata to a Field's schema and return the same schema, so it can sit inline in
  * `z.object({...})`. It may go inside or outside `.optional()`, `.nullable()` and `.default()`:
  * `field(z.number(), { label: 'Calories' }).optional()` keeps its label. Its type is branded with
- * `readOnly`, `hidden`, `input` and `sortable`, so write the metadata inline (or `as const`) for
- * the types to see it: a read-only Field is then left out of a replaced form View's typed
- * `fields` and of the Provider's write data, and a sortable one is in `ListParams`' sort.
+ * `readOnly`, `hidden`, `input`, `sortable` and `filterable`, so write the metadata inline (or
+ * `as const`) for the types to see it: a read-only Field is then left out of a replaced form
+ * View's typed `fields` and of the Provider's write data, a sortable one is in `ListParams`' sort,
+ * and a filterable one in its filters.
  */
 export function field<T extends z.ZodType, const M extends FieldMeta>(
 	schema: T,
@@ -141,6 +168,35 @@ export type DetectedKind =
 	{ kind: Exclude<KindName, 'enum'> } | { kind: 'enum'; options: readonly (string | number)[] };
 
 const SCALAR_KINDS: ReadonlySet<KindName> = new Set(['text', 'number', 'boolean', 'date', 'enum']);
+
+/** The Kinds a Field can be sorted and filtered by: the scalar ones. */
+export type ScalarKindName = 'text' | 'number' | 'boolean' | 'date' | 'enum';
+
+/** The operators a filter on a Field of each scalar Kind can use, in the canonical order. */
+export const KIND_OPERATORS = {
+	text: ['eq', 'in', 'contains'],
+	number: ['eq', 'lt', 'lte', 'gt', 'gte'],
+	date: ['eq', 'lt', 'lte', 'gt', 'gte'],
+	enum: ['eq', 'in'],
+	boolean: ['eq']
+} as const satisfies Record<ScalarKindName, readonly FilterOperator[]>;
+
+/** The list URL's own params, which no filterable Field's key may be. */
+export const RESERVED_LIST_KEYS = ['page', 'perPage', 'sort', 'order', 'q'] as const;
+
+function isScalarKind(kind: KindName): kind is ScalarKindName {
+	return SCALAR_KINDS.has(kind);
+}
+
+/** The operators `filterable` allows on a Field of `kind`, in the canonical order. */
+function filterOperatorsOf(
+	kind: KindName,
+	filterable: FieldMeta['filterable']
+): readonly FilterOperator[] {
+	if (filterable === undefined || !isScalarKind(kind)) return [];
+	if (filterable === true) return KIND_OPERATORS[kind];
+	return FILTER_OPERATORS.filter((operator) => filterable.includes(operator));
+}
 
 /** The wrappers a Field's type can sit in without changing its Kind. */
 type Wrapper = z.ZodOptional | z.ZodNullable | z.ZodDefault;
@@ -236,6 +292,11 @@ export type Field = DetectedKind & {
 	/** Whether the list can be sorted by it: see `FieldMeta.sortable`. */
 	sortable: boolean;
 	/**
+	 * The operators the list can be filtered by it with, in the canonical order: see
+	 * `FieldMeta.filterable`. Empty when it isn't filterable.
+	 */
+	filterOperators: readonly FilterOperator[];
+	/**
 	 * For an object Field, the Fields of the object (or of each object in an array of objects),
 	 * so the detail View can show it as nested label-value pairs.
 	 */
@@ -250,13 +311,26 @@ function nestedObject(schema: z.ZodType): z.ZodObject | undefined {
 }
 
 /**
+ * A Field's metadata, looked up on its schema and every wrapper inside it; where both set a key,
+ * the outer one wins.
+ */
+function fieldMeta(schema: z.ZodType): FieldMeta {
+	return Object.assign(
+		{},
+		...wrapperChain(schema)
+			.map((s) => fieldRegistry.get(s))
+			.reverse()
+	);
+}
+
+/**
  * Describe one Field from its key and schema. Metadata is looked up on the schema and every
  * wrapper inside it, so it is found whether `field()` went inside or outside `.optional()`;
  * where both set a key, the outer one wins.
  */
 export function describeField(key: string, schema: z.ZodType): Field {
 	const chain = wrapperChain(schema);
-	const meta: FieldMeta = Object.assign({}, ...chain.map((s) => fieldRegistry.get(s)).reverse());
+	const meta = fieldMeta(schema);
 	const kind = detectKind(schema);
 	const hidden = meta.hidden ?? false;
 	const object = kind.kind === 'object' ? nestedObject(schema) : undefined;
@@ -271,6 +345,7 @@ export function describeField(key: string, schema: z.ZodType): Field {
 		...(meta.placeholder === undefined ? {} : { placeholder: meta.placeholder }),
 		required: !chain.some(isWrapper),
 		sortable: meta.sortable === true,
+		filterOperators: filterOperatorsOf(kind.kind, meta.filterable),
 		list: !hidden && meta.list !== false && kind.kind !== 'object',
 		detail: !hidden,
 		...(object === undefined ? {} : { fields: describeFields(object) })
@@ -288,6 +363,45 @@ export function assertSortable(name: string, fields: readonly Field[]): void {
 			`Resource "${name}": the Field "${field.key}" is \`sortable\`, but its Kind is ${field.kind}. ` +
 				'Only a text, number, date, enum or boolean Field can be sortable.'
 		);
+	}
+}
+
+/**
+ * Fails at startup when a Field's `filterable` can't work: on a Field that isn't of a scalar Kind,
+ * as an empty list, with an operator its Kind doesn't have, or on a key the list URL can't hold
+ * as a filter (one of its own params, or one with a `.`, which starts an operator suffix).
+ */
+export function assertFilterable(name: string, schema: z.ZodObject): void {
+	for (const [key, fieldSchema] of Object.entries(schema.shape)) {
+		const { filterable } = fieldMeta(fieldSchema as z.ZodType);
+		if (filterable === undefined) continue;
+		const fail = (problem: string): never => {
+			throw new Error(`Resource "${name}": the Field "${key}" is \`filterable\`, but ${problem}`);
+		};
+		const { kind } = detectKind(fieldSchema as z.ZodType);
+		if (!isScalarKind(kind)) {
+			fail(
+				`its Kind is ${kind}. Only a text, number, date, enum or boolean Field can be filterable.`
+			);
+		} else if (filterable !== true) {
+			if (filterable.length === 0) fail('its list of operators is empty. Name at least one.');
+			const allowed: readonly FilterOperator[] = KIND_OPERATORS[kind];
+			const foreign = filterable.find((operator) => !allowed.includes(operator));
+			if (foreign !== undefined) {
+				fail(
+					`it names the operator "${foreign}", which a ${kind} Field doesn't have. ` +
+						`It may name ${allowed.map((operator) => `"${operator}"`).join(', ')}.`
+				);
+			}
+		}
+		if ((RESERVED_LIST_KEYS as readonly string[]).includes(key)) {
+			fail(
+				`its key is reserved by the list URL (${RESERVED_LIST_KEYS.join(', ')}). Rename the Field.`
+			);
+		}
+		if (key.includes('.')) {
+			fail('its key holds a ".", which the list URL uses for operators. Rename the Field.');
+		}
 	}
 }
 

@@ -1,9 +1,9 @@
 import type { Component } from 'svelte';
 import type { z } from 'zod';
-import { assertSortable, describeFields, type Field } from './fields.ts';
+import { assertFilterable, assertSortable, describeFields, type Field } from './fields.ts';
 import { assertFormInputs } from './form-spec.ts';
 import { assertListSettings, DEFAULT_PER_PAGE } from './list-params.ts';
-import type { ListSort, SchemaSortableKey } from './provider.ts';
+import type { ListSort, SchemaSortableKey, UnusableFilterKey } from './provider.ts';
 import { assertRecordTitle } from './record-title.ts';
 
 /** Any Zod object schema. `defineResource` checks that it has a usable `id` Field. */
@@ -93,6 +93,13 @@ type IdRequired = {
 	'A Resource schema needs an `id` Field of string or number type, with no coercion': true;
 };
 
+/** What a schema with a filterable Field the list URL can't hold is asked for: never met. */
+type FilterKeyUsable<K extends string> = {
+	[
+		P in `The filterable Field "${K}" needs another key: page, perPage, sort, order, q and keys with a "." belong to the list URL`
+	]: true;
+};
+
 export function defineResource<
 	const N extends string,
 	S extends ResourceSchema,
@@ -117,7 +124,9 @@ export function defineResource<
 	 * the forms edit needs a type they have an input for; one that has none (a union, a record)
 	 * must be `readOnly: true` or `hidden`, or `defineResource` throws.
 	 */
-	schema: S & (HasValidId<S> extends true ? unknown : IdRequired);
+	schema: S &
+		(HasValidId<S> extends true ? unknown : IdRequired) &
+		([UnusableFilterKey<S>] extends [never] ? unknown : FilterKeyUsable<UnusableFilterKey<S>>);
 	/**
 	 * Whether the backend can search this Resource. Only then does the list View show a search
 	 * box, and only then does `getList` accept a search: for any other Resource it is rejected.
@@ -155,6 +164,7 @@ export function defineResource<
 	assertFormInputs(name, fields, schema);
 	assertRecordTitle(name, fields, recordTitle);
 	assertSortable(name, fields);
+	assertFilterable(name, schema);
 	assertListSettings(name, fields, { defaultSort, perPage });
 	return {
 		name,

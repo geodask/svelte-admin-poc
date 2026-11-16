@@ -1,5 +1,5 @@
-// The posts Provider: the bundled REST Provider (so its `getList` forwards the page, the page size
-// and the sort), plus `deleteMany` over the demo backend's bulk route, which the REST convention
+// The posts Provider: the bundled REST Provider (so its `getList` forwards the page, the page size,
+// the sort and the filters), plus `deleteMany` over the demo backend's bulk route, which the REST convention
 // doesn't have. It shows how an app adds a method to the bundled Provider for one Resource by
 // spreading it. Recipes and users have no bulk route, so their bulk deletes fall back to one
 // `deleteOne` per id. Server-only, like `backend.ts`.

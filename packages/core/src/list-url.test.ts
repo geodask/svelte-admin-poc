@@ -7,6 +7,7 @@ import {
 	listHref,
 	listUrlRewrite,
 	readListParams,
+	type ListParams,
 	type Resource
 } from '@svelte-admin/core';
 
@@ -456,6 +457,178 @@ describe('the list URL helper', () => {
 			expect(rewrite('?sort=id')).toBeUndefined();
 			expect(rewrite('?sort=title&order=desc')).toBeUndefined();
 			expect(rewrite('?sort=name&order=desc', users)).toBeUndefined();
+		});
+	});
+
+	describe('the filters', () => {
+		// Like the demo's recipes: an enum and a boolean to filter by, with a search and a sort.
+		const filterable = defineResource({
+			name: 'recipes',
+			label: 'Recipes',
+			searchable: true,
+			schema: z.object({
+				id: z.number(),
+				name: field(z.string(), { sortable: true }),
+				difficulty: field(z.enum(['Easy', 'Medium', 'Hard']), { filterable: true }),
+				// Narrowed to `eq`, so it never takes several values.
+				course: field(z.enum(['main', 'dessert']), { filterable: ['eq'] }),
+				vegetarian: field(z.boolean(), { filterable: true }).optional(),
+				// Hidden Fields can still be filtered by from the URL.
+				archived: field(z.boolean(), { hidden: true, filterable: true }),
+				cuisine: z.string()
+			})
+		});
+		const at = (search: string) => new URL(`http://admin.test/admin/recipes${search}`);
+		const readFiltered = (search: string) => readListParams(at(search), filterable);
+		const filtersIn = (search: string) => readFiltered(search).filters;
+		const href = (params: Parameters<typeof listHref>[1]) =>
+			listHref(at('?page=2'), params, filterable);
+		const rewrite = (search: string) => listUrlRewrite(at(search), filterable);
+
+		it('read a bare param as eq', () => {
+			expect(readFiltered('?difficulty=Easy')).toEqual({
+				page: 1,
+				perPage: 25,
+				filters: [{ field: 'difficulty', operator: 'eq', value: 'Easy' }]
+			});
+			expect(filtersIn('?vegetarian=false')).toEqual([
+				{ field: 'vegetarian', operator: 'eq', value: false }
+			]);
+			expect(filtersIn('?archived=true')).toEqual([
+				{ field: 'archived', operator: 'eq', value: true }
+			]);
+		});
+
+		it('read a repeated param as in, with the values in the enum order', () => {
+			expect(filtersIn('?difficulty=Hard&difficulty=Easy')).toEqual([
+				{ field: 'difficulty', operator: 'in', value: ['Easy', 'Hard'] }
+			]);
+		});
+
+		it('read a repeated param that holds one value twice as eq', () => {
+			expect(filtersIn('?difficulty=Easy&difficulty=Easy')).toEqual([
+				{ field: 'difficulty', operator: 'eq', value: 'Easy' }
+			]);
+		});
+
+		it('read only the first value of a repeated param on a Field without in', () => {
+			expect(filtersIn('?course=dessert&course=main')).toEqual([
+				{ field: 'course', operator: 'eq', value: 'dessert' }
+			]);
+			expect(filtersIn('?vegetarian=true&vegetarian=false')).toEqual([
+				{ field: 'vegetarian', operator: 'eq', value: true }
+			]);
+		});
+
+		it('are combined, in schema order, whatever order the URL names them in', () => {
+			expect(filtersIn('?vegetarian=true&difficulty=Medium&difficulty=Easy&course=main')).toEqual([
+				{ field: 'difficulty', operator: 'in', value: ['Easy', 'Medium'] },
+				{ field: 'course', operator: 'eq', value: 'main' },
+				{ field: 'vegetarian', operator: 'eq', value: true }
+			]);
+		});
+
+		it.each([
+			['an unknown Field', '?rating=5'],
+			['a Field that is not filterable', '?cuisine=Thai'],
+			['an empty value', '?difficulty=&vegetarian='],
+			['a value that is not an enum member', '?difficulty=Spicy'],
+			['an enum member in the wrong case', '?difficulty=easy'],
+			['a boolean that is not true or false', '?vegetarian=yes&archived=1'],
+			['an operator suffix the Field does not allow', '?difficulty.contains=Ea'],
+			['an unknown operator suffix', '?vegetarian.ne=true']
+		])('drop %s', (_, search) => {
+			expect(readFiltered(search)).toEqual({ page: 1, perPage: 25 });
+		});
+
+		it('drop the bad values of a repeated param and keep the good ones', () => {
+			expect(filtersIn('?difficulty=Easy&difficulty=&difficulty=Spicy')).toEqual([
+				{ field: 'difficulty', operator: 'eq', value: 'Easy' }
+			]);
+		});
+
+		it('are ignored on a Resource with no filterable Field', () => {
+			expect(read('?difficulty=Easy&vegetarian=true', searchable)).toEqual({
+				page: 1,
+				perPage: 25
+			});
+		});
+
+		it('are written after the search, eq as a bare param and in as a repeated one', () => {
+			expect(
+				href({
+					page: 1,
+					perPage: 10,
+					search: 'pasta',
+					sort: { field: 'name', order: 'desc' },
+					filters: [
+						{ field: 'difficulty', operator: 'in', value: ['Easy', 'Medium'] },
+						{ field: 'vegetarian', operator: 'eq', value: true }
+					]
+				})
+			).toBe(
+				'/admin/recipes?perPage=10&sort=name&order=desc&q=pasta&difficulty=Easy&difficulty=Medium&vegetarian=true'
+			);
+		});
+
+		it('leave out an empty list of filters', () => {
+			expect(href({ page: 1, perPage: 25, filters: [] })).toBe('/admin/recipes');
+		});
+
+		it('are written by the shared encoder with every other param, as the REST Provider sends them', () => {
+			expect(
+				encodeListParams({
+					page: 1,
+					perPage: 25,
+					filters: [
+						{ field: 'difficulty', operator: 'eq', value: 'Hard' },
+						{ field: 'vegetarian', operator: 'eq', value: false }
+					]
+				}).toString()
+			).toBe('page=1&perPage=25&difficulty=Hard&vegetarian=false');
+		});
+
+		it.each([
+			{ page: 1, perPage: 25, filters: [{ field: 'difficulty', operator: 'eq', value: 'Easy' }] },
+			{
+				page: 3,
+				perPage: 10,
+				search: 'chicken',
+				sort: { field: 'name', order: 'asc' },
+				filters: [
+					{ field: 'difficulty', operator: 'in', value: ['Easy', 'Medium', 'Hard'] },
+					{ field: 'course', operator: 'eq', value: 'dessert' },
+					{ field: 'vegetarian', operator: 'eq', value: false },
+					{ field: 'archived', operator: 'eq', value: true }
+				]
+			}
+		] satisfies ListParams[])('read back through listHref as %j', (params) => {
+			expect(readFiltered(href(params).replace('/admin/recipes', ''))).toEqual(params);
+		});
+
+		it('leave a clean filtered URL alone, in any param order', () => {
+			expect(rewrite('?difficulty=Easy')).toBeUndefined();
+			expect(rewrite('?vegetarian=false&difficulty=Easy&difficulty=Hard&page=2')).toBeUndefined();
+			expect(rewrite('?q=pasta&difficulty=Medium&sort=name')).toBeUndefined();
+		});
+
+		it.each([
+			['an unknown filter', '?rating=5&difficulty=Easy', '/admin/recipes?difficulty=Easy'],
+			['a bad enum value', '?difficulty=Spicy&page=2', '/admin/recipes?page=2'],
+			['a boolean that is not true or false', '?vegetarian=', '/admin/recipes'],
+			[
+				'empty params from a form',
+				'?q=&difficulty=Easy&vegetarian=',
+				'/admin/recipes?difficulty=Easy'
+			],
+			[
+				'in values out of order',
+				'?difficulty=Hard&difficulty=Easy',
+				'/admin/recipes?difficulty=Easy&difficulty=Hard'
+			],
+			['a value repeated', '?difficulty=Easy&difficulty=Easy', '/admin/recipes?difficulty=Easy']
+		])('rewrite a URL with %s', (_, search, clean) => {
+			expect(rewrite(search)).toBe(clean);
 		});
 	});
 });

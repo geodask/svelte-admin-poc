@@ -144,4 +144,149 @@ describe('the getList input schema', () => {
 			expect(accepts({ page: 1, perPage: 25, sort: { field: 'title', order: 'asc' } })).toBe(false);
 		});
 	});
+
+	describe('for a Resource with filterable Fields', () => {
+		const filterable = defineResource({
+			name: 'recipes',
+			label: 'Recipes',
+			searchable: true,
+			schema: z.object({
+				id: z.number(),
+				// A refinement that a filter value isn't held to.
+				name: field(z.string().min(5), { filterable: ['eq'] }),
+				difficulty: field(z.enum(['Easy', 'Medium', 'Hard']), { filterable: true }),
+				course: field(z.enum(['main', 'dessert']), { filterable: ['eq'] }),
+				vegetarian: field(z.boolean(), { filterable: true }).optional(),
+				secret: field(z.boolean(), { hidden: true, filterable: true }),
+				cuisine: z.string()
+			})
+		});
+		const schema = listParamsSchema(filterable);
+		const withFilters = (filters: unknown) => schema.safeParse({ page: 1, perPage: 25, filters });
+		const accepted = (filters: unknown) => withFilters(filters).success;
+
+		it('accepts filters on the declared Fields, with their operators and values', () => {
+			expect(
+				withFilters([
+					{ field: 'difficulty', operator: 'in', value: ['Easy', 'Hard'] },
+					{ field: 'vegetarian', operator: 'eq', value: false }
+				])
+			).toEqual({
+				success: true,
+				data: {
+					page: 1,
+					perPage: 25,
+					filters: [
+						{ field: 'difficulty', operator: 'in', value: ['Easy', 'Hard'] },
+						{ field: 'vegetarian', operator: 'eq', value: false }
+					]
+				}
+			});
+			expect(accepted([{ field: 'difficulty', operator: 'eq', value: 'Medium' }])).toBe(true);
+			expect(accepted([{ field: 'course', operator: 'eq', value: 'main' }])).toBe(true);
+			expect(accepted([{ field: 'secret', operator: 'eq', value: true }])).toBe(true);
+		});
+
+		it('checks a value against the base type only, not its refinements', () => {
+			expect(accepted([{ field: 'name', operator: 'eq', value: 'Pho' }])).toBe(true);
+		});
+
+		it('accepts no filters', () => {
+			expect(schema.parse({ page: 1, perPage: 25 })).toEqual({ page: 1, perPage: 25 });
+		});
+
+		it('gives the Provider the filters in schema order, then operator order, values in enum order', () => {
+			expect(
+				schema.parse({
+					page: 1,
+					perPage: 25,
+					filters: [
+						{ field: 'vegetarian', operator: 'eq', value: true },
+						{ field: 'difficulty', operator: 'in', value: ['Hard', 'Easy'] },
+						{ field: 'difficulty', operator: 'eq', value: 'Medium' }
+					]
+				}).filters
+			).toEqual([
+				{ field: 'difficulty', operator: 'eq', value: 'Medium' },
+				{ field: 'difficulty', operator: 'in', value: ['Easy', 'Hard'] },
+				{ field: 'vegetarian', operator: 'eq', value: true }
+			]);
+		});
+
+		it.each([
+			['an undeclared Field', [{ field: 'cuisine', operator: 'eq', value: 'Thai' }]],
+			['a Field it does not have', [{ field: 'rating', operator: 'eq', value: 5 }]],
+			[
+				'an operator the Kind does not have',
+				[{ field: 'vegetarian', operator: 'in', value: [true, false] }]
+			],
+			[
+				'an operator the Field does not allow',
+				[{ field: 'course', operator: 'in', value: ['main', 'dessert'] }]
+			],
+			[
+				'an operator for another Kind',
+				[{ field: 'difficulty', operator: 'contains', value: 'Ea' }]
+			],
+			['an unknown operator', [{ field: 'difficulty', operator: 'ne', value: 'Easy' }]],
+			[
+				'a value that is not an enum member',
+				[{ field: 'difficulty', operator: 'eq', value: 'Spicy' }]
+			],
+			['a boolean written as text', [{ field: 'vegetarian', operator: 'eq', value: 'true' }]],
+			['a single value for in', [{ field: 'difficulty', operator: 'in', value: 'Easy' }]],
+			['an array for eq', [{ field: 'difficulty', operator: 'eq', value: ['Easy'] }]],
+			['an in of one value', [{ field: 'difficulty', operator: 'in', value: ['Easy'] }]],
+			[
+				'an in with a repeated value',
+				[{ field: 'difficulty', operator: 'in', value: ['Easy', 'Easy'] }]
+			],
+			['an empty in', [{ field: 'difficulty', operator: 'in', value: [] }]],
+			['a missing value', [{ field: 'vegetarian', operator: 'eq' }]],
+			['an extra key', [{ field: 'vegetarian', operator: 'eq', value: true, not: true }]],
+			[
+				'the same Field and operator twice',
+				[
+					{ field: 'vegetarian', operator: 'eq', value: true },
+					{ field: 'vegetarian', operator: 'eq', value: false }
+				]
+			],
+			['an empty list', []],
+			['an object instead of a list', { vegetarian: true }]
+		])('rejects %s', (_, filters) => {
+			expect(accepted(filters)).toBe(false);
+		});
+
+		it('accepts an in of 2 to 100 values, and rejects 101', () => {
+			const ints = defineResource({
+				name: 'things',
+				label: 'Things',
+				schema: z.object({
+					id: z.number(),
+					code: field(z.enum(Array.from({ length: 101 }, (_, i) => `c${i}`)), {
+						filterable: true
+					})
+				})
+			});
+			const values = (n: number) => Array.from({ length: n }, (_, i) => `c${i}`);
+			const parse = (n: number) =>
+				listParamsSchema(ints).safeParse({
+					page: 1,
+					perPage: 25,
+					filters: [{ field: 'code', operator: 'in', value: values(n) }]
+				}).success;
+			expect(parse(2)).toBe(true);
+			expect(parse(100)).toBe(true);
+			expect(parse(101)).toBe(false);
+		});
+	});
+
+	describe('for a Resource with no filterable Field', () => {
+		it('rejects any filters as an undeclared key', () => {
+			expect(accepts({ page: 1, perPage: 25, filters: [] })).toBe(false);
+			expect(
+				accepts({ page: 1, perPage: 25, filters: [{ field: 'title', operator: 'eq', value: 'x' }] })
+			).toBe(false);
+		});
+	});
 });

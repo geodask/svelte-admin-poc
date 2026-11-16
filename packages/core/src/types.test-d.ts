@@ -12,7 +12,9 @@ import {
 	type CreateData,
 	type EditData,
 	type FormInput,
+	type FilterableKey,
 	type IdOf,
+	type ListFilter,
 	type ListParams,
 	type ListSort,
 	type Provider,
@@ -636,13 +638,23 @@ expectTypeOf<ListParams<typeof unsearchableRecipes>>().toEqualTypeOf<{
 	page: number;
 	perPage: number;
 }>();
-// For a Resource TypeScript can't see, a search may come or not, and a sort on any Field.
+// For a Resource TypeScript can't see, a search may come or not, a sort on any Field, and filters
+// on any Field with any operator.
 expectTypeOf<ListParams>().toEqualTypeOf<{
 	page: number;
 	perPage: number;
 	search?: string;
 	sort?: { field: string; order: 'asc' | 'desc' };
+	filters?: ListFilter[];
 }>();
+expectTypeOf<ListFilter>().toEqualTypeOf<
+	| { field: string; operator: 'in'; value: (string | number | boolean | Date)[] }
+	| {
+			field: string;
+			operator: 'eq' | 'contains' | 'lt' | 'lte' | 'gt' | 'gte';
+			value: string | number | boolean | Date;
+	  }
+>();
 
 // `serveResource` hands the Provider's `getList` the Resource's own list params.
 serveResource(searchableRecipes, {
@@ -884,4 +896,218 @@ defineResource({
 	schema: newestPostsSchema,
 	// @ts-expect-error the page size is a number
 	perPage: '20'
+});
+
+// ---------------------------------------------------------------------------------------------
+// Filterable Fields: typed filters in the list params.
+
+const filterableRecipes = defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	searchable: true,
+	schema: z.object({
+		id: z.number(),
+		name: field(z.string(), { filterable: true }),
+		// The narrowed form: only exact matches.
+		cuisine: field(z.string(), { filterable: ['eq', 'in'] }),
+		difficulty: field(z.enum(['Easy', 'Medium', 'Hard']), { filterable: true }),
+		prepTime: field(z.number(), { filterable: true }),
+		// The brand survives the wrappers, on either side of `field()`.
+		vegetarian: field(z.boolean(), { filterable: true }).optional(),
+		spicy: field(z.boolean().nullable(), { filterable: true }),
+		publishedAt: field(z.iso.datetime(), { filterable: true }),
+		cookedOn: field(z.date(), { filterable: ['gte', 'lte'] }),
+		// An enum narrowed to `eq` has no `in`.
+		course: field(z.enum(['main', 'dessert']), { filterable: ['eq'] }),
+		// Hidden Fields may be filterable too.
+		secret: field(z.boolean(), { hidden: true, filterable: true }),
+		servings: z.number()
+	})
+});
+type FilterableRecipes = typeof filterableRecipes;
+
+expectTypeOf<FilterableKey<FilterableRecipes>>().toEqualTypeOf<
+	| 'name'
+	| 'cuisine'
+	| 'difficulty'
+	| 'prepTime'
+	| 'vegetarian'
+	| 'spicy'
+	| 'publishedAt'
+	| 'cookedOn'
+	| 'course'
+	| 'secret'
+>();
+
+/** The filters on one Field. */
+type FiltersOn<K extends string> = Extract<ListFilter<FilterableRecipes>, { field: K }>;
+
+// An enum: `eq` with one member, `in` with an array of them.
+expectTypeOf<FiltersOn<'difficulty'>>().toEqualTypeOf<
+	| { field: 'difficulty'; operator: 'in'; value: ('Easy' | 'Medium' | 'Hard')[] }
+	| { field: 'difficulty'; operator: 'eq'; value: 'Easy' | 'Medium' | 'Hard' }
+>();
+// A boolean: `eq` only, whatever wraps it, never with `undefined` or `null`.
+expectTypeOf<FiltersOn<'vegetarian'>>().toEqualTypeOf<{
+	field: 'vegetarian';
+	operator: 'eq';
+	value: boolean;
+}>();
+expectTypeOf<FiltersOn<'spicy'>>().toEqualTypeOf<{
+	field: 'spicy';
+	operator: 'eq';
+	value: boolean;
+}>();
+// Text: `eq` and `contains` take a string, `in` an array of them.
+expectTypeOf<FiltersOn<'name'>>().toEqualTypeOf<
+	| { field: 'name'; operator: 'in'; value: string[] }
+	| { field: 'name'; operator: 'eq' | 'contains'; value: string }
+>();
+// A narrowed text Field has no `contains`.
+expectTypeOf<FiltersOn<'cuisine'>>().toEqualTypeOf<
+	| { field: 'cuisine'; operator: 'in'; value: string[] }
+	| { field: 'cuisine'; operator: 'eq'; value: string }
+>();
+// A number: no `in`.
+expectTypeOf<FiltersOn<'prepTime'>>().toEqualTypeOf<{
+	field: 'prepTime';
+	operator: 'eq' | 'lt' | 'lte' | 'gt' | 'gte';
+	value: number;
+}>();
+// A date keeps the Field's own type: an ISO string, or a `Date`.
+expectTypeOf<FiltersOn<'publishedAt'>>().toEqualTypeOf<{
+	field: 'publishedAt';
+	operator: 'eq' | 'lt' | 'lte' | 'gt' | 'gte';
+	value: string;
+}>();
+expectTypeOf<FiltersOn<'cookedOn'>>().toEqualTypeOf<{
+	field: 'cookedOn';
+	operator: 'lte' | 'gte';
+	value: Date;
+}>();
+expectTypeOf<FiltersOn<'course'>>().toEqualTypeOf<{
+	field: 'course';
+	operator: 'eq';
+	value: 'main' | 'dessert';
+}>();
+expectTypeOf<FiltersOn<'servings'>>().toEqualTypeOf<never>();
+
+expectTypeOf<ListParams<FilterableRecipes>>().toEqualTypeOf<{
+	page: number;
+	perPage: number;
+	search?: string;
+	filters?: ListFilter<FilterableRecipes>[];
+}>();
+
+// A Resource with no filterable Field has no `filters`, whatever else it has.
+expectTypeOf<FilterableKey<typeof sortableRecipes>>().toEqualTypeOf<never>();
+expectTypeOf<keyof ListParams<typeof sortableRecipes>>().toEqualTypeOf<
+	'page' | 'perPage' | 'search' | 'sort'
+>();
+expectTypeOf<keyof ListParams<typeof recipes>>().toEqualTypeOf<'page' | 'perPage'>();
+
+// The Provider's `getList` gets the typed filters from `serveResource` and the REST Provider.
+const filterableRecipesProvider = restProvider('http://api.test').for(filterableRecipes);
+serveResource(filterableRecipes, {
+	...filterableRecipesProvider,
+	getList: async (_ctx, params) => {
+		expectTypeOf(params.filters).toEqualTypeOf<ListFilter<FilterableRecipes>[] | undefined>();
+		return { data: [], total: 0 };
+	}
+});
+const statusPosts = defineResource({
+	name: 'posts',
+	label: 'Posts',
+	schema: z.object({
+		id: z.number(),
+		title: z.string(),
+		status: field(z.enum(['draft', 'published']), { filterable: true })
+	})
+});
+serveResource(statusPosts, {
+	...restProvider('http://api.test').for(statusPosts),
+	// @ts-expect-error posts here are only filtered by status, so a Provider can't be written for a title filter
+	getList: async (
+		_ctx,
+		params: {
+			page: number;
+			perPage: number;
+			filters?: { field: 'title'; operator: 'eq'; value: string }[];
+		}
+	) => ({ data: [], hasNextPage: params.filters === undefined })
+});
+// A Provider written against the loose `ListParams`, as before filters, still fits.
+serveResource(filterableRecipes, {
+	...filterableRecipesProvider,
+	getList: async (_ctx, { page, perPage, filters }: ListParams) => ({
+		data: [],
+		total: page + perPage + (filters?.length ?? 0)
+	})
+});
+
+// The remote `getList` takes filters only on filterable Fields, with their operators and values.
+const filterableRemote = serveResource(filterableRecipes, filterableRecipesProvider);
+void filterableRemote.getList({
+	page: 1,
+	perPage: 25,
+	filters: [
+		{ field: 'difficulty', operator: 'in', value: ['Easy', 'Medium'] },
+		{ field: 'vegetarian', operator: 'eq', value: true }
+	]
+});
+void filterableRemote.getList({
+	page: 1,
+	perPage: 25,
+	// @ts-expect-error `servings` isn't filterable
+	filters: [{ field: 'servings', operator: 'eq', value: 4 }]
+});
+void filterableRemote.getList({
+	page: 1,
+	perPage: 25,
+	// @ts-expect-error a boolean has no `in`
+	filters: [{ field: 'vegetarian', operator: 'in', value: [true, false] }]
+});
+void filterableRemote.getList({
+	page: 1,
+	perPage: 25,
+	// @ts-expect-error `Spicy` isn't a difficulty
+	filters: [{ field: 'difficulty', operator: 'eq', value: 'Spicy' }]
+});
+void filterableRemote.getList({
+	page: 1,
+	perPage: 25,
+	// @ts-expect-error `in` takes an array
+	filters: [{ field: 'difficulty', operator: 'in', value: 'Easy' }]
+});
+// @ts-expect-error a Resource with no filterable Field takes no filters
+void recipesRemote.getList({ page: 1, perPage: 25, filters: [] });
+
+// A list View's `params` carry the typed filters.
+const filterableView = createListView(filterableRecipes, filterableRemote);
+expectTypeOf(filterableView.params.filters).toEqualTypeOf<
+	ListFilter<FilterableRecipes>[] | undefined
+>();
+
+// TypeScript rejects a filterable Field on a key the list URL uses for itself.
+defineResource({
+	name: 'things',
+	label: 'Things',
+	// @ts-expect-error `page` is the list URL's own param
+	schema: z.object({ id: z.number(), page: field(z.number(), { filterable: true }) })
+});
+defineResource({
+	name: 'things',
+	label: 'Things',
+	// @ts-expect-error `q` is the list URL's own param
+	schema: z.object({ id: z.number(), q: field(z.string(), { filterable: ['eq'] }).optional() })
+});
+// Not filterable, such a key is fine.
+defineResource({
+	name: 'things',
+	label: 'Things',
+	schema: z.object({
+		id: z.number(),
+		page: z.number(),
+		order: field(z.number(), { sortable: true })
+	})
 });

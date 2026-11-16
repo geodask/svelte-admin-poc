@@ -4,7 +4,9 @@
 import type {
 	CreateData,
 	EditData,
+	FilterableKey,
 	FormInput,
+	ListFilter,
 	ListParams,
 	Resource,
 	ResourceProvider,
@@ -73,6 +75,54 @@ export const recipeCuisineSort: ListParams<typeof recipes>['sort'] = {
 };
 // @ts-expect-error a sort is ascending or descending
 export const postSortOrder: ListParams<typeof posts>['sort'] = { field: 'id', order: 'down' };
+
+// Filters name one of each Resource's filterable Fields, with the operators of its Kind and values
+// typed by the Field.
+export const recipeFilterKeys: Exactly<
+	FilterableKey<typeof recipes>,
+	'difficulty' | 'vegetarian'
+> = true;
+export const userFilterKeys: Exactly<FilterableKey<typeof users>, 'role' | 'active'> = true;
+export const postFilterKeys: Exactly<FilterableKey<typeof posts>, 'status'> = true;
+export const recipeFilters: Exactly<
+	ListFilter<typeof recipes>,
+	| { field: 'difficulty'; operator: 'in'; value: ('Easy' | 'Medium' | 'Hard')[] }
+	| { field: 'difficulty'; operator: 'eq'; value: 'Easy' | 'Medium' | 'Hard' }
+	| { field: 'vegetarian'; operator: 'eq'; value: boolean }
+> = true;
+export const userRoles: ListParams<typeof users>['filters'] = [
+	{ field: 'role', operator: 'in', value: ['admin', 'editor'] },
+	{ field: 'active', operator: 'eq', value: false }
+];
+export const postStatus: ListParams<typeof posts>['filters'] = [
+	{ field: 'status', operator: 'eq', value: 'draft' }
+];
+export const recipeCuisineFilter: ListParams<typeof recipes>['filters'] = [
+	// @ts-expect-error recipes can't be filtered by cuisine yet
+	{ field: 'cuisine', operator: 'eq', value: 'Thai' }
+];
+export const vegetarianIn: ListParams<typeof recipes>['filters'] = [
+	// @ts-expect-error a boolean has no `in`
+	{ field: 'vegetarian', operator: 'in', value: [true, false] }
+];
+export const postStatusTypo: ListParams<typeof posts>['filters'] = [
+	// @ts-expect-error `archived` isn't a post status
+	{ field: 'status', operator: 'eq', value: 'archived' }
+];
+// A Provider whose `getList` reads a filter on a Field the Resource doesn't declare filterable is
+// rejected.
+export const postsTitleFilterProvider: Served<typeof posts> = {
+	...({} as Omit<ResourceProvider<typeof posts>, 'getList'>),
+	// @ts-expect-error posts are only filtered by status
+	getList: async (
+		_ctx: unknown,
+		params: {
+			page: number;
+			perPage: number;
+			filters?: { field: 'title'; operator: 'eq'; value: string }[];
+		}
+	) => ({ data: [], hasNextPage: params.filters === undefined })
+};
 
 // A Provider whose `getList` takes the loose `ListParams` and reads a search, as every Provider
 // did before list params were typed from the Resource, still fits `serveResource` for every demo
