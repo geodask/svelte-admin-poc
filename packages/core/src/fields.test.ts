@@ -254,3 +254,46 @@ describe("a Resource's Fields", () => {
 		expect(firstField({ tags: z.array(z.string()) }).fields).toBeUndefined();
 	});
 });
+
+describe('sortable Fields', () => {
+	it('are not sortable unless they say so', () => {
+		expect(firstField({ name: z.string() }).sortable).toBe(false);
+	});
+
+	it('are sortable with `sortable: true`, inside or outside a wrapper', () => {
+		expect(firstField({ name: field(z.string(), { sortable: true }) }).sortable).toBe(true);
+		expect(firstField({ kcal: field(z.number(), { sortable: true }).optional() }).sortable).toBe(
+			true
+		);
+		expect(firstField({ kcal: field(z.number().nullable(), { sortable: true }) }).sortable).toBe(
+			true
+		);
+	});
+
+	it.each([
+		['text', z.string()],
+		['number', z.number()],
+		['date', z.iso.datetime()],
+		['enum', z.enum(['a', 'b'])],
+		['boolean', z.boolean()]
+	])('may be of the scalar Kind %s', (_, schema) => {
+		expect(firstField({ value: field(schema, { sortable: true }) }).sortable).toBe(true);
+	});
+
+	it.each([
+		['a list', z.array(z.string())],
+		['an object', z.object({ grams: z.number() })],
+		['an unknown Field', z.union([z.string(), z.number()])]
+	])('make defineResource throw for %s, naming the Resource and the Field', (_, schema) => {
+		expect(() =>
+			defineResource({
+				name: 'things',
+				label: 'Things',
+				schema: z.object({
+					id: z.number(),
+					value: field(schema, { sortable: true, readOnly: true })
+				})
+			})
+		).toThrow(/Resource "things".*"value".*sortable/);
+	});
+});

@@ -4,6 +4,7 @@ import {
 	ConflictError,
 	defineResource,
 	encodeListParams,
+	field,
 	FieldError,
 	InvalidInputError,
 	NotFoundError,
@@ -16,6 +17,17 @@ const recipes = defineResource({
 	label: 'Recipes',
 	schema: z.object({ id: z.number(), name: z.string() }),
 	// Searchable, so its `getList` takes a search.
+	searchable: true
+});
+
+const sortableRecipes = defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	schema: z.object({
+		id: z.number(),
+		name: field(z.string(), { sortable: true }),
+		calories: field(z.number(), { sortable: true }).optional()
+	}),
 	searchable: true
 });
 
@@ -105,6 +117,38 @@ describe('the bundled REST Provider', () => {
 				expect(requests).toEqual([`http://api.test/recipes?${query}`]);
 			}
 		);
+
+		it('sends the sort as sort, always with its order, before q', async () => {
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+			const provider = restProvider('http://api.test').for(sortableRecipes);
+
+			await provider.getList(context(fetch), {
+				page: 1,
+				perPage: 25,
+				sort: { field: 'name', order: 'asc' }
+			});
+			await provider.getList(context(fetch), {
+				page: 2,
+				perPage: 10,
+				search: 'pasta',
+				sort: { field: 'calories', order: 'desc' }
+			});
+
+			expect(requests).toEqual([
+				'http://api.test/recipes?page=1&perPage=25&sort=name&order=asc',
+				'http://api.test/recipes?page=2&perPage=10&sort=calories&order=desc&q=pasta'
+			]);
+		});
+
+		it('sends neither sort nor order for a call with no sort, as before sorting', async () => {
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+
+			await restProvider('http://api.test')
+				.for(sortableRecipes)
+				.getList(context(fetch), { page: 1, perPage: 25, search: 'pasta' });
+
+			expect(requests).toEqual(['http://api.test/recipes?page=1&perPage=25&q=pasta']);
+		});
 
 		it('keeps a path in the base URL and ignores a trailing slash', async () => {
 			const { fetch, requests } = fakeFetch({ data: [], total: 0 });

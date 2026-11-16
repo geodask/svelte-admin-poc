@@ -3,7 +3,7 @@ import { page } from '$app/state';
 import { untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
-import type { ListParams } from './provider.ts';
+import type { ListParams, SortableKey, SortOrder } from './provider.ts';
 import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
 import { titleKeys } from './record-title.ts';
 import type { DeleteFailure, ResourceRemote } from './remote.ts';
@@ -30,7 +30,7 @@ export type BulkDeleteResult =
 
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
- * the hrefs that change page and page size, each record's href, and the search box's state.
+ * the hrefs that change page, page size and sort, each record's href, and the search box's state.
  * The Theme's list View is built on it, and so can a replaced View. It takes the Resource as an
  * argument, not from context.
  *
@@ -42,7 +42,7 @@ export type BulkDeleteResult =
  *
  * The selection belongs to the Resource the list View was made for: it holds that Resource's
  * ids, with their canonical type, and a list View for another Resource starts with none. It
- * lasts while the list View does, across pages and searches, and is never in the URL.
+ * lasts while the list View does, across pages, searches and sorts, and is never in the URL.
  *
  * Call it during component setup. In a component whose Resource can change, wrap the call in
  * `$derived`, so the list View follows the Resource: each Resource then gets a new list View,
@@ -99,12 +99,19 @@ export function createListView<R extends Resource>(
 	// Leaving the list (or switching Resource) drops a search that was still waiting.
 	$effect(() => () => clearTimeout(debounce));
 
-	// The search in the URL, if any. Read through the loose `ListParams`, since a Resource that
-	// isn't searchable has no `search` in its own.
-	const urlSearch = $derived((params satisfies ListParams as ListParams).search);
+	// The search and the sort in the URL, if any. Read through the loose `ListParams`, since a
+	// Resource that isn't searchable has no `search` in its own, and one with no sortable Field no
+	// `sort`.
+	const looseParams = $derived(params satisfies ListParams as ListParams);
+	const urlSearch = $derived(looseParams.search);
 	const searchText = () => draft ?? urlSearch ?? '';
 
 	const selection = createSelection<IdOf<R>>();
+
+	function sortState(key: SortableKey<R>): SortOrder | undefined {
+		const sort = looseParams.sort;
+		return sort?.field === key ? sort.order : undefined;
+	}
 
 	/** Write a search to the URL now, in place, at page 1 of the current page size. */
 	function writeSearch(text: string) {
@@ -171,13 +178,34 @@ export function createListView<R extends Resource>(
 			if (urlSearch !== undefined) return `No ${records} match “${urlSearch}”.`;
 			return `No ${records} ${params.page > 1 ? 'on this page' : 'yet'}.`;
 		},
+		/**
+		 * The order the list is sorted by a Field in: `'asc'`, `'desc'`, or `undefined` when the
+		 * list isn't sorted by it.
+		 */
+		// Methods, like the selection's, so a list View for one Resource still stands in for any
+		// Resource's, as the Theme's parts take it.
+		sortState(key: SortableKey<R>): SortOrder | undefined {
+			return sortState(key);
+		},
+		/**
+		 * The href that sorts the list by a sortable Field, for its column header: ascending, then
+		 * descending once it is sorted ascending, then no sort once it is sorted descending. It
+		 * starts again at page 1 and keeps the search and the page size.
+		 */
+		sortHref(key: SortableKey<R>): string {
+			const { perPage, search } = looseParams;
+			const order = sortState(key);
+			if (order === 'desc') return listHref(url, { page: 1, perPage, search });
+			const next: SortOrder = order === 'asc' ? 'desc' : 'asc';
+			return listHref(url, { page: 1, perPage, search, sort: { field: key, order: next } });
+		},
 		/** The page sizes to offer, as plain links. */
 		perPageOptions: PER_PAGE_OPTIONS,
 		/** The href of another page, at the same page size. */
 		pageHref(target: number): string {
 			return listHref(url, { ...params, page: target });
 		},
-		/** The href of the first page at another page size, keeping the search. */
+		/** The href of the first page at another page size, keeping the search and the sort. */
 		perPageHref(perPage: number): string {
 			return listHref(url, { ...params, page: 1, perPage });
 		},
@@ -226,11 +254,12 @@ export function createListView<R extends Resource>(
 		/**
 		 * The GET form the search box sits in, so search works without JavaScript too: where it
 		 * goes, the name of its search box, and the params it keeps as hidden inputs (a page size
-		 * that isn't the default, never the page). The form names no empty param.
+		 * that isn't the default and the sort, never the page). The form names no empty param.
 		 */
 		get searchForm(): { action: string; name: 'q'; hidden: [name: string, value: string][] } {
+			const { perPage, sort } = looseParams;
 			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
-			const kept = new URL(listHref(url, { page: 1, perPage: params.perPage }), url);
+			const kept = new URL(listHref(url, { page: 1, perPage, sort }), url);
 			return { action: kept.pathname, name: 'q', hidden: [...kept.searchParams] };
 		}
 	};

@@ -1,6 +1,6 @@
 import type { Component } from 'svelte';
 import type { z } from 'zod';
-import { describeFields, type Field } from './fields.ts';
+import { assertSortable, describeFields, type Field } from './fields.ts';
 import { assertFormInputs } from './form-spec.ts';
 import { assertRecordTitle } from './record-title.ts';
 
@@ -130,5 +130,6 @@ export function defineResource<
 	// Fail at startup, not on a form that could never be saved.
 	assertFormInputs(name, fields, schema);
 	assertRecordTitle(name, fields, recordTitle);
+	assertSortable(name, fields);
 	return { name, label, icon, group, schema, searchable, fields, recordTitle };
 }

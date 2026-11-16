@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { defineResource, listParamsSchema } from '@svelte-admin/core';
+import { defineResource, field, listParamsSchema } from '@svelte-admin/core';
 
 const recipes = defineResource({
 	name: 'recipes',
@@ -90,6 +90,58 @@ describe('the getList input schema', () => {
 	describe('for a Resource that is not searchable', () => {
 		it('rejects a search as an undeclared key', () => {
 			expect(accepts({ page: 1, perPage: 25, search: 'pasta' })).toBe(false);
+		});
+	});
+
+	describe('for a Resource with sortable Fields', () => {
+		const sortable = defineResource({
+			name: 'recipes',
+			label: 'Recipes',
+			schema: z.object({
+				id: field(z.number(), { sortable: true }),
+				name: field(z.string(), { sortable: true }),
+				cuisine: z.string(),
+				calories: field(z.number(), { sortable: true }).optional(),
+				secret: field(z.string(), { hidden: true, sortable: true })
+			})
+		});
+		const schema = listParamsSchema(sortable);
+		const withSort = (sort: unknown) => schema.safeParse({ page: 1, perPage: 25, sort });
+
+		it.each(['id', 'name', 'calories', 'secret'])(
+			'accepts a sort on the sortable Field %s, either way',
+			(key) => {
+				for (const order of ['asc', 'desc']) {
+					expect(withSort({ field: key, order })).toEqual({
+						success: true,
+						data: { page: 1, perPage: 25, sort: { field: key, order } }
+					});
+				}
+			}
+		);
+
+		it('accepts no sort', () => {
+			expect(schema.parse({ page: 1, perPage: 25 })).toEqual({ page: 1, perPage: 25 });
+		});
+
+		it.each([
+			['a Field that is not sortable', { field: 'cuisine', order: 'asc' }],
+			['a Field it does not have', { field: 'rating', order: 'asc' }],
+			['an unknown order', { field: 'name', order: 'up' }],
+			['a missing order', { field: 'name' }],
+			['a missing Field', { order: 'asc' }],
+			['an extra key', { field: 'name', order: 'asc', nulls: 'last' }],
+			['a bare Field name', 'name'],
+			['an empty sort', {}],
+			['a list of sorts', [{ field: 'name', order: 'asc' }]]
+		])('rejects a sort on %s', (_, sort) => {
+			expect(withSort(sort).success).toBe(false);
+		});
+	});
+
+	describe('for a Resource with no sortable Field', () => {
+		it('rejects any sort as an undeclared key', () => {
+			expect(accepts({ page: 1, perPage: 25, sort: { field: 'title', order: 'asc' } })).toBe(false);
 		});
 	});
 });

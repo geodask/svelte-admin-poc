@@ -259,7 +259,7 @@ export type FormValues = {
 };
 
 /** A type with its intersections flattened into one object, so it reads (and compares) plainly. */
-type Simplify<T> = { [K in keyof T]: T[K] } & {};
+export type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
 /** A Resource's schema shape: each Field's key and its schema. */
 type ShapeOf<R extends Resource> = R['schema']['shape'];

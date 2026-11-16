@@ -11,13 +11,15 @@ export const recipes = defineResource({
 	// The key order is the display order. Recipes hold a Field of every built-in Kind.
 	schema: z.object({
 		id: z.number(),
-		name: field(z.string(), { placeholder: 'e.g. Classic Margherita Pizza' }),
+		// The demo backend can sort by any Field; these four are offered as the list's sort.
+		name: field(z.string(), { placeholder: 'e.g. Classic Margherita Pizza', sortable: true }),
 		cuisine: field(z.string(), { placeholder: 'e.g. Italian' }),
 		difficulty: z.enum(['Easy', 'Medium', 'Hard']),
-		prepTimeMinutes: field(z.number(), { label: 'Prep time (min)' }),
+		prepTimeMinutes: field(z.number(), { label: 'Prep time (min)', sortable: true }),
 		servings: z.number(),
-		// Metadata set before `.optional()` still applies.
-		caloriesPerServing: field(z.number(), { label: 'Calories' }).optional(),
+		// Metadata set before `.optional()` still applies. Some recipes have no calorie count,
+		// and those come last in either order.
+		caloriesPerServing: field(z.number(), { label: 'Calories', sortable: true }).optional(),
 		vegetarian: z.boolean(),
 		// Edited as one textarea, one tag per line. Posts' tags keep one input per tag.
 		tags: field(z.array(z.string()), { input: 'lines' }),
@@ -27,7 +29,7 @@ export const recipes = defineResource({
 			.min(1, 'Add at least one ingredient'),
 		// Counted by the backend: it starts at 0, and no form can set it.
 		reviewCount: field(z.number(), { readOnly: true }),
-		publishedAt: z.iso.datetime(),
+		publishedAt: field(z.iso.datetime(), { sortable: true }),
 		// A number or a slug: no built-in Kind fits, so it shows as unknown. The forms have no
 		// input for it either, so it must be read-only (the backend sets it) or hidden.
 		sourceId: field(z.union([z.string(), z.number()]), { readOnly: true }),

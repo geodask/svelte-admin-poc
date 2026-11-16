@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 /**
  * The metadata a Field can carry, attached with `field()`: `label`, `description`, `hidden` (in
- * no View), `list: false` (left off the list View only), `readOnly`, `placeholder` and `input`.
+ * no View), `list: false` (left off the list View only), `readOnly`, `placeholder`, `input` and
+ * `sortable`.
  */
 export type FieldMeta = {
 	label?: string;
@@ -30,6 +31,13 @@ export type FieldMeta = {
 	 * default) or `lines` (one textarea with one item per line). Ignored for any other type.
 	 */
 	input?: FieldInputChoice;
+	/**
+	 * Whether the backend can sort the list by this Field, so the list View offers it as the sort
+	 * (its header becomes a link) and `getList` accepts it. Fields are not sortable unless they
+	 * say so. Only a scalar Kind (text, number, date, enum, boolean) can be: `defineResource`
+	 * throws for any other. Write it inline (or `as const`), so `ListParams` sees it.
+	 */
+	sortable?: true;
 };
 
 /** Who may set a Field the backend owns: never (`true`), or only on create. See `FieldMeta.readOnly`. */
@@ -53,6 +61,7 @@ export type FieldBrand = {
 	readOnly: FieldReadOnly | undefined;
 	hidden: boolean | undefined;
 	input: FieldInputChoice | undefined;
+	sortable: true | undefined;
 };
 
 /** One key of the metadata as a literal type, or `undefined` when it isn't set. */
@@ -62,8 +71,9 @@ type MetaValue<M, K extends keyof FieldBrand> = M extends { readonly [P in K]: i
 
 /**
  * A Field's schema as `field()` returns it: the same Zod type, branded in its type with the
- * metadata the forms' types depend on (`readOnly`, `hidden` and `input`), so `FormInput`,
- * `CreateData` and `EditData` can leave out the Fields no form sets. The brand survives
+ * metadata the forms' and the list's types depend on (`readOnly`, `hidden`, `input` and
+ * `sortable`), so `FormInput`, `CreateData` and `EditData` can leave out the Fields no form sets,
+ * and `ListParams` can name the sortable ones. The brand survives
  * `.optional()`, `.nullable()` and `.default()`, which keep the schema's type inside them.
  */
 export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
@@ -71,6 +81,7 @@ export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
 		readOnly: MetaValue<M, 'readOnly'>;
 		hidden: MetaValue<M, 'hidden'>;
 		input: MetaValue<M, 'input'>;
+		sortable: MetaValue<M, 'sortable'>;
 	};
 };
 
@@ -78,9 +89,9 @@ export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
  * Attach metadata to a Field's schema and return the same schema, so it can sit inline in
  * `z.object({...})`. It may go inside or outside `.optional()`, `.nullable()` and `.default()`:
  * `field(z.number(), { label: 'Calories' }).optional()` keeps its label. Its type is branded with
- * `readOnly`, `hidden` and `input`, so write the metadata inline (or `as const`) for the form
- * types to see it: a read-only Field is then left out of a replaced form View's typed `fields`
- * and of the Provider's write data.
+ * `readOnly`, `hidden`, `input` and `sortable`, so write the metadata inline (or `as const`) for
+ * the types to see it: a read-only Field is then left out of a replaced form View's typed
+ * `fields` and of the Provider's write data, and a sortable one is in `ListParams`' sort.
  */
 export function field<T extends z.ZodType, const M extends FieldMeta>(
 	schema: T,
@@ -222,6 +233,8 @@ export type Field = DetectedKind & {
 	readOnly?: FieldReadOnly;
 	/** The example value its input shows while empty, if any. */
 	placeholder?: string;
+	/** Whether the list can be sorted by it: see `FieldMeta.sortable`. */
+	sortable: boolean;
 	/**
 	 * For an object Field, the Fields of the object (or of each object in an array of objects),
 	 * so the detail View can show it as nested label-value pairs.
@@ -257,10 +270,25 @@ export function describeField(key: string, schema: z.ZodType): Field {
 		...(meta.readOnly === undefined ? {} : { readOnly: meta.readOnly }),
 		...(meta.placeholder === undefined ? {} : { placeholder: meta.placeholder }),
 		required: !chain.some(isWrapper),
+		sortable: meta.sortable === true,
 		list: !hidden && meta.list !== false && kind.kind !== 'object',
 		detail: !hidden,
 		...(object === undefined ? {} : { fields: describeFields(object) })
 	};
+}
+
+/**
+ * Fails at startup when a Field that isn't of a scalar Kind (text, number, date, enum, boolean)
+ * is sortable: no backend sort of a list, an object or an unknown value could be offered.
+ */
+export function assertSortable(name: string, fields: readonly Field[]): void {
+	for (const field of fields) {
+		if (!field.sortable || SCALAR_KINDS.has(field.kind)) continue;
+		throw new Error(
+			`Resource "${name}": the Field "${field.key}" is \`sortable\`, but its Kind is ${field.kind}. ` +
+				'Only a text, number, date, enum or boolean Field can be sortable.'
+		);
+	}
 }
 
 /** Describe every Field of an object schema, in its key order, which is the display order. */

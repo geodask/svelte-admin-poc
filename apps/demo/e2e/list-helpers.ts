@@ -22,6 +22,39 @@ export const selectedCount = (page: Page) => page.getByText(/^\d+ selected$/);
 export const openInSidebar = (page: Page, label: string) =>
 	page.getByRole('navigation', { name: 'Resources' }).getByRole('link', { name: label }).click();
 
+/** The column header of the list View's table for a Field, by its label. */
+export const columnHeader = (page: Page, label: string) =>
+	page.getByRole('columnheader', { name: label, exact: true });
+
+/** The cells of one column of the list View's table, by its header's label, in row order. */
+export async function columnCells(page: Page, label: string) {
+	const labels = await page.getByRole('columnheader').allInnerTexts();
+	const index = labels.findIndex((text) => text.trim() === label);
+	if (index === -1) throw new Error(`No column "${label}" among ${JSON.stringify(labels)}`);
+	return dataRows(page).locator(`td:nth-child(${index + 1})`);
+}
+
+/**
+ * Add a value to a devalue array and return its index. A plain object maps each key to the
+ * index of its value, and an array holds the indexes of its items; strings, numbers and
+ * booleans are stored as they are.
+ */
+function addNode(nodes: unknown[], value: unknown): number {
+	if (Array.isArray(value)) {
+		const index = nodes.push(null) - 1;
+		nodes[index] = value.map((item) => addNode(nodes, item));
+		return index;
+	}
+	if (typeof value === 'object' && value !== null) {
+		const index = nodes.push(null) - 1;
+		nodes[index] = Object.fromEntries(
+			Object.entries(value).map(([key, item]) => [key, addNode(nodes, item)])
+		);
+		return index;
+	}
+	return nodes.push(value) - 1;
+}
+
 /**
  * Re-encode a captured `getList` remote query payload with some args changed. A payload is
  * Kit's url-safe base64 of a devalue array, where an object maps each key to the index of its
@@ -35,7 +68,7 @@ function withArgs(payload: string, changes: Record<string, unknown>): string {
 	);
 	if (!args) throw new Error(`No list params in the payload ${JSON.stringify(nodes)}`);
 	for (const [key, value] of Object.entries(changes)) {
-		args[key] = nodes.push(value) - 1;
+		args[key] = addNode(nodes, value);
 	}
 	return Buffer.from(JSON.stringify(nodes)).toString('base64url');
 }
@@ -70,8 +103,24 @@ export const uniquePage = () => 1000 + Math.floor(Math.random() * 1_000_000_000)
 
 /** The requests the demo backend received for `page`, e.g. `GET /recipes?page=…&perPage=25`. */
 export async function backendRequestsFor(request: APIRequestContext, page: number) {
-	const log = (await (await request.get(`${BACKEND_URL}/requests`)).json()) as string[];
+	const log = await backendLog(request);
 	return log.filter(
 		(line) => new URL(line.split(' ')[1], BACKEND_URL).searchParams.get('page') === String(page)
 	);
+}
+
+/** The demo backend's request log so far: one line per request, e.g. `GET /recipes?page=1`. */
+export async function backendLog(request: APIRequestContext): Promise<string[]> {
+	return (await (await request.get(`${BACKEND_URL}/requests`)).json()) as string[];
+}
+
+/**
+ * The requests the demo backend receives while `act` runs. Tests run in parallel, so it may
+ * hold other tests' requests too: check it with `toContain`, never `toEqual`, for a request no
+ * other test sends (e.g. at a page size no other test asks for).
+ */
+export async function backendRequestsDuring(request: APIRequestContext, act: () => Promise<void>) {
+	const before = (await backendLog(request)).length;
+	await act();
+	return (await backendLog(request)).slice(before);
 }

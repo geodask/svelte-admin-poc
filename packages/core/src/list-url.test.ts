@@ -1,11 +1,40 @@
 import { describe, expect, it } from 'vitest';
-import { encodeListParams, listHref, listUrlRewrite, readListParams } from '@svelte-admin/core';
+import { z } from 'zod';
+import {
+	defineResource,
+	encodeListParams,
+	field,
+	listHref,
+	listUrlRewrite,
+	readListParams,
+	type Resource
+} from '@svelte-admin/core';
 
-// Only whether a Resource is searchable matters to the list URL.
-const searchable = { searchable: true };
-const notSearchable = { searchable: false };
+// What matters to the list URL: whether a Resource is searchable, and which Fields are sortable.
+const searchable = defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	searchable: true,
+	schema: z.object({ id: z.number(), name: z.string() })
+});
+const notSearchable = defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	schema: z.object({ id: z.number(), name: z.string() })
+});
+const sortable = defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	searchable: true,
+	schema: z.object({
+		id: z.number(),
+		name: field(z.string(), { sortable: true }),
+		cuisine: z.string(),
+		calories: field(z.number(), { sortable: true }).optional()
+	})
+});
 
-const read = (search: string, resource = notSearchable) =>
+const read = (search: string, resource: Resource = notSearchable) =>
 	readListParams(new URL(`http://admin.test/admin/recipes${search}`), resource);
 
 describe('the list URL helper', () => {
@@ -103,7 +132,7 @@ describe('the list URL helper', () => {
 	});
 
 	describe('encoding list params', () => {
-		const urlDefaults = { page: 1, perPage: 25 };
+		const urlDefaults = { page: 1, perPage: 25, order: 'asc' } as const;
 		const encode = (...args: Parameters<typeof encodeListParams>) =>
 			encodeListParams(...args).toString();
 
@@ -146,7 +175,7 @@ describe('the list URL helper', () => {
 	});
 
 	describe('rewriting a list URL', () => {
-		const rewrite = (search: string, resource = notSearchable) =>
+		const rewrite = (search: string, resource: Resource = notSearchable) =>
 			listUrlRewrite(new URL(`http://admin.test/admin/recipes${search}`), resource);
 
 		it('leaves a URL alone when it names only good values that differ from the defaults', () => {
@@ -195,6 +224,115 @@ describe('the list URL helper', () => {
 
 		it('drops q on a Resource that is not searchable', () => {
 			expect(rewrite('?q=pasta&page=2')).toBe('/admin/recipes?page=2');
+		});
+	});
+
+	describe('the sort', () => {
+		const at = (search: string) => new URL(`http://admin.test/admin/recipes${search}`);
+		const readSorted = (search: string) => read(search, sortable);
+		const rewrite = (search: string) => listUrlRewrite(at(search), sortable);
+
+		it('is read from sort, ascending unless order says desc', () => {
+			expect(readSorted('?sort=name')).toEqual({
+				page: 1,
+				perPage: 25,
+				sort: { field: 'name', order: 'asc' }
+			});
+			expect(readSorted('?sort=calories&order=desc')).toEqual({
+				page: 1,
+				perPage: 25,
+				sort: { field: 'calories', order: 'desc' }
+			});
+			expect(readSorted('?order=desc&sort=name')).toMatchObject({
+				sort: { field: 'name', order: 'desc' }
+			});
+			expect(readSorted('?sort=name&order=asc')).toMatchObject({
+				sort: { field: 'name', order: 'asc' }
+			});
+		});
+
+		it('reads ascending for an order that is neither asc nor desc', () => {
+			expect(readSorted('?sort=name&order=DESC')).toMatchObject({
+				sort: { field: 'name', order: 'asc' }
+			});
+		});
+
+		it.each([
+			['a Field that is not sortable', '?sort=cuisine&order=desc'],
+			['a Field the Resource does not have', '?sort=rating'],
+			['an empty sort', '?sort=&order=desc'],
+			['an order without a sort', '?order=desc']
+		])('is dropped for %s', (_, search) => {
+			expect(readSorted(search)).toEqual({ page: 1, perPage: 25 });
+		});
+
+		it('is ignored on a Resource with no sortable Field', () => {
+			expect(read('?sort=name&order=desc', searchable)).toEqual({ page: 1, perPage: 25 });
+		});
+
+		it('keeps only the first of a repeated sort', () => {
+			expect(readSorted('?sort=calories&sort=name')).toMatchObject({
+				sort: { field: 'calories', order: 'asc' }
+			});
+		});
+
+		it('is written after the page size and before the search, with order only for desc', () => {
+			const url = at('?page=2');
+			expect(listHref(url, { page: 1, perPage: 25, sort: { field: 'name', order: 'asc' } })).toBe(
+				'/admin/recipes?sort=name'
+			);
+			expect(
+				listHref(url, {
+					page: 2,
+					perPage: 10,
+					search: 'pasta',
+					sort: { field: 'calories', order: 'desc' }
+				})
+			).toBe('/admin/recipes?page=2&perPage=10&sort=calories&order=desc&q=pasta');
+		});
+
+		it('always writes the order when given no defaults, as the REST Provider sends it', () => {
+			const encode = (params: Parameters<typeof encodeListParams>[0]) =>
+				encodeListParams(params).toString();
+			expect(encode({ page: 1, perPage: 25, sort: { field: 'name', order: 'asc' } })).toBe(
+				'page=1&perPage=25&sort=name&order=asc'
+			);
+			expect(encode({ page: 1, perPage: 25, sort: { field: 'name', order: 'desc' } })).toBe(
+				'page=1&perPage=25&sort=name&order=desc'
+			);
+			expect(encode({ page: 1, perPage: 25 })).toBe('page=1&perPage=25');
+		});
+
+		it.each([
+			{ page: 1, perPage: 25, sort: { field: 'name', order: 'asc' } },
+			{ page: 3, perPage: 10, sort: { field: 'calories', order: 'desc' } },
+			{ page: 1, perPage: 25, search: 'pasta', sort: { field: 'name', order: 'desc' } }
+		] as const)('reads back through listHref as %j', (params) => {
+			expect(readSorted(listHref(at(''), params).replace('/admin/recipes', ''))).toEqual(params);
+		});
+
+		it('leaves a clean sorted URL alone, in any param order', () => {
+			expect(rewrite('?sort=name')).toBeUndefined();
+			expect(rewrite('?sort=name&order=desc')).toBeUndefined();
+			expect(rewrite('?order=desc&page=2&sort=calories&q=pasta')).toBeUndefined();
+		});
+
+		it.each([
+			['order=asc, the default', '?sort=name&order=asc', '/admin/recipes?sort=name'],
+			[
+				'a sort on a Field that is not sortable',
+				'?sort=cuisine&order=desc&page=2',
+				'/admin/recipes?page=2'
+			],
+			['a sort on an unknown Field', '?sort=rating', '/admin/recipes'],
+			['an order without a sort', '?order=desc&q=pasta', '/admin/recipes?q=pasta'],
+			['an order that is neither asc nor desc', '?sort=name&order=up', '/admin/recipes?sort=name']
+		])('rewrites a URL with %s', (_, search, clean) => {
+			expect(rewrite(search)).toBe(clean);
+		});
+
+		it('drops the sort on a Resource with no sortable Field', () => {
+			expect(listUrlRewrite(at('?sort=name&order=desc'), searchable)).toBe('/admin/recipes');
 		});
 	});
 });

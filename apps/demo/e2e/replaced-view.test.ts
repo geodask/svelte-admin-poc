@@ -123,7 +123,8 @@ test.describe('the replaced users list View', () => {
 	test('drops bad and unknown params from the URL, as the stock View does @js', async ({
 		page
 	}) => {
-		await page.goto('/admin/users?perPage=abc&sort=name&page=1');
+		// Users sort by name, but not by email.
+		await page.goto('/admin/users?perPage=abc&sort=email&page=1');
 
 		await expect(page).toHaveURL('/admin/users');
 		await expect(cards(page)).toHaveCount(12);

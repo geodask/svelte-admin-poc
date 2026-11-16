@@ -1,11 +1,16 @@
 // The demo backend: a small REST server over in-memory seed data, speaking the convention of
 // the bundled REST Provider. Start it with `bun backend/server.ts` from `apps/demo`.
 //
-//   GET  /{resource}?page=&perPage=&q=
+//   GET  /{resource}?page=&perPage=&sort=&order=&q=
 //                                     one page: { data, total }, or { data, hasNextPage } for
-//                                     posts, which stand in for a backend that can't count. q
-//                                     searches recipes by their text Fields and users by name
-//                                     and email; posts can't be searched, and q for them is a 400
+//                                     posts, which stand in for a backend that can't count. sort
+//                                     names any Field to sort by, with order asc (the default) or
+//                                     desc (anything else is a 400): numbers as numbers, text and
+//                                     ISO dates with a locale compare, stable, and records without
+//                                     a value last either way. q searches recipes by their text
+//                                     Fields and users by name and email; posts can't be
+//                                     searched, and q for them is a 400. The sort applies before
+//                                     the search and the paging
 //   GET  /{resource}/{id}             one record, or a 404. The id is one path segment, decoded,
 //                                     and matched against each record's id written as text
 //   POST /{resource}                  create a record from the JSON body, with the next id (the
@@ -110,6 +115,27 @@ function search(records: Records, fields: string[], q: string): Records {
 	);
 }
 
+/** Compare two values that are both set: numbers as numbers, anything else as text. */
+function compareValues(a: unknown, b: unknown): number {
+	if (typeof a === 'number' && typeof b === 'number') return a - b;
+	return String(a).localeCompare(String(b));
+}
+
+/**
+ * The records sorted by the Field `key`, ascending or descending. The sort is stable, and
+ * records without a value (missing or null) come last in both orders.
+ */
+function sortBy(records: Records, key: string, order: 'asc' | 'desc'): Records {
+	const direction = order === 'desc' ? -1 : 1;
+	const valueOf = (record: Records[number]) => (record as Record<string, unknown>)[key];
+	return records.toSorted((a, b) => {
+		const [x, y] = [valueOf(a), valueOf(b)];
+		const [xMissing, yMissing] = [x === undefined || x === null, y === undefined || y === null];
+		if (xMissing || yMissing) return Number(xMissing) - Number(yMissing);
+		return compareValues(x, y) * direction;
+	});
+}
+
 let db = fresh();
 let faults: Fault[] = [];
 const requests: string[] = [];
@@ -180,6 +206,12 @@ const server = Bun.serve({
 		if (request.method === 'GET' && segments.length === 1 && Object.hasOwn(db, segments[0])) {
 			const name = segments[0];
 			let records = db[name];
+			const sort = url.searchParams.get('sort');
+			const order = url.searchParams.get('order') ?? 'asc';
+			if (order !== 'asc' && order !== 'desc') {
+				return json({ message: 'order must be asc or desc' }, 400);
+			}
+			if (sort !== null) records = sortBy(records, sort, order);
 			const q = url.searchParams.get('q');
 			if (q !== null) {
 				if (!Object.hasOwn(searchFields, name)) {
