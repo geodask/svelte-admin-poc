@@ -17,7 +17,7 @@ export const users = defineResource({
 		phone: z.string().optional(),
 		role: field(z.enum(['admin', 'editor', 'viewer']), { filterable: true }),
 		active: field(z.boolean(), { filterable: true }),
-		joinedAt: field(z.iso.datetime(), { sortable: true })
+		joinedAt: field(z.iso.datetime(), { sortable: true, filterable: true })
 	}),
 	// The list opens in name order, with nothing in the URL.
 	defaultSort: { field: 'name', order: 'asc' }

@@ -281,6 +281,80 @@ describe('the getList input schema', () => {
 		});
 	});
 
+	describe('for a Resource with text, number and date filters', () => {
+		const ranged = defineResource({
+			name: 'recipes',
+			label: 'Recipes',
+			schema: z.object({
+				id: z.number(),
+				// Refinements that a filter value isn't held to.
+				name: field(z.string().min(5), { filterable: true }),
+				cuisine: field(z.string(), { filterable: ['eq', 'in'] }),
+				prepTimeMinutes: field(z.int().min(1), { filterable: true }),
+				difficulty: field(z.enum(['Easy', 'Hard']), { filterable: true }),
+				publishedAt: field(z.iso.datetime(), { filterable: true }),
+				cookedOn: field(z.iso.date(), { filterable: true }),
+				bakedOn: field(z.date(), { filterable: ['gte', 'lte'] })
+			})
+		});
+		const schema = listParamsSchema(ranged);
+		const accepted = (filters: unknown) =>
+			schema.safeParse({ page: 1, perPage: 25, filters }).success;
+
+		it('accepts a short contains value on a Field with a .min() refinement', () => {
+			expect(accepted([{ field: 'name', operator: 'contains', value: 'piz' }])).toBe(true);
+		});
+
+		it('accepts text eq and in on a narrowed text Field, as for an enum', () => {
+			expect(accepted([{ field: 'cuisine', operator: 'eq', value: 'It' }])).toBe(true);
+			expect(accepted([{ field: 'cuisine', operator: 'in', value: ['Italian', 'Thai'] }])).toBe(
+				true
+			);
+		});
+
+		it('accepts every range operator on a number, with any finite number', () => {
+			for (const operator of ['eq', 'lt', 'lte', 'gt', 'gte']) {
+				expect(accepted([{ field: 'prepTimeMinutes', operator, value: -2.5 }])).toBe(true);
+			}
+		});
+
+		it('accepts dates in the Field type: ISO strings, or a Date', () => {
+			expect(
+				accepted([
+					{ field: 'publishedAt', operator: 'gte', value: '2024-03-01T00:00:00.000Z' },
+					{ field: 'cookedOn', operator: 'lt', value: '2024-03-01' },
+					{ field: 'bakedOn', operator: 'lte', value: new Date('2024-03-01T00:00:00Z') }
+				])
+			).toBe(true);
+		});
+
+		it.each([
+			[
+				'contains on a Field narrowed to eq and in',
+				{ field: 'cuisine', operator: 'contains', value: 'Ital' }
+			],
+			['a range on an enum', { field: 'difficulty', operator: 'gte', value: 'Easy' }],
+			['a range on text', { field: 'name', operator: 'lt', value: 'M' }],
+			['contains on a number', { field: 'prepTimeMinutes', operator: 'contains', value: 1 }],
+			['eq on a date narrowed to a range', { field: 'bakedOn', operator: 'eq', value: new Date() }],
+			['an infinite number', { field: 'prepTimeMinutes', operator: 'gte', value: Infinity }],
+			['a number that is NaN', { field: 'prepTimeMinutes', operator: 'lt', value: Number.NaN }],
+			['a number written as text', { field: 'prepTimeMinutes', operator: 'gte', value: '10' }],
+			[
+				'a datetime as the input writes it',
+				{ field: 'publishedAt', operator: 'gte', value: '2024-03-01T00:00' }
+			],
+			['a datetime as a Date', { field: 'publishedAt', operator: 'gte', value: new Date() }],
+			['an ISO date as a datetime', { field: 'publishedAt', operator: 'lt', value: '2024-03-01' }],
+			['a Date for an ISO date', { field: 'cookedOn', operator: 'lt', value: new Date() }],
+			['an ISO string for a Date', { field: 'bakedOn', operator: 'gte', value: '2024-03-01' }],
+			['an invalid Date', { field: 'bakedOn', operator: 'gte', value: new Date('nope') }],
+			['text that is not a string', { field: 'name', operator: 'contains', value: 5 }]
+		])('rejects %s', (_, filter) => {
+			expect(accepted([filter])).toBe(false);
+		});
+	});
+
 	describe('for a Resource with no filterable Field', () => {
 		it('rejects any filters as an undeclared key', () => {
 			expect(accepts({ page: 1, perPage: 25, filters: [] })).toBe(false);

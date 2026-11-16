@@ -80,26 +80,47 @@ export const postSortOrder: ListParams<typeof posts>['sort'] = { field: 'id', or
 // typed by the Field.
 export const recipeFilterKeys: Exactly<
 	FilterableKey<typeof recipes>,
-	'difficulty' | 'vegetarian'
+	'name' | 'cuisine' | 'difficulty' | 'prepTimeMinutes' | 'vegetarian' | 'publishedAt'
 > = true;
-export const userFilterKeys: Exactly<FilterableKey<typeof users>, 'role' | 'active'> = true;
-export const postFilterKeys: Exactly<FilterableKey<typeof posts>, 'status'> = true;
+export const userFilterKeys: Exactly<
+	FilterableKey<typeof users>,
+	'role' | 'active' | 'joinedAt'
+> = true;
+export const postFilterKeys: Exactly<FilterableKey<typeof posts>, 'userId' | 'status'> = true;
 export const recipeFilters: Exactly<
 	ListFilter<typeof recipes>,
+	| { field: 'name'; operator: 'in'; value: string[] }
+	| { field: 'name'; operator: 'eq' | 'contains'; value: string }
+	// Narrowed: no `contains`.
+	| { field: 'cuisine'; operator: 'in'; value: string[] }
+	| { field: 'cuisine'; operator: 'eq'; value: string }
 	| { field: 'difficulty'; operator: 'in'; value: ('Easy' | 'Medium' | 'Hard')[] }
 	| { field: 'difficulty'; operator: 'eq'; value: 'Easy' | 'Medium' | 'Hard' }
+	| { field: 'prepTimeMinutes'; operator: 'eq' | 'lt' | 'lte' | 'gt' | 'gte'; value: number }
 	| { field: 'vegetarian'; operator: 'eq'; value: boolean }
+	// A date keeps the Field's own type: an ISO datetime string.
+	| { field: 'publishedAt'; operator: 'eq' | 'lt' | 'lte' | 'gt' | 'gte'; value: string }
 > = true;
 export const userRoles: ListParams<typeof users>['filters'] = [
 	{ field: 'role', operator: 'in', value: ['admin', 'editor'] },
-	{ field: 'active', operator: 'eq', value: false }
+	{ field: 'active', operator: 'eq', value: false },
+	{ field: 'joinedAt', operator: 'gte', value: '2023-06-01T00:00:00.000Z' }
 ];
 export const postStatus: ListParams<typeof posts>['filters'] = [
-	{ field: 'status', operator: 'eq', value: 'draft' }
+	{ field: 'status', operator: 'eq', value: 'draft' },
+	{ field: 'userId', operator: 'eq', value: 3 }
 ];
 export const recipeCuisineFilter: ListParams<typeof recipes>['filters'] = [
-	// @ts-expect-error recipes can't be filtered by cuisine yet
-	{ field: 'cuisine', operator: 'eq', value: 'Thai' }
+	// @ts-expect-error cuisine is narrowed to exact matches
+	{ field: 'cuisine', operator: 'contains', value: 'Thai' }
+];
+export const postUserRange: ListParams<typeof posts>['filters'] = [
+	// @ts-expect-error a post's author is filtered by one id only
+	{ field: 'userId', operator: 'gte', value: 3 }
+];
+export const joinedAtDate: ListParams<typeof users>['filters'] = [
+	// @ts-expect-error joinedAt is an ISO string, not a Date
+	{ field: 'joinedAt', operator: 'gte', value: new Date() }
 ];
 export const vegetarianIn: ListParams<typeof recipes>['filters'] = [
 	// @ts-expect-error a boolean has no `in`
@@ -113,7 +134,7 @@ export const postStatusTypo: ListParams<typeof posts>['filters'] = [
 // rejected.
 export const postsTitleFilterProvider: Served<typeof posts> = {
 	...({} as Omit<ResourceProvider<typeof posts>, 'getList'>),
-	// @ts-expect-error posts are only filtered by status
+	// @ts-expect-error posts are only filtered by author and status
 	getList: async (
 		_ctx: unknown,
 		params: {

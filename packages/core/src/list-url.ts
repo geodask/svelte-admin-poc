@@ -1,9 +1,16 @@
 import { z } from 'zod';
-import type { Field } from './fields.ts';
+import {
+	dateInputValue,
+	datetimeInputValue,
+	readDateInput,
+	readDatetimeInput
+} from './date-input.ts';
+import { unwrap, type Field } from './fields.ts';
 import {
 	canonicalValues,
 	filterableFields,
 	filterValueKey,
+	filterValueSchema,
 	MAX_IN_VALUES,
 	pageParamSchemas,
 	sortableKeys,
@@ -73,19 +80,91 @@ function readSort(
 	return { field, order: searchParams.get('order') === 'desc' ? 'desc' : 'asc' };
 }
 
+/** A number as the list URL writes it: a plain decimal, such as `15`, `-5` or `45.5`. */
+const PLAIN_DECIMAL = /^-?\d+(\.\d+)?$/;
+
 /**
- * One filter value as the list URL writes it, read into the Field's type, or `undefined` when it
- * is empty or malformed: an enum member as written (any other text is no member), and a boolean
- * as `true` or `false`. Values of the other Kinds can't be read from the URL yet.
+ * Which type a date Field holds: an ISO datetime string, an ISO date string, or a `Date`. The
+ * list URL writes a datetime as a `datetime-local` input does, and the other two as a `date`
+ * input does.
  */
-function readFilterValue(field: Field, text: string): FilterValue | undefined {
-	if (field.kind === 'enum') return field.options.find((option) => String(option) === text);
-	if (field.kind === 'boolean')
-		return text === 'true' ? true : text === 'false' ? false : undefined;
-	return undefined;
+function dateType(schema: z.ZodType): 'datetime' | 'date' | 'Date' {
+	const type = unwrap(schema);
+	if (type instanceof z.ZodISODateTime) return 'datetime';
+	return type instanceof z.ZodDate ? 'Date' : 'date';
 }
 
-/** A filter value as the list URL writes it: a date as an ISO string, anything else as text. */
+/** The schema of a Resource's Field, by its key. */
+function schemaOf(resource: Pick<ListSchemaResource, 'schema'>, field: Field): z.ZodType {
+	return resource.schema.shape[field.key] as z.ZodType;
+}
+
+/**
+ * One filter value as the list URL writes it, read into the Field's type, or `undefined` when it
+ * is empty, blank or malformed: text as written; a number as a plain decimal; a boolean as `true`
+ * or `false`; an enum member as written (any other text is no member); and a date as the filter
+ * input sends it, with the rules the forms use: a datetime as `YYYY-MM-DDTHH:mm` (seconds
+ * optional) in UTC, becoming an ISO datetime string, and a date as `YYYY-MM-DD`, becoming an ISO
+ * date string or, for `z.date()`, a `Date` at midnight UTC. The value must then be of the
+ * Field's base type, as `getList` checks it.
+ */
+function readFilterValue(field: Field, schema: z.ZodType, text: string): FilterValue | undefined {
+	if (text.trim() === '') return undefined;
+	const value = urlValue(field, schema, text);
+	if (value === undefined) return undefined;
+	return filterValueSchema(field, schema).safeParse(value).success ? value : undefined;
+}
+
+/** A filter value as the list URL writes it, read into the Field's type, before it is checked. */
+function urlValue(field: Field, schema: z.ZodType, text: string): FilterValue | undefined {
+	switch (field.kind) {
+		case 'enum':
+			return field.options.find((option) => String(option) === text);
+		case 'boolean':
+			return text === 'true' ? true : text === 'false' ? false : undefined;
+		case 'number':
+			return PLAIN_DECIMAL.test(text) ? Number(text) : undefined;
+		case 'date': {
+			const type = dateType(schema);
+			if (type === 'datetime') return readDatetimeInput(text);
+			const day = readDateInput(text);
+			return type === 'Date' ? day : day && text;
+		}
+		default:
+			return text;
+	}
+}
+
+/**
+ * A filter value on a Resource's Field `key` as the list URL writes it, which is what its filter
+ * input sends: a datetime as a `datetime-local` input does, in UTC (`2024-03-01T10:30`), a `Date`
+ * as a `date` input does (`2024-03-01`), and anything else as text.
+ */
+export function urlFilterValue(
+	resource: Pick<ListSchemaResource, 'fields' | 'schema'>,
+	key: string,
+	value: FilterValue
+): string {
+	if (dateInputType(resource, key) === 'datetime') {
+		return datetimeInputValue(value as string | Date);
+	}
+	return value instanceof Date ? dateInputValue(value) : String(value);
+}
+
+/**
+ * The input a date filter on a Resource's Field `key` uses: `datetime` (a `datetime-local` input,
+ * in UTC) for an ISO datetime Field, else `date`.
+ */
+export function dateInputType(
+	resource: Pick<ListSchemaResource, 'fields' | 'schema'>,
+	key: string
+): 'date' | 'datetime' {
+	const field = resource.fields.find((candidate) => candidate.key === key);
+	if (field?.kind !== 'date') return 'date';
+	return dateType(schemaOf(resource, field)) === 'datetime' ? 'datetime' : 'date';
+}
+
+/** A filter value as the shared encoder writes it: a `Date` as an ISO string, anything else as text. */
 function writeFilterValue(value: FilterValue): string {
 	return value instanceof Date ? value.toISOString() : String(value);
 }
@@ -99,12 +178,13 @@ function writeFilterValue(value: FilterValue): string {
  */
 function readFilters(
 	searchParams: URLSearchParams,
-	resource: Pick<ListSchemaResource, 'fields'>
+	resource: Pick<ListSchemaResource, 'fields' | 'schema'>
 ): ListFilter[] | undefined {
 	const filters: ListFilter[] = [];
 	for (const field of filterableFields(resource)) {
 		const { key, filterOperators: operators } = field;
-		const read = (text: string) => readFilterValue(field, text);
+		const schema = schemaOf(resource, field);
+		const read = (text: string) => readFilterValue(field, schema, text);
 		const values = [
 			...new Map(
 				searchParams
@@ -194,15 +274,26 @@ export function encodeListParams(
 	return encoded;
 }
 
+/** What `listHref` asks of a Resource: its list settings, and its Fields to write filter values by. */
+export type ListHrefResource = ListSettings & Pick<ListSchemaResource, 'fields' | 'schema'>;
+
 /**
  * The href of the list at `url`'s path with `params`, for pager, page-size and search links.
  * It keeps the path, so it carries the admin's base path and works the same in a replaced
  * View. Only params that differ from their defaults are written (the Resource's own page size
  * and default sort included, and a blank search is none), and every other search param is
- * dropped. Params with no sort read back with the Resource's default sort.
+ * dropped. Params with no sort read back with the Resource's default sort. Filter values are
+ * written as the filter form sends them: a datetime as `YYYY-MM-DDTHH:mm` in UTC (with seconds
+ * only when they aren't zero), and a `Date` as its day, `YYYY-MM-DD`.
  */
-export function listHref(url: URL, params: ListParams, resource: ListSettings): string {
-	const query = encodeListParams(params, urlDefaults(resource)).toString();
+export function listHref(url: URL, params: ListParams, resource: ListHrefResource): string {
+	const filters = params.filters?.map((filter): ListFilter => {
+		const write = (value: FilterValue) => urlFilterValue(resource, filter.field, value);
+		return filter.operator === 'in'
+			? { ...filter, value: filter.value.map(write) }
+			: { ...filter, value: write(filter.value) };
+	});
+	const query = encodeListParams({ ...params, filters }, urlDefaults(resource)).toString();
 	return query ? `${url.pathname}?${query}` : url.pathname;
 }
 

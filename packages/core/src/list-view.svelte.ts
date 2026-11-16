@@ -3,9 +3,15 @@ import { page } from '$app/state';
 import { untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
-import type { Field } from './fields.ts';
+import type { Field, FilterOperator } from './fields.ts';
 import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
-import { listHref, listUrlRewrite, readListParams } from './list-url.ts';
+import {
+	dateInputType,
+	listHref,
+	listUrlRewrite,
+	readListParams,
+	urlFilterValue
+} from './list-url.ts';
 import { titleKeys } from './record-title.ts';
 import type { DeleteFailure, ResourceRemote } from './remote.ts';
 import { readDeleteFailure } from './delete-failure.ts';
@@ -48,21 +54,44 @@ export type FilterOption = {
 export type KeptForm = { action: string; hidden: [name: string, value: string][] };
 
 /**
+ * One text, number or date input of a filter control: its name, as the list URL names the filter
+ * (`name.contains`, `prepTimeMinutes.gte`), and the value the list is filtered by now, as the URL
+ * writes it, or empty when it filters nothing.
+ */
+export type FilterInput = { name: string; value: string };
+
+/**
+ * Which input a text, number or date filter control uses: a text box, a number, a date, or a
+ * date and time (a `datetime-local` input, read and written in UTC, as the forms do).
+ */
+export type FilterInputType = 'text' | 'number' | 'date' | 'datetime';
+
+/**
  * The filter control of one filterable Field, in a list View's filter form. Its inputs are named
- * by the Field's key, as the list URL names the filter.
+ * as the list URL names the filter. `operators` are the ones it sends; a filter with any other
+ * operator (text `eq` when the control offers `contains`, `lt`, `gt`) still works from the URL,
+ * and the filter form keeps it.
  *
  * - `checkboxes`: one per option, any number of them checked, for an enum Field that allows
  *   `in`. One checked option filters with `eq`, several with `in`, none not at all.
  * - `radio`: one of the options, the first of which is "Any" (no filter, an empty value), for a
  *   boolean Field (Any / Yes / No) or an enum Field that allows only `eq`. It filters with `eq`.
+ * - `input`: one input. For a text Field a text box, filtering with `contains` when the Field
+ *   allows it, else with `eq`; for a number or date Field that doesn't allow a range, its one
+ *   value, filtering with `eq`. Empty, it filters nothing.
+ * - `range`: a from and a to input, for a number or date Field that allows `gte` and `lte`.
+ *   Either may be left empty, to filter one side only.
  */
-export type FilterControl = {
-	field: Field;
-	type: 'checkboxes' | 'radio';
-	/** The name of each of its inputs. */
-	name: string;
-	options: FilterOption[];
-};
+export type FilterControl = { field: Field; operators: readonly FilterOperator[] } & (
+	| {
+			type: 'checkboxes' | 'radio';
+			/** The name of each of its inputs. */
+			name: string;
+			options: FilterOption[];
+	  }
+	| { type: 'input'; input: FilterInputType; value: FilterInput }
+	| { type: 'range'; input: Exclude<FilterInputType, 'text'>; from: FilterInput; to: FilterInput }
+);
 
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
@@ -161,11 +190,26 @@ export function createListView<R extends Resource>(
 			if (filter.operator === 'eq') values.push(filter.value);
 			if (filter.operator === 'in') values.push(...filter.value);
 		}
-		return values.map(String);
+		return values.map((value) => urlFilterValue(resource, key, value));
+	}
+
+	/** The input of a Field's filter with one operator, and its value now as the URL writes it. */
+	function filterInput(field: Field, operator: Exclude<FilterOperator, 'in'>): FilterInput {
+		const filter = looseParams.filters?.find(
+			(candidate) => candidate.field === field.key && candidate.operator === operator
+		);
+		return {
+			name: operator === 'eq' ? field.key : `${field.key}.${operator}`,
+			value:
+				filter === undefined || filter.operator === 'in'
+					? ''
+					: urlFilterValue(resource, field.key, filter.value)
+		};
 	}
 
 	/** The filter control of a filterable Field, or `undefined` when no stock control fits it. */
 	function filterControl(field: Field): FilterControl | undefined {
+		const allows = (operator: FilterOperator) => field.filterOperators.includes(operator);
 		const values = filteredValues(field.key);
 		const option = (value: string, label: string): FilterOption => ({
 			value,
@@ -174,17 +218,39 @@ export function createListView<R extends Resource>(
 		});
 		const radio = (options: FilterOption[]): FilterControl => ({
 			field,
+			operators: ['eq'],
 			type: 'radio',
 			name: field.key,
 			options: [option('', 'Any'), ...options]
 		});
-		if (field.kind === 'boolean') return radio([option('true', 'Yes'), option('false', 'No')]);
-		if (field.kind !== 'enum') return undefined;
-		const options = field.options.map((value) => option(String(value), String(value)));
-		if (field.filterOperators.includes('in')) {
-			return { field, type: 'checkboxes', name: field.key, options };
+		switch (field.kind) {
+			case 'boolean':
+				return radio([option('true', 'Yes'), option('false', 'No')]);
+			case 'enum': {
+				const options = field.options.map((value) => option(String(value), String(value)));
+				if (!allows('in')) return radio(options);
+				return { field, operators: ['eq', 'in'], type: 'checkboxes', name: field.key, options };
+			}
+			case 'text': {
+				const operator = allows('contains') ? 'contains' : allows('eq') ? 'eq' : undefined;
+				if (operator === undefined) return undefined;
+				const value = filterInput(field, operator);
+				return { field, operators: [operator], type: 'input', input: 'text', value };
+			}
+			case 'number':
+			case 'date': {
+				const input = field.kind === 'number' ? 'number' : dateInputType(resource, field.key);
+				if (allows('gte') && allows('lte')) {
+					const [from, to] = [filterInput(field, 'gte'), filterInput(field, 'lte')];
+					return { field, operators: ['lte', 'gte'], type: 'range', input, from, to };
+				}
+				if (!allows('eq')) return undefined;
+				const value = filterInput(field, 'eq');
+				return { field, operators: ['eq'], type: 'input', input, value };
+			}
+			default:
+				return undefined;
 		}
-		return radio(options);
 	}
 
 	// One control per filterable Field the list View shows anywhere (`detail`: not hidden).
@@ -194,9 +260,14 @@ export function createListView<R extends Resource>(
 			.map(filterControl)
 			.filter((control) => control !== undefined)
 	);
-	const controlledKeys = $derived(
+	/** Each filter a control sends, as `{field}.{operator}`. */
+	const controlled = $derived(
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
-		new Set(filterControls.map((control) => control.field.key))
+		new Set(
+			filterControls.flatMap((control) =>
+				control.operators.map((operator) => `${control.field.key}.${operator}`)
+			)
+		)
 	);
 
 	function sortState(key: SortableKey<R>): SortOrder | undefined {
@@ -368,7 +439,7 @@ export function createListView<R extends Resource>(
 		},
 		/**
 		 * The filter controls to offer: one per filterable Field that isn't hidden, in schema order,
-		 * for the Fields a stock control fits (an enum, a boolean). Filters on other Fields, and with
+		 * for the Fields a stock control fits (see `FilterControl`). Filters on other Fields, and with
 		 * operators no control offers, still work from the URL.
 		 */
 		get filterControls(): FilterControl[] {
@@ -388,10 +459,9 @@ export function createListView<R extends Resource>(
 		 */
 		get filterForm(): KeptForm {
 			const { perPage, sort, search, filters } = looseParams;
-			// A control sends its Field's bare params, so `eq` and `in`; keep every other filter.
+			// Keep every filter no control sends.
 			const uncontrolled = filters?.filter(
-				({ field, operator }) =>
-					!controlledKeys.has(field) || (operator !== 'eq' && operator !== 'in')
+				({ field, operator }) => !controlled.has(`${field}.${operator}`)
 			);
 			return keptForm({ page: 1, perPage, sort, search, filters: uncontrolled });
 		},

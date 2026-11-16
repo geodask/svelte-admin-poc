@@ -188,6 +188,50 @@ describe('the bundled REST Provider', () => {
 			]);
 		});
 
+		it('sends every other operator as a suffix, and a Date as an ISO string', async () => {
+			const rangedRecipes = defineResource({
+				name: 'recipes',
+				label: 'Recipes',
+				schema: z.object({
+					id: z.number(),
+					name: field(z.string(), { filterable: true }),
+					prepTimeMinutes: field(z.number(), { filterable: true }),
+					publishedAt: field(z.iso.datetime(), { filterable: true }),
+					cookedOn: field(z.date(), { filterable: true })
+				})
+			});
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+
+			await restProvider('http://api.test')
+				.for(rangedRecipes)
+				.getList(context(fetch), {
+					page: 1,
+					perPage: 25,
+					filters: [
+						{ field: 'name', operator: 'contains', value: 'piz' },
+						{ field: 'prepTimeMinutes', operator: 'lt', value: 60 },
+						{ field: 'prepTimeMinutes', operator: 'lte', value: 45.5 },
+						{ field: 'prepTimeMinutes', operator: 'gt', value: -5 },
+						{ field: 'prepTimeMinutes', operator: 'gte', value: 10 },
+						{ field: 'publishedAt', operator: 'gte', value: '2024-03-01T10:30:00.000Z' },
+						{ field: 'cookedOn', operator: 'lt', value: new Date('2024-03-01T00:00:00Z') }
+					]
+				});
+
+			const query = new URL(requests[0]).searchParams;
+			expect([...query]).toEqual([
+				['page', '1'],
+				['perPage', '25'],
+				['name.contains', 'piz'],
+				['prepTimeMinutes.lt', '60'],
+				['prepTimeMinutes.lte', '45.5'],
+				['prepTimeMinutes.gt', '-5'],
+				['prepTimeMinutes.gte', '10'],
+				['publishedAt.gte', '2024-03-01T10:30:00.000Z'],
+				['cookedOn.lt', '2024-03-01T00:00:00.000Z']
+			]);
+		});
+
 		it('sends no filter params for a call with no filters, as before filters', async () => {
 			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
 

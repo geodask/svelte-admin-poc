@@ -631,4 +631,205 @@ describe('the list URL helper', () => {
 			expect(rewrite(search)).toBe(clean);
 		});
 	});
+
+	describe('the text, number and date filters', () => {
+		// Like the demo's recipes, with a date Field of each type.
+		const ranged = defineResource({
+			name: 'recipes',
+			label: 'Recipes',
+			searchable: true,
+			schema: z.object({
+				id: z.number(),
+				// A refinement that a filter value isn't held to.
+				name: field(z.string().min(5), { filterable: true }),
+				// Narrowed: exact text only, never `contains`.
+				cuisine: field(z.string(), { filterable: ['eq', 'in'] }),
+				prepTimeMinutes: field(z.number(), { filterable: true }),
+				publishedAt: field(z.iso.datetime(), { filterable: true }),
+				cookedOn: field(z.iso.date(), { filterable: true }).optional(),
+				bakedOn: field(z.date(), { filterable: true }).nullable(),
+				// Narrowed to a range: no `eq`.
+				calories: field(z.number(), { filterable: ['gte', 'lte'] }).optional()
+			})
+		});
+		const at = (search: string) => new URL(`http://admin.test/admin/recipes${search}`);
+		const filtersIn = (search: string) => readListParams(at(search), ranged).filters;
+		const href = (params: Parameters<typeof listHref>[1]) =>
+			listHref(at('?page=2'), params, ranged);
+		const rewrite = (search: string) => listUrlRewrite(at(search), ranged);
+
+		it('read text with contains, eq and in, as typed', () => {
+			expect(filtersIn('?name.contains=piz')).toEqual([
+				{ field: 'name', operator: 'contains', value: 'piz' }
+			]);
+			expect(filtersIn('?name=Pizza%20Night&name.contains=%20piz')).toEqual([
+				{ field: 'name', operator: 'eq', value: 'Pizza Night' },
+				{ field: 'name', operator: 'contains', value: ' piz' }
+			]);
+			expect(filtersIn('?cuisine=Thai&cuisine=Italian')).toEqual([
+				{ field: 'cuisine', operator: 'in', value: ['Italian', 'Thai'] }
+			]);
+		});
+
+		it('read numbers as plain decimals with every operator', () => {
+			expect(
+				filtersIn(
+					'?prepTimeMinutes=15&prepTimeMinutes.lt=60&prepTimeMinutes.lte=45.5&prepTimeMinutes.gt=-5&prepTimeMinutes.gte=0.5'
+				)
+			).toEqual([
+				{ field: 'prepTimeMinutes', operator: 'eq', value: 15 },
+				{ field: 'prepTimeMinutes', operator: 'lt', value: 60 },
+				{ field: 'prepTimeMinutes', operator: 'lte', value: 45.5 },
+				{ field: 'prepTimeMinutes', operator: 'gt', value: -5 },
+				{ field: 'prepTimeMinutes', operator: 'gte', value: 0.5 }
+			]);
+		});
+
+		it('read a datetime as the input sends it, in UTC, into an ISO datetime string', () => {
+			expect(
+				filtersIn('?publishedAt.gte=2024-03-01T00:00&publishedAt.lte=2024-03-31T23:30:15')
+			).toEqual([
+				{ field: 'publishedAt', operator: 'lte', value: '2024-03-31T23:30:15.000Z' },
+				{ field: 'publishedAt', operator: 'gte', value: '2024-03-01T00:00:00.000Z' }
+			]);
+		});
+
+		it('read a date into the Field type: an ISO date string, or a Date at midnight UTC', () => {
+			expect(filtersIn('?cookedOn.lt=2024-03-01&bakedOn.gte=2024-02-29')).toEqual([
+				{ field: 'cookedOn', operator: 'lt', value: '2024-03-01' },
+				{ field: 'bakedOn', operator: 'gte', value: new Date('2024-02-29T00:00:00Z') }
+			]);
+		});
+
+		it.each([
+			['a number that is not a number', '?prepTimeMinutes.gte=abc'],
+			['a number in exponent form', '?prepTimeMinutes.gte=1e3'],
+			['a number in hex', '?prepTimeMinutes=0x10'],
+			['a number with spaces', '?prepTimeMinutes.lte=%2010'],
+			['a number that is not finite', '?prepTimeMinutes.lt=Infinity&prepTimeMinutes.gt=NaN'],
+			['an empty number', '?prepTimeMinutes.gte=&prepTimeMinutes.lte='],
+			['blank text', '?name.contains=&name=%20%20'],
+			['contains on a Field narrowed to eq and in', '?cuisine.contains=Ital'],
+			['an operator text does not have', '?name.gte=a'],
+			['an operator number does not have', '?prepTimeMinutes.contains=1'],
+			['eq on a Field narrowed to a range', '?calories=300'],
+			['a datetime with a zone', '?publishedAt.gte=2024-03-01T00:00Z'],
+			['a datetime without a time', '?publishedAt.gte=2024-03-01'],
+			['a datetime on no real day', '?publishedAt.gte=2024-02-30T00:00'],
+			['a datetime with no real time', '?publishedAt.lte=2024-03-01T25:00'],
+			['a date that is no real day', '?cookedOn=2024-13-01&bakedOn=2024-02-30'],
+			['a date with a time', '?cookedOn.lt=2024-03-01T00:00&bakedOn.gte=2024-03-01T00:00'],
+			['a date as words', '?bakedOn=yesterday']
+		])('drop %s', (_, search) => {
+			expect(filtersIn(search)).toBeUndefined();
+		});
+
+		it('write each operator, numbers as plain decimals and dates as the input sends them', () => {
+			expect(
+				href({
+					page: 1,
+					perPage: 25,
+					filters: [
+						{ field: 'name', operator: 'contains', value: 'piz' },
+						{ field: 'prepTimeMinutes', operator: 'lt', value: 60 },
+						{ field: 'prepTimeMinutes', operator: 'gte', value: 0.5 },
+						{ field: 'publishedAt', operator: 'gt', value: '2024-03-01T10:30:00.000Z' },
+						{ field: 'publishedAt', operator: 'lte', value: '2024-03-31T23:30:15.000Z' },
+						{ field: 'cookedOn', operator: 'eq', value: '2024-03-01' },
+						{ field: 'bakedOn', operator: 'lte', value: new Date('2024-02-29T00:00:00Z') }
+					]
+				})
+			).toBe(
+				'/admin/recipes?name.contains=piz&prepTimeMinutes.lt=60&prepTimeMinutes.gte=0.5' +
+					'&publishedAt.gt=2024-03-01T10%3A30&publishedAt.lte=2024-03-31T23%3A30%3A15' +
+					'&cookedOn=2024-03-01&bakedOn.lte=2024-02-29'
+			);
+		});
+
+		it('are written by the shared encoder with dates in their own type, a Date as an ISO string', () => {
+			expect(
+				encodeListParams({
+					page: 1,
+					perPage: 25,
+					filters: [
+						{ field: 'name', operator: 'contains', value: 'piz' },
+						{ field: 'publishedAt', operator: 'gte', value: '2024-03-01T10:30:00.000Z' },
+						{ field: 'bakedOn', operator: 'lt', value: new Date('2024-02-29T00:00:00Z') }
+					]
+				}).toString()
+			).toBe(
+				'page=1&perPage=25&name.contains=piz&publishedAt.gte=2024-03-01T10%3A30%3A00.000Z' +
+					'&bakedOn.lt=2024-02-29T00%3A00%3A00.000Z'
+			);
+		});
+
+		it.each([
+			{
+				page: 1,
+				perPage: 25,
+				filters: [{ field: 'name', operator: 'contains', value: 'Pizza & Pasta?' }]
+			},
+			{
+				page: 2,
+				perPage: 10,
+				search: 'chicken',
+				filters: [
+					{ field: 'name', operator: 'eq', value: 'Pad Thai' },
+					{ field: 'name', operator: 'contains', value: 'thai' },
+					{ field: 'cuisine', operator: 'in', value: ['Italian', 'Thai'] },
+					{ field: 'prepTimeMinutes', operator: 'eq', value: 15 },
+					{ field: 'prepTimeMinutes', operator: 'lt', value: 60 },
+					{ field: 'prepTimeMinutes', operator: 'lte', value: 45.5 },
+					{ field: 'prepTimeMinutes', operator: 'gt', value: -5 },
+					{ field: 'prepTimeMinutes', operator: 'gte', value: 0 },
+					{ field: 'publishedAt', operator: 'lte', value: '2024-03-31T23:30:15.000Z' },
+					{ field: 'publishedAt', operator: 'gte', value: '2024-03-01T00:00:00.000Z' },
+					{ field: 'cookedOn', operator: 'gt', value: '2024-01-01' },
+					{ field: 'bakedOn', operator: 'eq', value: new Date('2024-02-29T00:00:00Z') },
+					{ field: 'calories', operator: 'lte', value: 500 }
+				]
+			}
+		] satisfies ListParams[])('read back through listHref as %j', (params) => {
+			expect(readListParams(at(href(params).replace('/admin/recipes', '')), ranged)).toEqual(
+				params
+			);
+		});
+
+		it('leave a clean URL alone, as the filter form sends it', () => {
+			expect(
+				rewrite(
+					'?name.contains=piz&prepTimeMinutes.gte=10&prepTimeMinutes.lte=30' +
+						'&publishedAt.gte=2024-03-01T00%3A00&bakedOn=2024-02-29'
+				)
+			).toBeUndefined();
+			expect(rewrite('?cuisine=Italian&cuisine=Thai')).toBeUndefined();
+		});
+
+		it.each([
+			[
+				'a malformed number',
+				'?prepTimeMinutes.gte=abc&prepTimeMinutes.lte=30',
+				'/admin/recipes?prepTimeMinutes.lte=30'
+			],
+			['a malformed date', '?publishedAt.gte=2024-02-30T00:00&page=2', '/admin/recipes?page=2'],
+			['contains on the narrowed text Field', '?cuisine.contains=Ital', '/admin/recipes'],
+			[
+				'a number in a longer form',
+				'?prepTimeMinutes.gte=010.50',
+				'/admin/recipes?prepTimeMinutes.gte=10.5'
+			],
+			[
+				'a datetime with zero seconds',
+				'?publishedAt.lt=2024-03-01T10%3A30%3A00',
+				'/admin/recipes?publishedAt.lt=2024-03-01T10%3A30'
+			],
+			[
+				'blank range sides from a form',
+				'?prepTimeMinutes.gte=&prepTimeMinutes.lte=30&name.contains=',
+				'/admin/recipes?prepTimeMinutes.lte=30'
+			]
+		])('rewrite a URL with %s', (_, search, clean) => {
+			expect(rewrite(search)).toBe(clean);
+		});
+	});
 });

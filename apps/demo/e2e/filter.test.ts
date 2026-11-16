@@ -39,10 +39,18 @@ async function applyFilters(
 const isJs = () => test.info().project.name === 'js';
 
 /**
- * The URL a filter form lands on: with JavaScript, the clean one; without, the same plus the empty
- * params the form posts for the controls left at "Any".
+ * Expect the URL a filter form lands on: with JavaScript, the clean one; without, the same params
+ * plus the empty ones the form posts for the controls left blank (or at "Any"), wherever they fall.
  */
-const landed = (clean: string, blanks: string) => (isJs() ? clean : `${clean}${blanks}`);
+async function expectLanded(page: Page, clean: string) {
+	if (isJs()) return expect(page).toHaveURL(clean);
+	const sorted = (url: URL) => {
+		const params = new URLSearchParams([...url.searchParams].filter(([, value]) => value !== ''));
+		params.sort();
+		return `${url.pathname}?${params}`;
+	};
+	await expect(page).toHaveURL((url) => sorted(url) === sorted(new URL(clean, url)));
+}
 
 test.describe('filtering recipes by difficulty and vegetarian', () => {
 	test('one difficulty filters with eq, two with in, on the server', async ({ page, request }) => {
@@ -53,9 +61,7 @@ test.describe('filtering recipes by difficulty and vegetarian', () => {
 
 		const one = await backendRequestsDuring(request, async () => {
 			await applyFilters(page, (form) => form.getByRole('checkbox', { name: 'Hard' }).check());
-			await expect(page).toHaveURL(
-				landed(`/admin/recipes?perPage=${perPage}&difficulty=Hard`, '&vegetarian=')
-			);
+			await expectLanded(page, `/admin/recipes?perPage=${perPage}&difficulty=Hard`);
 			await expect(dataRows(page)).toHaveCount(12);
 		});
 		expect(one).toContain(`GET /recipes?page=1&perPage=${perPage}&difficulty=Hard`);
@@ -64,9 +70,7 @@ test.describe('filtering recipes by difficulty and vegetarian', () => {
 
 		const two = await backendRequestsDuring(request, async () => {
 			await applyFilters(page, (form) => form.getByRole('checkbox', { name: 'Easy' }).check());
-			await expect(page).toHaveURL(
-				landed(`/admin/recipes?perPage=${perPage}&difficulty=Easy&difficulty=Hard`, '&vegetarian=')
-			);
+			await expectLanded(page, `/admin/recipes?perPage=${perPage}&difficulty=Easy&difficulty=Hard`);
 			await expect(dataRows(page)).toHaveCount(27);
 		});
 		expect(two).toContain(`GET /recipes?page=1&perPage=${perPage}&difficulty=Easy&difficulty=Hard`);
@@ -86,17 +90,17 @@ test.describe('filtering recipes by difficulty and vegetarian', () => {
 			(await (await columnCells(page, 'Vegetarian')).allInnerTexts()).map((text) => text.trim());
 
 		await applyFilters(page, (form) => form.getByRole('radio', { name: 'Yes' }).check());
-		await expect(page).toHaveURL('/admin/recipes?perPage=100&vegetarian=true');
+		await expectLanded(page, '/admin/recipes?perPage=100&vegetarian=true');
 		await expect(dataRows(page)).toHaveCount(17);
 		expect((await vegetarianCells()).every((text) => text === 'Yes')).toBe(true);
 
 		await applyFilters(page, (form) => form.getByRole('radio', { name: 'No' }).check());
-		await expect(page).toHaveURL('/admin/recipes?perPage=100&vegetarian=false');
+		await expectLanded(page, '/admin/recipes?perPage=100&vegetarian=false');
 		await expect(dataRows(page)).toHaveCount(38);
 		expect((await vegetarianCells()).every((text) => text === 'No')).toBe(true);
 
 		await applyFilters(page, (form) => form.getByRole('radio', { name: 'Any' }).check());
-		await expect(page).toHaveURL(landed('/admin/recipes?perPage=100', '&vegetarian='));
+		await expectLanded(page, '/admin/recipes?perPage=100');
 		await expect(dataRows(page)).toHaveCount(55);
 	});
 
@@ -108,7 +112,7 @@ test.describe('filtering recipes by difficulty and vegetarian', () => {
 			await form.getByRole('radio', { name: 'Yes' }).check();
 		});
 
-		await expect(page).toHaveURL('/admin/recipes?difficulty=Hard&vegetarian=true');
+		await expectLanded(page, '/admin/recipes?difficulty=Hard&vegetarian=true');
 		await expect(names(page)).toHaveText([
 			'Saag (Spinach) with Makki di Roti',
 			'South Indian Masala Dosa',
@@ -142,9 +146,7 @@ test.describe('filtering recipes by difficulty and vegetarian', () => {
 
 		await applyFilters(page, (form) => form.getByRole('checkbox', { name: 'Easy' }).check());
 
-		await expect(page).toHaveURL(
-			landed('/admin/recipes?perPage=5&sort=name&q=chicken&difficulty=Easy', '&vegetarian=')
-		);
+		await expectLanded(page, '/admin/recipes?perPage=5&sort=name&q=chicken&difficulty=Easy');
 		await expect(names(page)).toHaveText(['Chicken Tacos', 'Mango Salsa Chicken']);
 
 		// Clear filters keeps them too.
@@ -212,7 +214,7 @@ test.describe('filtering recipes by difficulty and vegetarian', () => {
 		await applyFilters(page, async () => {});
 
 		// Without JavaScript the form posts its blank controls; the list ignores them.
-		await expect(page).toHaveURL(landed('/admin/recipes?perPage=10', '&vegetarian='));
+		await expectLanded(page, '/admin/recipes?perPage=10');
 		await expect(dataRows(page)).toHaveCount(10);
 		await expect(names(page).first()).toHaveText('Classic Margherita Pizza');
 		await expect(filtersToggle(page)).toHaveText(/^\s*Filters\s*$/);
@@ -276,8 +278,12 @@ test.describe('the getList remote function with filters', () => {
 		const marker = uniquePage();
 
 		for (const filters of [
-			// Cuisine isn't filterable.
-			[{ field: 'cuisine', operator: 'eq', value: 'Italian' }],
+			// Servings aren't filterable.
+			[{ field: 'servings', operator: 'eq', value: 4 }],
+			// Cuisine is narrowed to exact matches.
+			[{ field: 'cuisine', operator: 'contains', value: 'Ital' }],
+			// An enum has no range.
+			[{ field: 'difficulty', operator: 'gte', value: 'Easy' }],
 			// A boolean has no `in`.
 			[{ field: 'vegetarian', operator: 'in', value: [true, false] }],
 			// An `in` of 101 values (the core's unit tests check the bound with distinct ones).
@@ -320,7 +326,7 @@ test.describe('filtering the other Resources', () => {
 
 		await applyFilters(page, (form) => form.getByRole('checkbox', { name: 'draft' }).check());
 
-		await expect(page).toHaveURL('/admin/posts?status=draft');
+		await expectLanded(page, '/admin/posts?status=draft');
 		await expect(dataRows(page)).toHaveCount(15);
 		const statuses = await (await columnCells(page, 'Status')).allInnerTexts();
 		expect(statuses.every((text) => text.trim() === 'draft')).toBe(true);
@@ -337,7 +343,7 @@ test.describe('filtering the other Resources', () => {
 			await form.getByRole('radio', { name: 'No' }).check();
 		});
 
-		await expect(page).toHaveURL('/admin/users?role=editor&active=false');
+		await expectLanded(page, '/admin/users?role=editor&active=false');
 		await expect(cards).toHaveCount(3);
 		// In the default order, by name.
 		await expect(cards.nth(0)).toContainText('Katherine Johnson');
