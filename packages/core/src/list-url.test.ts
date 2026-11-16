@@ -95,39 +95,49 @@ describe('the list URL helper', () => {
 		const url = new URL('http://admin.test/admin/recipes?page=2&perPage=50#rows');
 
 		it('keeps the list path and names the page and the page size', () => {
-			expect(listHref(url, { page: 3, perPage: 50 })).toBe('/admin/recipes?page=3&perPage=50');
+			expect(listHref(url, { page: 3, perPage: 50 }, notSearchable)).toBe(
+				'/admin/recipes?page=3&perPage=50'
+			);
 		});
 
 		it('leaves the defaults out of the URL', () => {
-			expect(listHref(url, { page: 1, perPage: 25 })).toBe('/admin/recipes');
-			expect(listHref(url, { page: 2, perPage: 25 })).toBe('/admin/recipes?page=2');
-			expect(listHref(url, { page: 1, perPage: 10 })).toBe('/admin/recipes?perPage=10');
+			expect(listHref(url, { page: 1, perPage: 25 }, notSearchable)).toBe('/admin/recipes');
+			expect(listHref(url, { page: 2, perPage: 25 }, notSearchable)).toBe('/admin/recipes?page=2');
+			expect(listHref(url, { page: 1, perPage: 10 }, notSearchable)).toBe(
+				'/admin/recipes?perPage=10'
+			);
 		});
 
 		it('drops params the list does not know', () => {
 			const withJunk = new URL('http://admin.test/admin/recipes?foo=1&limit=100000');
-			expect(listHref(withJunk, { page: 2, perPage: 25 })).toBe('/admin/recipes?page=2');
+			expect(listHref(withJunk, { page: 2, perPage: 25 }, notSearchable)).toBe(
+				'/admin/recipes?page=2'
+			);
 		});
 
 		it('names the search in q, after the page and the page size', () => {
-			expect(listHref(url, { page: 1, perPage: 25, search: 'pasta' })).toBe(
+			expect(listHref(url, { page: 1, perPage: 25, search: 'pasta' }, searchable)).toBe(
 				'/admin/recipes?q=pasta'
 			);
-			expect(listHref(url, { page: 2, perPage: 10, search: 'chicken tacos' })).toBe(
+			expect(listHref(url, { page: 2, perPage: 10, search: 'chicken tacos' }, searchable)).toBe(
 				'/admin/recipes?page=2&perPage=10&q=chicken+tacos'
 			);
 		});
 
 		it('leaves an empty search out of the URL', () => {
-			expect(listHref(url, { page: 1, perPage: 10, search: '' })).toBe('/admin/recipes?perPage=10');
-			expect(listHref(url, { page: 1, perPage: 10, search: '  ' })).toBe(
+			expect(listHref(url, { page: 1, perPage: 10, search: '' }, searchable)).toBe(
+				'/admin/recipes?perPage=10'
+			);
+			expect(listHref(url, { page: 1, perPage: 10, search: '  ' }, searchable)).toBe(
 				'/admin/recipes?perPage=10'
 			);
 		});
 
 		it('reads back as the params it was written from', () => {
 			const params = { page: 7, perPage: 100, search: 'pasta & co' };
-			expect(read(listHref(url, params).replace('/admin/recipes', ''), searchable)).toEqual(params);
+			expect(
+				read(listHref(url, params, searchable).replace('/admin/recipes', ''), searchable)
+			).toEqual(params);
 		});
 	});
 
@@ -141,11 +151,11 @@ describe('the list URL helper', () => {
 				'page=2&perPage=10&q=chicken+tacos'
 			);
 			expect(
-				listHref(new URL('http://admin.test/admin/recipes'), {
-					page: 2,
-					perPage: 10,
-					search: 'chicken tacos'
-				})
+				listHref(
+					new URL('http://admin.test/admin/recipes'),
+					{ page: 2, perPage: 10, search: 'chicken tacos' },
+					searchable
+				)
 			).toBe('/admin/recipes?page=2&perPage=10&q=chicken+tacos');
 		});
 
@@ -278,16 +288,15 @@ describe('the list URL helper', () => {
 
 		it('is written after the page size and before the search, with order only for desc', () => {
 			const url = at('?page=2');
-			expect(listHref(url, { page: 1, perPage: 25, sort: { field: 'name', order: 'asc' } })).toBe(
-				'/admin/recipes?sort=name'
-			);
 			expect(
-				listHref(url, {
-					page: 2,
-					perPage: 10,
-					search: 'pasta',
-					sort: { field: 'calories', order: 'desc' }
-				})
+				listHref(url, { page: 1, perPage: 25, sort: { field: 'name', order: 'asc' } }, sortable)
+			).toBe('/admin/recipes?sort=name');
+			expect(
+				listHref(
+					url,
+					{ page: 2, perPage: 10, search: 'pasta', sort: { field: 'calories', order: 'desc' } },
+					sortable
+				)
 			).toBe('/admin/recipes?page=2&perPage=10&sort=calories&order=desc&q=pasta');
 		});
 
@@ -308,7 +317,9 @@ describe('the list URL helper', () => {
 			{ page: 3, perPage: 10, sort: { field: 'calories', order: 'desc' } },
 			{ page: 1, perPage: 25, search: 'pasta', sort: { field: 'name', order: 'desc' } }
 		] as const)('reads back through listHref as %j', (params) => {
-			expect(readSorted(listHref(at(''), params).replace('/admin/recipes', ''))).toEqual(params);
+			expect(readSorted(listHref(at(''), params, sortable).replace('/admin/recipes', ''))).toEqual(
+				params
+			);
 		});
 
 		it('leaves a clean sorted URL alone, in any param order', () => {
@@ -333,6 +344,118 @@ describe('the list URL helper', () => {
 
 		it('drops the sort on a Resource with no sortable Field', () => {
 			expect(listUrlRewrite(at('?sort=name&order=desc'), searchable)).toBe('/admin/recipes');
+		});
+	});
+
+	describe("a Resource's default sort and page size", () => {
+		// Newest first, at 20 rows a page: like the demo's posts.
+		const posts = defineResource({
+			name: 'posts',
+			label: 'Posts',
+			schema: z.object({
+				id: field(z.number(), { sortable: true }),
+				title: field(z.string(), { sortable: true })
+			}),
+			defaultSort: { field: 'id', order: 'desc' },
+			perPage: 20
+		});
+		// Sorted ascending by default, at the stock page size.
+		const users = defineResource({
+			name: 'users',
+			label: 'Users',
+			searchable: true,
+			schema: z.object({ id: z.number(), name: field(z.string(), { sortable: true }) }),
+			defaultSort: { field: 'name', order: 'asc' }
+		});
+		const at = (search: string, resource: Resource = posts) =>
+			new URL(`http://admin.test/admin/${resource.name}${search}`);
+		const readPosts = (search: string) => readListParams(at(search), posts);
+		const href = (params: Parameters<typeof listHref>[1], resource: Resource = posts) =>
+			listHref(at('?page=2', resource), params, resource);
+		const rewrite = (search: string, resource: Resource = posts) =>
+			listUrlRewrite(at(search, resource), resource);
+		const newestFirst = { field: 'id', order: 'desc' } as const;
+
+		it('are what a URL that names neither reads as', () => {
+			expect(readPosts('')).toEqual({ page: 1, perPage: 20, sort: newestFirst });
+			expect(readListParams(at('', users), users)).toEqual({
+				page: 1,
+				perPage: 25,
+				sort: { field: 'name', order: 'asc' }
+			});
+		});
+
+		it('give way to a page size and a sort the URL names', () => {
+			expect(readPosts('?perPage=25&sort=title')).toEqual({
+				page: 1,
+				perPage: 25,
+				sort: { field: 'title', order: 'asc' }
+			});
+			expect(readPosts('?sort=id')).toMatchObject({ sort: { field: 'id', order: 'asc' } });
+		});
+
+		it.each(['0', '101', 'abc'])('are what a bad page size %j falls back to', (perPage) => {
+			expect(readPosts(`?perPage=${perPage}`)).toEqual({ page: 1, perPage: 20, sort: newestFirst });
+		});
+
+		it.each(['?sort=rating', '?order=asc', '?sort=&order=asc'])(
+			'are what a sort the URL cannot use, %j, falls back to',
+			(search) => {
+				expect(readPosts(search)).toEqual({ page: 1, perPage: 20, sort: newestFirst });
+			}
+		);
+
+		it('are left out of a list href', () => {
+			expect(href({ page: 1, perPage: 20, sort: newestFirst })).toBe('/admin/posts');
+			expect(href({ page: 3, perPage: 20, sort: newestFirst })).toBe('/admin/posts?page=3');
+			expect(href({ page: 1, perPage: 20 })).toBe('/admin/posts');
+			expect(href({ page: 1, perPage: 25, sort: { field: 'name', order: 'asc' } }, users)).toBe(
+				'/admin/users'
+			);
+		});
+
+		it('leave the rest of a list href written out', () => {
+			// The stock page size isn't this Resource's own, so it is written.
+			expect(href({ page: 1, perPage: 25, sort: newestFirst })).toBe('/admin/posts?perPage=25');
+			// The default sort's Field the other way round, or another Field, is written.
+			expect(href({ page: 1, perPage: 20, sort: { field: 'id', order: 'asc' } })).toBe(
+				'/admin/posts?sort=id'
+			);
+			expect(href({ page: 1, perPage: 20, sort: { field: 'title', order: 'desc' } })).toBe(
+				'/admin/posts?sort=title&order=desc'
+			);
+			expect(href({ page: 1, perPage: 25, sort: { field: 'name', order: 'desc' } }, users)).toBe(
+				'/admin/users?sort=name&order=desc'
+			);
+		});
+
+		it.each([
+			{ page: 1, perPage: 20, sort: newestFirst },
+			{ page: 2, perPage: 25, sort: newestFirst },
+			{ page: 1, perPage: 20, sort: { field: 'id', order: 'asc' } },
+			{ page: 4, perPage: 10, sort: { field: 'title', order: 'desc' } }
+		] as const)('read back through listHref as %j', (params) => {
+			expect(readPosts(href(params).replace('/admin/posts', ''))).toEqual(params);
+		});
+
+		it.each([
+			['the default sort', '?sort=id&order=desc', '/admin/posts'],
+			["the Resource's page size", '?perPage=20', '/admin/posts'],
+			['both, beside a page', '?perPage=20&sort=id&order=desc&page=2', '/admin/posts?page=2']
+		])('are cleaned out of a URL that writes out %s', (_, search, clean) => {
+			expect(rewrite(search)).toBe(clean);
+		});
+
+		it('are cleaned out of a URL that writes out an ascending default sort', () => {
+			expect(rewrite('?sort=name', users)).toBe('/admin/users');
+			expect(rewrite('?sort=name&order=asc&q=ann', users)).toBe('/admin/users?q=ann');
+		});
+
+		it('leave a URL alone that names another page size or sort', () => {
+			expect(rewrite('?perPage=25')).toBeUndefined();
+			expect(rewrite('?sort=id')).toBeUndefined();
+			expect(rewrite('?sort=title&order=desc')).toBeUndefined();
+			expect(rewrite('?sort=name&order=desc', users)).toBeUndefined();
 		});
 	});
 });

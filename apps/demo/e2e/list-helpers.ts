@@ -56,9 +56,9 @@ function addNode(nodes: unknown[], value: unknown): number {
 }
 
 /**
- * Re-encode a captured `getList` remote query payload with some args changed. A payload is
- * Kit's url-safe base64 of a devalue array, where an object maps each key to the index of its
- * value.
+ * Re-encode a captured `getList` remote query payload with some args changed: a change to
+ * `undefined` leaves that arg out. A payload is Kit's url-safe base64 of a devalue array, where
+ * an object maps each key to the index of its value.
  */
 function withArgs(payload: string, changes: Record<string, unknown>): string {
 	const nodes = JSON.parse(Buffer.from(payload, 'base64url').toString()) as unknown[];
@@ -68,7 +68,8 @@ function withArgs(payload: string, changes: Record<string, unknown>): string {
 	);
 	if (!args) throw new Error(`No list params in the payload ${JSON.stringify(nodes)}`);
 	for (const [key, value] of Object.entries(changes)) {
-		args[key] = addNode(nodes, value);
+		if (value === undefined) delete args[key];
+		else args[key] = addNode(nodes, value);
 	}
 	return Buffer.from(JSON.stringify(nodes)).toString('base64url');
 }

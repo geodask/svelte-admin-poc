@@ -22,5 +22,9 @@ export const posts = defineResource({
 	}),
 	// Posts have no `name` Field, so the default rule would pick `title` anyway; written out, it
 	// shows the key form of the setting.
-	recordTitle: 'title'
+	recordTitle: 'title',
+	// Newest first: the list opens sorted by id, descending, with nothing in the URL.
+	defaultSort: { field: 'id', order: 'desc' },
+	// Not one of the stock page sizes, so the list View offers it beside them.
+	perPage: 20
 });

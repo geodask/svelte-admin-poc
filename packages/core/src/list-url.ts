@@ -1,11 +1,7 @@
 import { z } from 'zod';
-import {
-	DEFAULT_PER_PAGE,
-	pageParamSchemas,
-	sortableKeys,
-	type ListSchemaResource
-} from './list-params.ts';
+import { pageParamSchemas, sortableKeys, type ListSchemaResource } from './list-params.ts';
 import type { ListParams, ListSort, SortOrder } from './provider.ts';
+import type { Resource } from './resource.ts';
 
 /**
  * A URL param of plain digits that must also pass `schema`, or `fallback` when it is missing
@@ -15,17 +11,36 @@ function urlInt(schema: z.ZodInt, fallback: number) {
 	return z.string().regex(/^\d+$/).transform(Number).pipe(schema).catch(fallback);
 }
 
-/** Values a list param is left out of the encoding at, when they are given. */
-export type ListParamDefaults = { page: number; perPage: number; order: SortOrder };
+/**
+ * Values a list param is left out of the encoding at, when they are given: the page, the page
+ * size, the order of a sort on any Field, and a whole sort (a Field and its order).
+ */
+export type ListParamDefaults = {
+	page: number;
+	perPage: number;
+	order: SortOrder;
+	sort?: ListSort;
+};
 
-/** The defaults a list View's URL falls back to when it leaves a param out, and so leaves out. */
-const URL_DEFAULTS: ListParamDefaults = { page: 1, perPage: DEFAULT_PER_PAGE, order: 'asc' };
+/** What the list URL asks of a Resource: what `listParamsSchema` does, and its list settings. */
+export type ListUrlResource = ListSchemaResource & ListHrefResource;
 
-/** How a list View's URL search params map to list params. */
-const listUrlSchema = z.object({
-	page: urlInt(pageParamSchemas.page, URL_DEFAULTS.page),
-	perPage: urlInt(pageParamSchemas.perPage, URL_DEFAULTS.perPage)
-});
+/** The list settings `listHref` leaves out of a URL: a Resource's page size and default sort. */
+export type ListHrefResource = Pick<Resource, 'perPage' | 'defaultSort'>;
+
+/**
+ * The defaults a Resource's list URL falls back to when it leaves a param out, and so leaves
+ * out: page 1, the Resource's page size and its default sort, and an ascending order.
+ */
+function urlDefaults(resource: ListHrefResource): ListParamDefaults {
+	const { perPage, defaultSort } = resource;
+	return { page: 1, perPage, order: 'asc', sort: defaultSort };
+}
+
+/** Whether two sorts are the same, or both absent. */
+function sameSort(a: ListSort | undefined, b: ListSort | undefined): boolean {
+	return a?.field === b?.field && a?.order === b?.order;
+}
 
 /**
  * A search worth sending, or `undefined`. A blank one is no search. A real one is kept as
@@ -50,20 +65,27 @@ function readSort(
 }
 
 /**
- * The list params a list View's URL names, with defaults for what it leaves out. The search is
- * read from `q`, and only for a searchable Resource. The sort is read from `sort` and `order`,
- * and only on a sortable Field.
+ * The list params a list View's URL names, with defaults for what it leaves out: page 1, the
+ * Resource's page size, and its default sort if it has one. The search is read from `q`, and
+ * only for a searchable Resource. The sort is read from `sort` and `order`, and only on a
+ * sortable Field.
  */
-export function readListParams<R extends ListSchemaResource>(url: URL, resource: R): ListParams<R> {
+export function readListParams<R extends ListUrlResource>(url: URL, resource: R): ListParams<R> {
 	const { searchParams } = url;
-	const params: ListParams = listUrlSchema.parse({
-		page: searchParams.get('page') ?? undefined,
-		perPage: searchParams.get('perPage') ?? undefined
-	});
+	const defaults = urlDefaults(resource);
+	const params: ListParams = z
+		.object({
+			page: urlInt(pageParamSchemas.page, defaults.page),
+			perPage: urlInt(pageParamSchemas.perPage, defaults.perPage)
+		})
+		.parse({
+			page: searchParams.get('page') ?? undefined,
+			perPage: searchParams.get('perPage') ?? undefined
+		});
 	const search = resource.searchable ? nonBlank(searchParams.get('q')) : undefined;
 	if (search !== undefined) params.search = search;
-	const sort = readSort(searchParams, resource);
-	if (sort !== undefined) params.sort = sort;
+	const sort = readSort(searchParams, resource) ?? defaults.sort;
+	if (sort !== undefined) params.sort = { ...sort };
 	// A search only for a searchable Resource, and a sort only on a sortable Field, as its type says.
 	return params as ListParams<R>;
 }
@@ -73,7 +95,7 @@ export function readListParams<R extends ListSchemaResource>(url: URL, resource:
  * Provider so the two can't drift: `page`, `perPage`, the sort as `sort` and `order`, then the
  * search as `q`. A blank search is never written, nor an `order` without a sort. Given
  * `defaults`, a param at its default is left out too, as the list URL does (so `order=asc` is
- * never in it); without them every other param is written, as the REST Provider does, so a
+ * never in it, nor the default sort); without them every other param is written, as the REST Provider does, so a
  * backend never has to know the defaults. `readListParams` reads it back.
  */
 export function encodeListParams(
@@ -83,7 +105,7 @@ export function encodeListParams(
 	const encoded = new URLSearchParams();
 	if (params.page !== defaults?.page) encoded.set('page', String(params.page));
 	if (params.perPage !== defaults?.perPage) encoded.set('perPage', String(params.perPage));
-	if (params.sort !== undefined) {
+	if (params.sort !== undefined && !sameSort(params.sort, defaults?.sort)) {
 		encoded.set('sort', params.sort.field);
 		if (params.sort.order !== defaults?.order) encoded.set('order', params.sort.order);
 	}
@@ -95,23 +117,24 @@ export function encodeListParams(
 /**
  * The href of the list at `url`'s path with `params`, for pager, page-size and search links.
  * It keeps the path, so it carries the admin's base path and works the same in a replaced
- * View. Only params that differ from their defaults are written (a blank search is none), and
- * every other search param is dropped.
+ * View. Only params that differ from their defaults are written (the Resource's own page size
+ * and default sort included, and a blank search is none), and every other search param is
+ * dropped. Params with no sort read back with the Resource's default sort.
  */
-export function listHref(url: URL, params: ListParams): string {
-	const query = encodeListParams(params, URL_DEFAULTS).toString();
+export function listHref(url: URL, params: ListParams, resource: ListHrefResource): string {
+	const query = encodeListParams(params, urlDefaults(resource)).toString();
 	return query ? `${url.pathname}?${query}` : url.pathname;
 }
 
 /**
  * Where a list URL should be rewritten to, or `undefined` when it is already clean. A URL is
- * clean when it names only known params with good values that differ from their defaults; the
- * order they are written in doesn't matter. `q` is known only for a searchable Resource, and
- * `sort` only on a sortable Field, with `order` only beside it and only as `desc`. The rewrite
- * keeps the path and the hash.
+ * clean when it names only known params with good values that differ from their defaults (the
+ * Resource's page size and default sort included); the order they are written in doesn't
+ * matter. `q` is known only for a searchable Resource, and `sort` only on a sortable Field, with
+ * `order` only beside it and only as `desc`. The rewrite keeps the path and the hash.
  */
-export function listUrlRewrite(url: URL, resource: ListSchemaResource): string | undefined {
-	const clean = listHref(url, readListParams(url, resource));
+export function listUrlRewrite(url: URL, resource: ListUrlResource): string | undefined {
+	const clean = listHref(url, readListParams(url, resource), resource);
 	const cleanParams = new URL(clean, url).searchParams;
 	cleanParams.sort();
 	const params = new URLSearchParams(url.searchParams);

@@ -25,7 +25,8 @@ test.describe('the replaced users list View', () => {
 		await expect(cards(page).first()).toContainText('ada@example.com');
 		await expect(cards(page).first()).toContainText('admin');
 		await expect(cards(page).first()).toContainText('Jan 15, 2023');
-		await expect(cards(page).nth(3)).toContainText('No');
+		// Katherine Johnson has left.
+		await expect(cards(page).filter({ hasText: 'Katherine Johnson' })).toContainText('No');
 	});
 
 	test('recipes and posts still render the stock list View', async ({ page }) => {
@@ -34,7 +35,7 @@ test.describe('the replaced users list View', () => {
 		await expect(cards(page)).toHaveCount(0);
 
 		await page.goto('/admin/posts');
-		await expect(dataRows(page)).toHaveCount(25);
+		await expect(dataRows(page)).toHaveCount(20);
 		await expect(cards(page)).toHaveCount(0);
 	});
 
@@ -100,8 +101,10 @@ test.describe('the replaced users list View', () => {
 		await pager(page).getByRole('link', { name: 'Next' }).click();
 
 		await expect(page).toHaveURL('/admin/users?page=2&perPage=10');
+		// The cards come in name order, the Resource's default sort.
 		await expect(cards(page)).toHaveCount(2);
-		await expect(cards(page).first()).toContainText('John McCarthy');
+		await expect(cards(page).first()).toContainText('Margaret Hamilton');
+		await expect(cards(page).last()).toContainText('Radia Perlman');
 		await expect(pager(page)).toContainText('Rows 11–12 of 12');
 
 		await pager(page).getByRole('link', { name: '25 rows per page' }).click();
@@ -157,7 +160,7 @@ test.describe('selection on the replaced users list View @js', () => {
 		await openInSidebar(page, 'Posts');
 
 		await expect(page.getByRole('heading', { level: 1, name: 'Posts' })).toBeVisible();
-		await expect(dataRows(page)).toHaveCount(25);
+		await expect(dataRows(page)).toHaveCount(20);
 		await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(0);
 		await expect(selectedCount(page)).toHaveCount(0);
 

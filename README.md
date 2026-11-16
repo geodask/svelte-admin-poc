@@ -81,10 +81,30 @@ adapter-node checks a form post's origin, so set `ORIGIN` when you run the built
 
 Mark a Field `sortable: true` with `field()` when the backend can sort by it, written inline beside its label: `name: field(z.string(), { label: 'Name', sortable: true })`. Fields are not sortable unless they say so, and only a scalar Kind (text, number, date, enum, boolean) can be: `defineResource` throws at startup for a sortable list, object or unknown Field. Like `readOnly`, the setting is in the schema's type, and it survives `.optional()`, `.nullable()` and `.default()` on either side. A hidden Field may be sortable too: it gets no header, but the URL can still sort by it.
 
-The list View's header of a sortable Field is a link (the Theme's `SortHeader`): the first click sorts the whole list ascending on the server, the second descending, the third goes back to the backend's order. Each starts again at page 1 and keeps the search and the page size; the selection is unchanged. The sorted header shows an arrow and carries `aria-sort`. Other headers are plain text. It works without JavaScript, since each click is a plain link. A replaced list View reads `createListView(...).sortState(key)` (`'asc'`, `'desc'` or `undefined`) and `sortHref(key)`.
+The list View's header of a sortable Field is a link (the Theme's `SortHeader`): the first click sorts the whole list ascending on the server, the second descending, the third goes back to the default order (see below). Each starts again at page 1 and keeps the search and the page size; the selection is unchanged. The sorted header shows an arrow and carries `aria-sort`. Other headers are plain text. It works without JavaScript, since each click is a plain link. A replaced list View reads `createListView(...).sortState(key)` (`'asc'`, `'desc'` or `undefined`) and `sortHref(key)`.
 
 `getList` then receives `sort?: { field, order: 'asc' | 'desc' }`, where `field` is typed as the union of the Resource's sortable keys (`SortableKey<R>`). It is absent when the list isn't sorted, never empty, and a Resource with no sortable Field has no `sort` in its `ListParams` at all. The server rejects a sort on any other Field before the Provider runs.
 
 The list URL writes the sort as `sort=<field>`, plus `order=desc` to reverse it: ascending is the default, so `order=asc` is never written. A sort on an unknown or non-sortable Field, an `order` without a `sort`, and `order=asc` are dropped when the URL is read, and with JavaScript the URL is cleaned in place.
 
 The bundled REST Provider sends the sort in the same encoding, but always with its order: `GET {base}/{resource}?page=1&perPage=25&sort=name&order=asc`, so a backend never has to know the default. A backend that can't do a declared sort should answer 400. The demo backend sorts any Resource by any Field: numbers as numbers, text and ISO dates with a locale compare, stable, with records that have no value last in both orders.
+
+### Default sort and page size
+
+A Resource can choose the order its list opens in and how many rows a page holds:
+
+```ts
+export const posts = defineResource({
+	name: 'posts',
+	label: 'Posts',
+	schema,
+	defaultSort: { field: 'id', order: 'desc' }, // newest first
+	perPage: 20
+});
+```
+
+`defaultSort.field` must be a sortable Field's key (a hidden one is fine, such as a hidden `createdAt`): TypeScript rejects any other where it can tell, and `defineResource` throws at startup for one that isn't sortable. Without a `defaultSort`, the list keeps the backend's order. `perPage` is a whole number from 1 to `MAX_PER_PAGE` (100), or `defineResource` throws; without it a Resource pages at `DEFAULT_PER_PAGE` (25).
+
+Neither is written to the list URL, so links stay short: `listHref(url, params, resource)` and `listUrlRewrite` leave out the Resource's default sort and its own `perPage`, and with JavaScript a URL that writes either out is cleaned in place. `readListParams` fills them in when the URL names none, so `createListView(...).sortState(key)` reports the default sort, and the default's header shows its arrow and `aria-sort`. The default sort's own header toggles between its two orders rather than ever leaving the list unsorted; any other sortable header goes ascending, descending, then back to the default. The page-size options offer the Resource's `perPage` beside 10, 25, 50 and 100.
+
+The default is applied on the server too: when `getList` is asked for no sort, the Provider gets the Resource's `defaultSort`, so every caller gets the same order and a Provider never needs to know the default. In the demo, posts open newest first at 20 rows a page, users in name order, and recipes in the backend's order.

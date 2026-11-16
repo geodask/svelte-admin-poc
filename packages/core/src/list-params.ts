@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { ListParams, ListParamsResource, SortOrder } from './provider.ts';
+import type { Field } from './fields.ts';
+import type { ListParams, ListParamsResource, ListSort, SortOrder } from './provider.ts';
 import type { Resource } from './resource.ts';
 
 /** The largest page size `getList` accepts. */
@@ -24,6 +25,51 @@ const sortOrder = z.enum(['asc', 'desc']) satisfies z.ZodType<SortOrder>;
 
 /** What `listParamsSchema` asks of a Resource: what `ListParams` does, and its described Fields. */
 export type ListSchemaResource = ListParamsResource & Pick<Resource, 'fields'>;
+
+/**
+ * Check a Resource's list settings at startup: a `defaultSort` on a sortable Field, ascending or
+ * descending, and a `perPage` from 1 to `MAX_PER_PAGE`. TypeScript catches most of these, but
+ * not a Resource whose Fields it can't see, nor a page size out of range.
+ */
+export function assertListSettings(
+	name: string,
+	fields: readonly Field[],
+	{ defaultSort, perPage }: { defaultSort?: ListSort; perPage: number }
+): void {
+	if (defaultSort !== undefined) {
+		const { field, order } = defaultSort;
+		if (!sortableKeys({ fields }).includes(field)) {
+			throw new Error(
+				`Resource "${name}": its \`defaultSort\` names the Field "${field}", which is not sortable. ` +
+					'Mark the Field `sortable: true` with `field()`, or sort by another one.'
+			);
+		}
+		if (!sortOrder.safeParse(order).success) {
+			throw new Error(
+				`Resource "${name}": its \`defaultSort\` order must be "asc" or "desc", not ${JSON.stringify(order)}.`
+			);
+		}
+	}
+	if (!pageParams.shape.perPage.safeParse(perPage).success) {
+		throw new Error(
+			`Resource "${name}": its \`perPage\` must be a whole number from 1 to ${MAX_PER_PAGE}, not ${perPage}.`
+		);
+	}
+}
+
+/**
+ * The params `getList` hands its Provider: those it was given, with the Resource's
+ * `defaultSort` when they name no sort, so every caller gets the same order.
+ */
+export function withDefaultSort<P extends ListParams>(
+	params: P,
+	resource: Pick<Resource, 'defaultSort'>
+): P {
+	const { defaultSort } = resource;
+	return params.sort !== undefined || defaultSort === undefined
+		? params
+		: { ...params, sort: { ...defaultSort } };
+}
 
 /** The keys of a Resource's sortable Fields, in schema order. */
 export function sortableKeys(resource: Pick<Resource, 'fields'>): string[] {

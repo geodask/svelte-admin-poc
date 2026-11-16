@@ -819,3 +819,69 @@ expectTypeOf(sortableView.params.sort).toEqualTypeOf<
 >();
 expectTypeOf(sortableView.sortState('name')).toEqualTypeOf<'asc' | 'desc' | undefined>();
 void sortableView.sortHref('outerOptional');
+
+// ---------------------------------------------------------------------------------------------
+// A Resource's default sort and page size.
+
+const newestPostsSchema = z.object({
+	id: field(z.number(), { sortable: true }),
+	title: z.string(),
+	createdAt: field(z.iso.datetime(), { hidden: true, sortable: true })
+});
+const newestPosts = defineResource({
+	name: 'posts',
+	label: 'Posts',
+	schema: newestPostsSchema,
+	defaultSort: { field: 'id', order: 'desc' },
+	perPage: 20
+});
+expectTypeOf(newestPosts.defaultSort).toEqualTypeOf<ListSort | undefined>();
+expectTypeOf(newestPosts.perPage).toEqualTypeOf<number>();
+// Neither setting changes the list params.
+expectTypeOf<ListParams<typeof newestPosts>>().toEqualTypeOf<{
+	page: number;
+	perPage: number;
+	sort?: ListSort<'id' | 'createdAt'>;
+}>();
+// A hidden Field may be the default sort, if it is sortable.
+defineResource({
+	name: 'posts',
+	label: 'Posts',
+	schema: newestPostsSchema,
+	defaultSort: { field: 'createdAt', order: 'asc' }
+});
+defineResource({
+	name: 'posts',
+	label: 'Posts',
+	schema: newestPostsSchema,
+	// @ts-expect-error `title` isn't sortable, so it can't be the default sort
+	defaultSort: { field: 'title', order: 'asc' }
+});
+defineResource({
+	name: 'posts',
+	label: 'Posts',
+	schema: newestPostsSchema,
+	// @ts-expect-error posts have no `rating` Field
+	defaultSort: { field: 'rating', order: 'asc' }
+});
+defineResource({
+	name: 'posts',
+	label: 'Posts',
+	schema: newestPostsSchema,
+	// @ts-expect-error a sort is ascending or descending
+	defaultSort: { field: 'id', order: 'down' }
+});
+defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	schema: z.object({ id: z.number(), name: z.string() }),
+	// @ts-expect-error a Resource with no sortable Field has no default sort
+	defaultSort: { field: 'name', order: 'asc' }
+});
+defineResource({
+	name: 'posts',
+	label: 'Posts',
+	schema: newestPostsSchema,
+	// @ts-expect-error the page size is a number
+	perPage: '20'
+});

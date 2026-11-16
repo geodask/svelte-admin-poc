@@ -113,7 +113,8 @@ test.describe('deleting the selected rows from the list View', () => {
 		request
 	}) => {
 		const before = (await backendLog(request)).length;
-		await openList(page, '/admin/posts');
+		// Oldest first, so posts 1 and 2 are on the first page.
+		await openList(page, '/admin/posts?sort=id');
 		await rowCheckbox(page, 'A beginner guide to weeknight dinners (part 1)').check();
 		await rowCheckbox(page, 'Ten tips for baking bread (part 1)').check();
 
@@ -199,7 +200,8 @@ test.describe('deleting the selected rows from the list View', () => {
 		await openInSidebar(page, 'Posts');
 
 		await expect(page.getByRole('heading', { level: 1, name: 'Posts' })).toBeVisible();
-		await expect(dataRows(page).first()).toContainText('A beginner guide to weeknight dinners');
+		// Newest first, the posts' default sort.
+		await expect(dataRows(page).first()).toContainText('A week of seasonal vegetables (part 8)');
 		await expect(selectedCount(page)).toHaveCount(0);
 		await expect(bulkDeleteButton(page)).toHaveCount(0);
 	});

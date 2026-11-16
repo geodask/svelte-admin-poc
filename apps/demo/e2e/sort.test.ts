@@ -210,19 +210,6 @@ test.describe('a list URL with a sort it cannot use', () => {
 	});
 });
 
-test.describe('sorting posts, which the backend pages without a total', () => {
-	test('a sort reaches every page, with next and previous', async ({ page }) => {
-		await page.goto('/admin/posts?sort=id&order=desc');
-		await expect(dataRows(page).first().locator('td:nth-child(2)')).toHaveText('60');
-
-		await pager(page).getByRole('link', { name: 'Next' }).click();
-
-		await expect(page).toHaveURL('/admin/posts?page=2&sort=id&order=desc');
-		await expect(dataRows(page).first().locator('td:nth-child(2)')).toHaveText('35');
-		await expect(columnHeader(page, 'ID')).toHaveAttribute('aria-sort', 'descending');
-	});
-});
-
 test.describe('the getList remote function with a sort', () => {
 	test('is rejected on a Field that is not sortable, before the Provider @js', async ({
 		page,

@@ -30,7 +30,7 @@ import {
 	listPathOfCreateView,
 	recordPath
 } from './ids.ts';
-import { listParamsSchema } from './list-params.ts';
+import { listParamsSchema, withDefaultSort } from './list-params.ts';
 import type { ListResult, ProviderContext, ResourceProvider } from './provider.ts';
 import type { DeleteManyReport, ServedFailure } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
@@ -47,7 +47,8 @@ const MAX_BULK_DELETE = 1000;
  * Build a Resource's remote functions from its Provider. The app's `.remote.ts` re-exports
  * them in one line and exports nothing else.
  *
- * - `getList` and `getOne` are remote queries.
+ * - `getList` and `getOne` are remote queries. When `getList` is asked for no sort and the
+ *   Resource has a `defaultSort`, the Provider gets that sort, so it needn't know the default.
  * - `create` is a remote form, validated with `formSchema(resource, 'create')`, which the
  *   browser also runs as its preflight. It works without JavaScript too. After a save it
  *   refreshes the list queries the client asks for and redirects with a 303 to the new record's
@@ -97,7 +98,9 @@ export function serveResource<R extends Resource>(resource: R, provider: Resourc
 	const getList = query(
 		listParamsSchema(resource),
 		async (params): Promise<ListResult<RecordOf<R>>> => {
-			const result = await served(() => provider.getList(providerContext(), params));
+			// Asked for no sort, the Provider gets the default, so every caller gets the same order.
+			const sorted = withDefaultSort(params, resource);
+			const result = await served(() => provider.getList(providerContext(), sorted));
 			// A record that doesn't match the schema is an unexpected error, masked as a 500.
 			// Parsing also drops any key the schema doesn't declare before it reaches the browser.
 			return { ...result, data: records.parse(result.data) as RecordOf<R>[] };
