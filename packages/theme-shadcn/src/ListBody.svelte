@@ -39,7 +39,7 @@
 			// An accessor function, not `accessorKey`, which would read a dotted key as a path.
 			id: field.key,
 			accessorFn: (row) => row[field.key],
-			header: field.label,
+			// The header is the Field's `SortHeader`, rendered from the Field itself.
 			cell: ({ getValue, row }) =>
 				renderComponent(FieldCell, {
 					field,

@@ -33,7 +33,7 @@
 	);
 </script>
 
-<Table.Head {colspan} aria-sort={ariaSort} data-sort={order}>
+<Table.Head {colspan} aria-sort={ariaSort}>
 	{#if field.sortable}
 		<a
 			href={view.sortHref(field.key)}

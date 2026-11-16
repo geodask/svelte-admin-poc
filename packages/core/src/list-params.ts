@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ListParams, ListParamsResource } from './provider.ts';
+import type { ListParams, ListParamsResource, SortOrder } from './provider.ts';
 import type { Resource } from './resource.ts';
 
 /** The largest page size `getList` accepts. */
@@ -20,7 +20,7 @@ const pageParams = z.strictObject({
 const searchableListParams = pageParams.extend({ search: z.string().trim().min(1).optional() });
 
 /** The directions a sort can take, as `getList` and the list URL name them. */
-const sortOrder = z.enum(['asc', 'desc']);
+const sortOrder = z.enum(['asc', 'desc']) satisfies z.ZodType<SortOrder>;
 
 /** What `listParamsSchema` asks of a Resource: what `ListParams` does, and its described Fields. */
 export type ListSchemaResource = ListParamsResource & Pick<Resource, 'fields'>;

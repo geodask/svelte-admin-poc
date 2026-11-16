@@ -15,29 +15,46 @@ import {
 /** The Name cell of each data row: the third cell, after the selection checkbox and the ID. */
 const names = (page: Page) => dataRows(page).locator('td:nth-child(3)');
 
+/** The arrow a sorted column's header shows for its direction. */
+const arrow = (page: Page, label: string, order: 'asc' | 'desc') =>
+	columnHeader(page, label).locator(
+		order === 'asc' ? 'svg.lucide-arrow-up' : 'svg.lucide-arrow-down'
+	);
+
 /** The link in a sortable Field's column header, which sorts the list by it. */
 const sortLink = (page: Page, label: string) =>
 	columnHeader(page, label).getByRole('link', { name: label, exact: true });
 
-test.describe('sorting recipes by a column', () => {
+test.describe('sorting recipes by a Field, from its column header', () => {
 	test('a header sorts the whole list on the server, across pages', async ({ page, request }) => {
-		await page.goto('/admin/recipes');
+		// A page size no other test asks for, one per project, so the request log check below only
+		// finds this test's requests. With 55 recipes the last page is page 8 at 7 rows a page, and
+		// page 7 at 8.
+		const perPage = test.info().project.name === 'js' ? 7 : 8;
+		const lastPage = {
+			7: { page: 8, first: 'Swedish Meatballs' },
+			8: { page: 7, first: 'Spanish Paella' }
+		}[perPage];
+		await page.goto(`/admin/recipes?perPage=${perPage}`);
+		const query = (n: number) => `GET /recipes?page=${n}&perPage=${perPage}&sort=name&order=asc`;
 
 		const sorted = await backendRequestsDuring(request, async () => {
 			await sortLink(page, 'Name').click();
-			await expect(page).toHaveURL('/admin/recipes?sort=name');
+			await expect(page).toHaveURL(`/admin/recipes?perPage=${perPage}&sort=name`);
 			await expect(names(page).first()).toHaveText('Aloo Keema');
 		});
-		expect(sorted).toContain('GET /recipes?page=1&perPage=25&sort=name&order=asc');
+		expect(sorted).toContain(query(1));
 
 		// The pager keeps the sort, so the last page holds the end of the whole sorted list.
 		const last = await backendRequestsDuring(request, async () => {
 			await pager(page).getByRole('link', { name: 'Last' }).click();
-			await expect(page).toHaveURL('/admin/recipes?page=3&sort=name');
-			await expect(names(page).first()).toHaveText('Thai Green Curry');
+			await expect(page).toHaveURL(
+				`/admin/recipes?page=${lastPage.page}&perPage=${perPage}&sort=name`
+			);
+			await expect(names(page).first()).toHaveText(lastPage.first);
 			await expect(names(page).last()).toHaveText('Vietnamese Pho');
 		});
-		expect(last).toContain('GET /recipes?page=3&perPage=25&sort=name&order=asc');
+		expect(last).toContain(query(lastPage.page));
 	});
 
 	test('a number header sorts numbers as numbers, descending on the second click', async ({
@@ -60,18 +77,20 @@ test.describe('sorting recipes by a column', () => {
 		await sortLink(page, 'Name').click();
 		await expect(page).toHaveURL('/admin/recipes?sort=name');
 		await expect(header).toHaveAttribute('aria-sort', 'ascending');
-		await expect(header).toHaveAttribute('data-sort', 'asc');
+		await expect(arrow(page, 'Name', 'asc')).toBeVisible();
 		await expect(page.locator('th[aria-sort]')).toHaveCount(1);
 
 		await sortLink(page, 'Name').click();
 		await expect(page).toHaveURL('/admin/recipes?sort=name&order=desc');
 		await expect(header).toHaveAttribute('aria-sort', 'descending');
-		await expect(header).toHaveAttribute('data-sort', 'desc');
+		await expect(arrow(page, 'Name', 'desc')).toBeVisible();
+		await expect(arrow(page, 'Name', 'asc')).toHaveCount(0);
 		await expect(names(page).first()).toHaveText('Vietnamese Pho');
 
 		await sortLink(page, 'Name').click();
 		await expect(page).toHaveURL('/admin/recipes');
 		await expect(header).not.toHaveAttribute('aria-sort');
+		await expect(arrow(page, 'Name', 'desc')).toHaveCount(0);
 		await expect(names(page).first()).toHaveText('Classic Margherita Pizza');
 	});
 
@@ -79,11 +98,14 @@ test.describe('sorting recipes by a column', () => {
 		await page.goto('/admin/recipes?sort=name&order=desc');
 
 		await sortLink(page, 'Published at').click();
-
 		await expect(page).toHaveURL('/admin/recipes?sort=publishedAt');
 		await expect(columnHeader(page, 'Name')).not.toHaveAttribute('aria-sort');
 		await expect(columnHeader(page, 'Published at')).toHaveAttribute('aria-sort', 'ascending');
-		await expect(names(page).first()).toHaveText('Classic Margherita Pizza');
+
+		// Newest first: the seed publishes recipes a week apart, in id order.
+		await sortLink(page, 'Published at').click();
+		await expect(page).toHaveURL('/admin/recipes?sort=publishedAt&order=desc');
+		await expect(names(page).first()).toHaveText('Mapo Tofu');
 	});
 
 	test('only sortable Fields have header links', async ({ page }) => {
@@ -107,7 +129,7 @@ test.describe('sorting recipes by a column', () => {
 			['desc', 'Mapo Tofu']
 		] as const) {
 			await sortLink(page, 'Calories').click();
-			await expect(columnHeader(page, 'Calories')).toHaveAttribute('data-sort', order);
+			await expect(arrow(page, 'Calories', order)).toBeVisible();
 			await expect(names(page).first()).toHaveText(first);
 			const calories = await (await columnCells(page, 'Calories')).allInnerTexts();
 			expect(calories).toHaveLength(55);

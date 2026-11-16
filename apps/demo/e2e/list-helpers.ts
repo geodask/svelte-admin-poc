@@ -116,7 +116,8 @@ export async function backendLog(request: APIRequestContext): Promise<string[]> 
 
 /**
  * The requests the demo backend receives while `act` runs. Tests run in parallel, so it may
- * hold other tests' requests too: check it with `toContain`, never `toEqual`.
+ * hold other tests' requests too: check it with `toContain`, never `toEqual`, for a request no
+ * other test sends (e.g. at a page size no other test asks for).
  */
 export async function backendRequestsDuring(request: APIRequestContext, act: () => Promise<void>) {
 	const before = (await backendLog(request)).length;

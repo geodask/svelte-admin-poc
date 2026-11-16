@@ -1,7 +1,7 @@
 // `App.Locals` is declared by SvelteKit, which the core peer-depends on.
 /// <reference types="@sveltejs/kit" />
 import type { FieldBrandOf } from './fields.ts';
-import type { CreateData, EditData } from './form-spec.ts';
+import type { CreateData, EditData, Simplify } from './form-spec.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /**
@@ -33,9 +33,6 @@ export type SortableKey<R extends ListParamsResource> = string extends keyof Sha
 			[K in keyof ShapeOf<R>]: [FieldBrandOf<ShapeOf<R>[K], 'sortable'>] extends [true] ? K : never;
 		}[keyof ShapeOf<R>] &
 			string;
-
-/** A type with its intersections flattened into one object, so it reads (and compares) plainly. */
-type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
 /**
  * The validated params a Resource's `getList` receives, typed from the Resource as `CreateData`

@@ -259,8 +259,8 @@ export function createListView<R extends Resource>(
 		get searchForm(): { action: string; name: 'q'; hidden: [name: string, value: string][] } {
 			const { perPage, sort } = looseParams;
 			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
-			const keptUrl = new URL(listHref(url, { page: 1, perPage, sort }), url);
-			return { action: keptUrl.pathname, name: 'q', hidden: [...keptUrl.searchParams] };
+			const kept = new URL(listHref(url, { page: 1, perPage, sort }), url);
+			return { action: kept.pathname, name: 'q', hidden: [...kept.searchParams] };
 		}
 	};
 }
