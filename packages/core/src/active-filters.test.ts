@@ -10,6 +10,7 @@ const recipes = defineResource({
 	schema: z.object({
 		id: z.number(),
 		name: field(z.string(), { sortable: true, filterable: true }),
+		cuisine: field(z.string(), { filterable: ['eq', 'in'] }),
 		difficulty: field(z.enum(['Easy', 'Medium', 'Hard']), { filterable: true }),
 		prepTimeMinutes: field(z.number(), { label: 'Prep time (min)', filterable: true }),
 		vegetarian: field(z.boolean(), { filterable: true }),
@@ -42,6 +43,7 @@ describe('the active filters', () => {
 		['difficulty=Easy&difficulty=Medium', 'Difficulty: Easy, Medium'],
 		['name=Pizza', 'Name: Pizza'],
 		['name.contains=piz', 'Name contains piz'],
+		['cuisine=Thai&cuisine=Italian', 'Cuisine: Italian, Thai'],
 		['vegetarian=true', 'Vegetarian: Yes'],
 		['vegetarian=false', 'Vegetarian: No'],
 		['prepTimeMinutes=15', 'Prep time (min): 15'],
@@ -51,7 +53,12 @@ describe('the active filters', () => {
 		['prepTimeMinutes.gte=45.5', 'Prep time (min) ≥ 45.5'],
 		['servedOn=2024-03-01', 'Served on: Mar 1, 2024'],
 		['servedOn.lt=2024-03-01', 'Served on < Mar 1, 2024'],
+		['servedOn.lte=2024-03-01', 'Served on ≤ Mar 1, 2024'],
+		['cookedOn=2024-12-31', 'Cooked on: Dec 31, 2024'],
+		['cookedOn.gt=2024-12-31', 'Cooked on > Dec 31, 2024'],
 		['cookedOn.gte=2024-12-31', 'Cooked on ≥ Dec 31, 2024'],
+		['publishedAt=2024-03-01T10:30', 'Published at: Mar 1, 2024, 10:30 UTC'],
+		['publishedAt.lt=2024-03-01T00:00', 'Published at < Mar 1, 2024'],
 		['publishedAt.gte=2024-03-01T00:00', 'Published at ≥ Mar 1, 2024'],
 		['publishedAt.lte=2024-03-01T23:30', 'Published at ≤ Mar 1, 2024, 23:30 UTC'],
 		['publishedAt.gt=2024-03-01T09:05:30', 'Published at > Mar 1, 2024, 09:05:30 UTC']

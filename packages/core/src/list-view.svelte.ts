@@ -190,7 +190,7 @@ export function createListView<R extends Resource>(
 	const looseParams = $derived(params satisfies ListParams as ListParams);
 	const urlSearch = $derived(looseParams.search);
 	const filterCount = $derived(looseParams.filters?.length ?? 0);
-	const active = $derived(activeFilters(url, resource));
+	const activeFilterList = $derived(activeFilters(url, resource));
 	const searchText = () => draft ?? urlSearch ?? '';
 
 	const selection = createSelection<IdOf<R>>();
@@ -494,7 +494,7 @@ export function createListView<R extends Resource>(
 		 * size and every other filter. Empty while no filter is on.
 		 */
 		get activeFilters(): ActiveFilter[] {
-			return active;
+			return activeFilterList;
 		},
 		/** The href of the list with no filters, at page 1, keeping the search, sort and page size. */
 		get clearFiltersHref(): string {

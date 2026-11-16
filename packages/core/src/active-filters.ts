@@ -1,20 +1,21 @@
 // The filters a list is filtered by, each with a readable label and the href that removes it:
 // the active filter chips under a list View's toolbar. Shared, pure.
+import { datetimeInputValue } from './date-input.ts';
 import type { Field, FilterOperator } from './fields.ts';
 import { dateInputType, listHref, readListParams, type ListUrlResource } from './list-url.ts';
 import type { FilterValue, ListFilter, ListParams } from './provider.ts';
 
 /**
- * One filter the list is filtered by: its Field, operator and value (an array for `in`), a
- * readable label such as "Prep time (min) ≥ 10", and the href of the list without it.
+ * One filter the list is filtered by: its described Field, its operator and value (an array of
+ * values only for `in`), a readable label such as "Prep time (min) ≥ 10", and the href of the
+ * list without it.
  */
-export type ActiveFilter = {
-	field: Field;
-	operator: FilterOperator;
-	value: FilterValue | FilterValue[];
-	label: string;
-	href: string;
-};
+export type ActiveFilter = DescribedFilter<ListFilter> & { label: string; href: string };
+
+/** A filter with its described Field in place of the Field's key, keeping each operator's value. */
+type DescribedFilter<F extends ListFilter> = F extends ListFilter
+	? Omit<F, 'field'> & { field: Field }
+	: never;
 
 /**
  * Each filter a list URL names, in the canonical order, whatever its operator and whether or not
@@ -27,16 +28,9 @@ export function activeFilters(url: URL, resource: ListUrlResource): ActiveFilter
 		const field = resource.fields.find((candidate) => candidate.key === filter.field);
 		if (field === undefined) return [];
 		const others = filters.filter((other) => other !== filter);
-		const without = { ...params, page: 1, filters: others.length > 0 ? others : undefined };
-		return [
-			{
-				field,
-				operator: filter.operator,
-				value: filter.value,
-				label: filterLabel(field, filter, (value) => valueText(resource, field, value)),
-				href: listHref(url, without, resource)
-			}
-		];
+		const paramsWithout = { ...params, page: 1, filters: others.length > 0 ? others : undefined };
+		const label = filterLabel(resource, field, filter);
+		return [{ ...filter, field, label, href: listHref(url, paramsWithout, resource) }];
 	});
 }
 
@@ -57,11 +51,8 @@ const OPERATOR_TEXT: Record<FilterOperator, string> = {
 };
 
 /** A filter's label: the Field's label, the operator, and the value (each value of an `in`). */
-function filterLabel(
-	field: Field,
-	filter: ListFilter,
-	text: (value: FilterValue) => string
-): string {
+function filterLabel(resource: ListUrlResource, field: Field, filter: ListFilter): string {
+	const text = (value: FilterValue) => valueText(resource, field, value);
 	const values = filter.operator === 'in' ? filter.value.map(text).join(', ') : text(filter.value);
 	return `${field.label}${OPERATOR_TEXT[filter.operator]}${values}`;
 }
@@ -79,11 +70,7 @@ function valueText(resource: ListUrlResource, field: Field, value: FilterValue):
 	if (Number.isNaN(date.getTime())) return String(value);
 	const day = dateFormat.format(date);
 	if (dateInputType(resource, field.key) !== 'datetime') return day;
-	// `HH:mm:ss.sss` in UTC, without the milliseconds, then the seconds, when they are zero.
-	const time = date
-		.toISOString()
-		.slice(11, 23)
-		.replace(/\.000$/, '')
-		.replace(/:00$/, '');
+	// The time as the filter input writes it, in UTC: `HH:mm`, with seconds only when they aren't zero.
+	const time = datetimeInputValue(date).slice(11);
 	return time === '00:00' ? day : `${day}, ${time} UTC`;
 }

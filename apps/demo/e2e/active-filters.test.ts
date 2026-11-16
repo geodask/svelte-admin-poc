@@ -4,14 +4,19 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
 import { columnCells, dataRows, filtersToggle, names } from './list-helpers.ts';
 
+/** The row of active filter chips, shown only while a filter is on. */
+const chipList = (page: Page) => page.getByRole('list', { name: 'Active filters' });
+
 /** The active filter chips, in order. */
-const chips = (page: Page) => page.getByRole('list', { name: 'Active filters' }).getByRole('link');
+const chips = (page: Page) => chipList(page).getByRole('link');
 
 /** The chip of one filter, by its label. Its link is named "Remove filter …". */
 const chip = (page: Page, label: string) =>
-	page
-		.getByRole('list', { name: 'Active filters' })
-		.getByRole('link', { name: `Remove filter ${label}`, exact: true });
+	chipList(page).getByRole('link', { name: `Remove filter ${label}`, exact: true });
+
+/** The prep times of the recipes listed, as numbers. */
+const prepTimes = async (page: Page) =>
+	(await (await columnCells(page, 'Prep time (min)')).allInnerTexts()).map(Number);
 
 /** Expect the chips to show these labels, in order. */
 const expectChips = (page: Page, labels: string[]) =>
@@ -51,11 +56,9 @@ test.describe('the active filter chips', () => {
 		await expect(page.getByRole('searchbox')).toHaveValue('a');
 		const difficulties = await (await columnCells(page, 'Difficulty')).allInnerTexts();
 		expect(difficulties.every((text) => ['Easy', 'Medium'].includes(text.trim()))).toBe(true);
-		const prepTimes = (await (await columnCells(page, 'Prep time (min)')).allInnerTexts()).map(
-			Number
-		);
-		expect(prepTimes.every((minutes) => minutes >= 10)).toBe(true);
-		expect(prepTimes).toEqual([...prepTimes].sort((a, b) => b - a));
+		const sorted = await prepTimes(page);
+		expect(sorted.every((minutes) => minutes >= 10)).toBe(true);
+		expect(sorted).toEqual([...sorted].sort((a, b) => b - a));
 
 		// Removing an `in` removes every value of it.
 		await chip(page, 'Difficulty: Easy, Medium').click();
@@ -68,11 +71,9 @@ test.describe('the active filter chips', () => {
 	test('show a filter only the URL can set, and remove it', async ({ page }) => {
 		await page.goto('/admin/recipes?perPage=100&prepTimeMinutes.lt=20');
 		await expectChips(page, ['Prep time (min) < 20']);
-		const prepTimes = (await (await columnCells(page, 'Prep time (min)')).allInnerTexts()).map(
-			Number
-		);
-		expect(prepTimes.length).toBeGreaterThan(0);
-		expect(prepTimes.every((minutes) => minutes < 20)).toBe(true);
+		const quick = await prepTimes(page);
+		expect(quick.length).toBeGreaterThan(0);
+		expect(quick.every((minutes) => minutes < 20)).toBe(true);
 
 		await chip(page, 'Prep time (min) < 20').click();
 
@@ -84,12 +85,12 @@ test.describe('the active filter chips', () => {
 	test('are not shown while no filter is on', async ({ page }) => {
 		await page.goto('/admin/recipes?q=pasta&sort=name');
 		await expect(names(page).first()).toBeVisible();
-		await expect(page.getByRole('list', { name: 'Active filters' })).toHaveCount(0);
+		await expect(chipList(page)).toHaveCount(0);
 
 		// Empty filter params, as a form without JavaScript posts them, are no filters either.
 		await page.goto('/admin/recipes?name.contains=&vegetarian=&prepTimeMinutes.gte=');
 		await expect(names(page).first()).toBeVisible();
-		await expect(page.getByRole('list', { name: 'Active filters' })).toHaveCount(0);
+		await expect(chipList(page)).toHaveCount(0);
 	});
 
 	test('show on the replaced users card list through the toolbar', async ({ page }) => {
