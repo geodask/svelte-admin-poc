@@ -10,13 +10,13 @@ export const users = defineResource({
 	searchable: true,
 	schema: z.object({
 		id: z.number(),
-		name: z.string(),
+		name: field(z.string(), { sortable: true }),
 		// Set once on create, then shown as text on the edit View.
 		email: field(z.email(), { readOnly: 'afterCreate', placeholder: 'name@example.com' }),
 		// Optional, so clearing it on the edit View removes it.
 		phone: z.string().optional(),
 		role: z.enum(['admin', 'editor', 'viewer']),
 		active: z.boolean(),
-		joinedAt: z.iso.datetime()
+		joinedAt: field(z.iso.datetime(), { sortable: true })
 	})
 });

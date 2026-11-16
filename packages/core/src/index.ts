@@ -13,10 +13,14 @@ export { idFromParam, idPathSegment, recordPath } from './ids.ts';
 export { recordTitle } from './record-title.ts';
 export type {
 	ListParams,
+	ListParamsResource,
 	ListResult,
+	ListSort,
 	Provider,
 	ProviderContext,
-	ResourceProvider
+	ResourceProvider,
+	SortableKey,
+	SortOrder
 } from './provider.ts';
 export {
 	ConflictError,

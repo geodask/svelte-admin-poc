@@ -3,6 +3,9 @@
 	the page, so the list View renders it inside its boundary. While a new page loads (after a
 	page change or a search), the old rows stay and a small indicator shows.
 
+	The header of a sortable Field's column is a link that sorts the whole list by it, on the
+	server (the Theme's `SortHeader`).
+
 	The first cell of each row is a checkbox that selects the row, and the one in the header
 	selects or clears every row on the page. The selection is the core's, so it belongs to this
 	Resource.
@@ -14,6 +17,7 @@
 	import FieldCell from './FieldCell.svelte';
 	import Pager from './Pager.svelte';
 	import SelectionCheckbox from './SelectionCheckbox.svelte';
+	import SortHeader from './SortHeader.svelte';
 	import {
 		createSvelteTable,
 		FlexRender,
@@ -94,14 +98,13 @@
 							/>
 						</Table.Head>
 						{#each headerGroup.headers as header (header.id)}
-							<Table.Head colspan={header.colSpan}>
-								{#if !header.isPlaceholder}
-									<FlexRender
-										content={header.column.columnDef.header}
-										context={header.getContext()}
-									/>
-								{/if}
-							</Table.Head>
+							<!-- Each column is one Field's, so its header sorts by it when it can. -->
+							{@const field = view.fields.find((candidate) => candidate.key === header.id)}
+							{#if field !== undefined && !header.isPlaceholder}
+								<SortHeader {view} {field} colspan={header.colSpan} />
+							{:else}
+								<Table.Head colspan={header.colSpan}></Table.Head>
+							{/if}
 						{/each}
 					</Table.Row>
 				{/each}

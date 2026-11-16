@@ -14,6 +14,7 @@ import {
 	type FormInput,
 	type IdOf,
 	type ListParams,
+	type ListSort,
 	type Provider,
 	type ProviderContext,
 	type RecordOf,
@@ -22,6 +23,7 @@ import {
 	type Resource,
 	type ResourceProvider,
 	type ResourceRemote,
+	type SortableKey,
 	type StandardSchemaV1
 } from '@svelte-admin/core';
 import { restProvider } from '@svelte-admin/core/rest';
@@ -634,8 +636,13 @@ expectTypeOf<ListParams<typeof unsearchableRecipes>>().toEqualTypeOf<{
 	page: number;
 	perPage: number;
 }>();
-// For a Resource TypeScript can't see, a search may come or not.
-expectTypeOf<ListParams>().toEqualTypeOf<{ page: number; perPage: number; search?: string }>();
+// For a Resource TypeScript can't see, a search may come or not, and a sort on any Field.
+expectTypeOf<ListParams>().toEqualTypeOf<{
+	page: number;
+	perPage: number;
+	search?: string;
+	sort?: { field: string; order: 'asc' | 'desc' };
+}>();
 
 // `serveResource` hands the Provider's `getList` the Resource's own list params.
 serveResource(searchableRecipes, {
@@ -696,3 +703,119 @@ expectTypeOf(createListView(searchableRecipes, searchableRemote).params).toEqual
 	ListParams<typeof searchableRecipes>
 >();
 expectTypeOf(replacedView.params).toEqualTypeOf<{ page: number; perPage: number }>();
+
+// ---------------------------------------------------------------------------------------------
+// Sortable Fields: a typed sort in the list params.
+
+const sortableRecipes = defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	searchable: true,
+	schema: z.object({
+		id: z.number(),
+		name: field(z.string(), { sortable: true, label: 'Name' }),
+		cuisine: field(z.string(), { label: 'Cuisine' }),
+		// The brand survives the wrappers, on either side of `field()`.
+		outerOptional: field(z.number(), { sortable: true }).optional(),
+		innerOptional: field(z.number().optional(), { sortable: true }),
+		outerNullable: field(z.iso.datetime(), { sortable: true }).nullable(),
+		outerDefault: field(z.boolean(), { sortable: true }).default(false),
+		twice: field(z.enum(['a', 'b']), { sortable: true })
+			.optional()
+			.nullable(),
+		// Hidden Fields may be sortable too.
+		hiddenSortable: field(z.string(), { hidden: true, sortable: true }),
+		readOnlyPlain: field(z.number(), { readOnly: true })
+	})
+});
+
+// `sort.field` is the union of the sortable Fields' keys.
+expectTypeOf<SortableKey<typeof sortableRecipes>>().toEqualTypeOf<
+	| 'name'
+	| 'outerOptional'
+	| 'innerOptional'
+	| 'outerNullable'
+	| 'outerDefault'
+	| 'twice'
+	| 'hiddenSortable'
+>();
+expectTypeOf<ListParams<typeof sortableRecipes>>().toEqualTypeOf<{
+	page: number;
+	perPage: number;
+	search?: string;
+	sort?: ListSort<
+		| 'name'
+		| 'outerOptional'
+		| 'innerOptional'
+		| 'outerNullable'
+		| 'outerDefault'
+		| 'twice'
+		| 'hiddenSortable'
+	>;
+}>();
+// A Resource with no sortable Field has no `sort`, searchable or not.
+expectTypeOf<SortableKey<typeof searchableRecipes>>().toEqualTypeOf<never>();
+expectTypeOf<keyof ListParams<typeof searchableRecipes>>().toEqualTypeOf<
+	'page' | 'perPage' | 'search'
+>();
+const sortableOnly = defineResource({
+	name: 'posts',
+	label: 'Posts',
+	schema: z.object({ id: field(z.number(), { sortable: true }), title: z.string() })
+});
+expectTypeOf<ListParams<typeof sortableOnly>>().toEqualTypeOf<{
+	page: number;
+	perPage: number;
+	sort?: { field: 'id'; order: 'asc' | 'desc' };
+}>();
+
+// The Provider's `getList` gets the typed sort from `serveResource` and the REST Provider.
+const sortableRecipesProvider = restProvider('http://api.test').for(sortableRecipes);
+serveResource(sortableRecipes, {
+	...sortableRecipesProvider,
+	getList: async (_ctx, params) => {
+		expectTypeOf(params.sort).toEqualTypeOf<
+			ListSort<SortableKey<typeof sortableRecipes>> | undefined
+		>();
+		return { data: [], total: 0 };
+	}
+});
+serveResource(sortableOnly, {
+	...restProvider('http://api.test').for(sortableOnly),
+	// @ts-expect-error posts here only sort by id, so a Provider can't be written for a title sort
+	getList: async (_ctx, params: { page: number; perPage: number; sort?: ListSort<'title'> }) => ({
+		data: [],
+		hasNextPage: params.sort === undefined
+	})
+});
+// A Provider written against the loose `ListParams`, as before sorting, still fits.
+serveResource(sortableRecipes, {
+	...sortableRecipesProvider,
+	getList: async (_ctx, { page, perPage, search }: ListParams) => ({
+		data: [],
+		total: page + perPage + (search?.length ?? 0)
+	})
+});
+
+// The remote `getList` takes a sort only on a sortable Field.
+const sortableRemote = serveResource(sortableRecipes, sortableRecipesProvider);
+void sortableRemote.getList({ page: 1, perPage: 25, sort: { field: 'name', order: 'desc' } });
+// @ts-expect-error `cuisine` isn't sortable
+void sortableRemote.getList({ page: 1, perPage: 25, sort: { field: 'cuisine', order: 'asc' } });
+// @ts-expect-error a sort is ascending or descending
+void sortableRemote.getList({ page: 1, perPage: 25, sort: { field: 'name', order: 'up' } });
+const sortableOnlyRemote = serveResource(
+	sortableOnly,
+	restProvider('http://api.test').for(sortableOnly)
+);
+// @ts-expect-error a Resource with no sortable Field takes no sort
+void recipesRemote.getList({ page: 1, perPage: 25, sort: { field: 'name', order: 'asc' } });
+void sortableOnlyRemote;
+
+// A list View's sort state and hrefs take the sortable keys.
+const sortableView = createListView(sortableRecipes, sortableRemote);
+expectTypeOf(sortableView.params.sort).toEqualTypeOf<
+	ListSort<SortableKey<typeof sortableRecipes>> | undefined
+>();
+expectTypeOf(sortableView.sortState('name')).toEqualTypeOf<'asc' | 'desc' | undefined>();
+void sortableView.sortHref('outerOptional');

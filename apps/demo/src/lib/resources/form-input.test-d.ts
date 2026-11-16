@@ -7,7 +7,8 @@ import type {
 	FormInput,
 	ListParams,
 	Resource,
-	ResourceProvider
+	ResourceProvider,
+	SortableKey
 } from '@svelte-admin/core';
 import type { serveResource } from '@svelte-admin/core/server';
 import type { posts } from './posts.ts';
@@ -51,6 +52,27 @@ export const recipeSearch: ListParams<typeof recipes>['search'] = 'pasta';
 export const userSearch: ListParams<typeof users>['search'] = 'ada';
 // @ts-expect-error posts aren't searchable
 export const postSearch: ListParams<typeof posts>['search'] = 'hello';
+
+// The sort names one of each Resource's sortable Fields, whether `field()` sits inside a wrapper
+// (recipes' calories) or not.
+type Exactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+export const recipeSortKeys: Exactly<
+	SortableKey<typeof recipes>,
+	'name' | 'prepTimeMinutes' | 'caloriesPerServing' | 'publishedAt'
+> = true;
+export const userSortKeys: Exactly<SortableKey<typeof users>, 'name' | 'joinedAt'> = true;
+export const postSortKeys: Exactly<SortableKey<typeof posts>, 'id' | 'title' | 'viewCount'> = true;
+export const recipeSort: ListParams<typeof recipes>['sort'] = {
+	field: 'caloriesPerServing',
+	order: 'desc'
+};
+export const recipeCuisineSort: ListParams<typeof recipes>['sort'] = {
+	// @ts-expect-error recipes can't be sorted by cuisine
+	field: 'cuisine',
+	order: 'asc'
+};
+// @ts-expect-error a sort is ascending or descending
+export const postSortOrder: ListParams<typeof posts>['sort'] = { field: 'id', order: 'down' };
 
 // A Provider whose `getList` takes the loose `ListParams` and reads a search, as every Provider
 // did before list params were typed from the Resource, still fits `serveResource` for every demo

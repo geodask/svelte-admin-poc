@@ -16,6 +16,7 @@ export { default as ListView } from './ListView.svelte';
 // Parts for a replaced list View, driven by the core's `createListView`.
 export { default as Toolbar, type ToolbarProps } from './Toolbar.svelte';
 export { default as Pager, type PagerProps } from './Pager.svelte';
+export { default as SortHeader, type SortHeaderProps } from './SortHeader.svelte';
 export {
 	default as SelectionCheckbox,
 	type SelectionCheckboxProps

@@ -22,9 +22,12 @@ const listResponse = z.union([
 /**
  * A Provider for a backend that speaks this convention:
  *
- * - `GET {base}/{resource}?page=&perPage=&q=` returns `{ data, total }` or
+ * - `GET {base}/{resource}?page=&perPage=&sort=&order=&q=` returns `{ data, total }` or
  *   `{ data, hasNextPage }`. The query is the list URL's encoding (`encodeListParams`), with
- *   `page` and `perPage` always written. `q` is the search, sent only when there is one.
+ *   `page` and `perPage` always written. `sort` names the Field the list is sorted by, sent only
+ *   when there is a sort, and then always with `order` (`asc` or `desc`), so the backend never has
+ *   to know the default. A backend that can't do a declared sort should answer 400. `q` is the
+ *   search, sent only when there is one.
  * - `GET {base}/{resource}/{id}` returns the record. The id is always one path segment
  *   (`idPathSegment`), so `../users/1` is asked for as `..%2Fusers%2F1`.
  * - `POST {base}/{resource}` with the record (without its id) as JSON creates it, and returns

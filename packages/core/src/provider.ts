@@ -1,5 +1,6 @@
 // `App.Locals` is declared by SvelteKit, which the core peer-depends on.
 /// <reference types="@sveltejs/kit" />
+import type { FieldBrandOf } from './fields.ts';
 import type { CreateData, EditData } from './form-spec.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -10,18 +11,51 @@ import type { IdOf, RecordOf, Resource } from './resource.ts';
  */
 export type ProviderContext = { fetch: typeof fetch; locals: App.Locals };
 
+/** The direction of a sort: ascending or descending. */
+export type SortOrder = 'asc' | 'desc';
+
+/** What a list is sorted by: one Field, by its key, ascending or descending. */
+export type ListSort<K extends string = string> = { field: K; order: SortOrder };
+
+/** What `ListParams` asks of a Resource: whether it is searchable, and its schema's Fields. */
+export type ListParamsResource = Pick<Resource, 'searchable' | 'schema'>;
+
+/** A Resource's schema shape: each Field's key and its schema. */
+type ShapeOf<R extends ListParamsResource> = R['schema']['shape'];
+
+/**
+ * The keys of a Resource's sortable Fields (`sortable: true`, read from `field()`'s brand), or
+ * `never` when it has none. For a Resource whose Fields TypeScript can't see, any key.
+ */
+export type SortableKey<R extends ListParamsResource> = string extends keyof ShapeOf<R>
+	? string
+	: {
+			[K in keyof ShapeOf<R>]: [FieldBrandOf<ShapeOf<R>[K], 'sortable'>] extends [true] ? K : never;
+		}[keyof ShapeOf<R>] &
+			string;
+
+/** A type with its intersections flattened into one object, so it reads (and compares) plainly. */
+type Simplify<T> = { [K in keyof T]: T[K] } & {};
+
 /**
  * The validated params a Resource's `getList` receives, typed from the Resource as `CreateData`
- * and `EditData` are: a 1-based page and a page size, plus, only for a searchable Resource, an
- * optional search, never blank and without the spaces around it. A Resource that isn't
- * searchable has no `search` at all. Without a Resource (or for one whose searchability
- * TypeScript can't see), a search may come or not. Sort and filters come later.
+ * and `EditData` are: a 1-based page and a page size, plus
+ *
+ * - only for a searchable Resource, an optional `search`, never blank and without the spaces
+ *   around it;
+ * - only for a Resource with a sortable Field, an optional `sort`, whose `field` is one of the
+ *   sortable Fields' keys. It is absent when the list isn't sorted, never empty.
+ *
+ * A Resource that isn't searchable has no `search` at all, and one with no sortable Field no
+ * `sort`. Without a Resource (or for one TypeScript can't see), either may come or not, and a
+ * sort may name any Field. Filters come later.
  */
-// Only whether the Resource is searchable matters so far, so that is all it asks of `R`.
-export type ListParams<R extends Pick<Resource, 'searchable'> = Resource> =
-	true extends R['searchable']
-		? { page: number; perPage: number; search?: string }
-		: { page: number; perPage: number };
+export type ListParams<R extends ListParamsResource = Resource> = Simplify<
+	{ page: number; perPage: number } & (true extends R['searchable']
+		? { search?: string }
+		: unknown) &
+		([SortableKey<R>] extends [never] ? unknown : { sort?: ListSort<SortableKey<R>> })
+>;
 
 /** One page of records, with a total when the backend can count, or else `hasNextPage`. */
 export type ListResult<T> = { data: T[]; total: number } | { data: T[]; hasNextPage: boolean };
