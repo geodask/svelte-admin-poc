@@ -1,15 +1,16 @@
 <!--
 	The confirmation before a delete: a modal dialog that names the record by its Record title,
 	says the delete can't be undone, and offers Cancel and Delete. While the delete runs, Delete
-	shows progress and neither button can be pressed. When it fails, the dialog stays open with
-	the reason, and Delete becomes Try again. It never leaves a rejection unhandled.
+	shows progress and the dialog can't be closed. When it fails, the dialog stays open with the
+	reason, focus moves to Delete, which has become Try again. It never leaves a rejection
+	unhandled.
 
 	Deleting needs JavaScript (it is a remote command), so render the control that opens it only
 	after hydration. A Theme part, exported for a replaced View: give it the Record title and a
 	`confirm` that deletes, such as the core's `createDetailView(...).delete`.
 -->
 <script module lang="ts">
-	import type { DeleteResult } from '@svelte-admin/core/views';
+	import type { DeleteFailure, DeleteResult } from '@svelte-admin/core/views';
 
 	export type DeleteDialogProps = {
 		/** Whether the dialog is open. Bind it: the dialog closes itself on Cancel or Escape. */
@@ -25,16 +26,23 @@
 </script>
 
 <script lang="ts">
+	import { tick } from 'svelte';
+
 	let { open = $bindable(), title, confirm }: DeleteDialogProps = $props();
 
 	let dialog: HTMLDialogElement;
+	let confirmButton: HTMLButtonElement;
 	let deleting = $state(false);
-	let failure = $state<{ status?: number; message: string }>();
-	const headingId = $props.id();
+	let failure = $state<DeleteFailure>();
+	const id = $props.id();
 
-	// The dialog element follows `open`: modal while open, so the page behind can't be used.
+	// The dialog element follows `open`: modal while open, so the View behind can't be used. Each
+	// opening starts afresh, without the failure of an earlier attempt.
 	$effect(() => {
-		if (open && !dialog.open) dialog.showModal();
+		if (open && !dialog.open) {
+			failure = undefined;
+			dialog.showModal();
+		}
 		if (!open && dialog.open) dialog.close();
 	});
 
@@ -51,24 +59,34 @@
 		} finally {
 			deleting = false;
 		}
+		if (failure) {
+			// The focused button was disabled while deleting: give focus back to Try again.
+			await tick();
+			confirmButton.focus();
+		}
 	}
 </script>
 
-<!-- Escape cancels, unless a delete is already on its way. -->
+<!--
+	Escape cancels, unless a delete is on its way. A browser may close the dialog anyway (Chrome
+	ignores a cancelled Escape when it is repeated), so it is opened again until the delete ends.
+-->
 <dialog
 	bind:this={dialog}
-	aria-labelledby={headingId}
+	aria-labelledby="{id}-heading"
+	aria-describedby="{id}-warning"
+	aria-busy={deleting}
 	oncancel={(event) => {
 		if (deleting) event.preventDefault();
 	}}
 	onclose={() => {
-		open = false;
-		failure = undefined;
+		if (deleting) dialog.showModal();
+		else open = false;
 	}}
 	class="m-auto w-full max-w-md rounded-lg border bg-background p-6 text-sm text-foreground shadow-lg backdrop:bg-black/50"
 >
-	<h2 id={headingId} class="text-lg font-semibold">Delete {title}?</h2>
-	<p class="mt-2 text-muted-foreground">This can't be undone.</p>
+	<h2 id="{id}-heading" class="text-lg font-semibold">Delete {title}?</h2>
+	<p id="{id}-warning" class="mt-2 text-muted-foreground">This can't be undone.</p>
 
 	{#if failure}
 		<div role="alert" class="mt-4 rounded-md border border-destructive/50 p-3 text-destructive">
@@ -89,6 +107,7 @@
 			Cancel
 		</button>
 		<button
+			bind:this={confirmButton}
 			type="button"
 			disabled={deleting}
 			onclick={onConfirm}

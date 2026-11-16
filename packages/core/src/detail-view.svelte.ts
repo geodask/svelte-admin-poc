@@ -10,7 +10,10 @@ import type { IdOf, RecordOf, Resource } from './resource.ts';
  * a message that is safe to show and, when the server answered, its HTTP status (404 for a
  * record that was already deleted).
  */
-export type DeleteResult = { ok: true } | { ok: false; status?: number; message: string };
+export type DeleteResult = { ok: true } | ({ ok: false } & DeleteFailure);
+
+/** Why a delete failed: a message safe to show, and the HTTP status when the server answered. */
+export type DeleteFailure = { status?: number; message: string };
 
 /** What a delete reports when the failure carries no message of its own (e.g. no network). */
 const DELETE_FAILED = "Couldn't delete this record.";
@@ -71,19 +74,16 @@ export function createDetailView<R extends Resource>(
 		 * show it and offer to try again.
 		 */
 		async delete(): Promise<DeleteResult> {
-			// Read now: once the delete lands, the page may already be moving on.
+			// Read now: once the delete lands, the route may already be changing.
 			const target = listViewHref;
 			try {
 				await remote.deleteOne(id).updates(remote.getList);
 			} catch (failure) {
 				return { ok: false, ...readFailure(failure) };
 			}
-			try {
-				await goto(target);
-			} catch {
-				// The record is gone either way: land on the list with a full page load instead.
-				location.assign(target);
-			}
+			// The delete succeeded whatever happens to the navigation: one the user started
+			// meanwhile may supersede it, and that is theirs to keep.
+			await goto(target).catch(() => {});
 			return { ok: true };
 		}
 	};
@@ -96,7 +96,7 @@ export type DetailViewState<R extends Resource = Resource> = ReturnType<typeof c
  * The status and message of a failed remote call: Kit rejects with `{ status, body }`, whose
  * body is the server's safe `{ message }`.
  */
-function readFailure(failure: unknown): { status?: number; message: string } {
+function readFailure(failure: unknown): DeleteFailure {
 	const { status, body } = (failure ?? {}) as { status?: unknown; body?: { message?: unknown } };
 	const message = body?.message;
 	return {

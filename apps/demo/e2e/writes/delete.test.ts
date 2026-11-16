@@ -116,6 +116,8 @@ test.describe('deleting a recipe from its detail View', () => {
 		await confirmButton(page).click();
 
 		await expect(dialog(page).getByRole('alert')).toHaveText('An unexpected error occurred.');
+		// Focus comes back to the button, now Try again, for a keyboard user.
+		await expect(dialog(page).getByRole('button', { name: 'Try again' })).toBeFocused();
 		await expect(dialog(page)).not.toContainText(marker);
 		await expect(page).toHaveURL('/admin/recipes/2');
 		expect(await recipeStored(request, 2)).toBe(true);

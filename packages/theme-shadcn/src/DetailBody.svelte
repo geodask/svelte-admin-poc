@@ -13,12 +13,12 @@
 	const record = $derived(await view.query);
 	const title = $derived(view.title(record));
 
-	// Deleting needs JavaScript, so Delete appears only once the page is hydrated: a page without
-	// JavaScript never shows a button that does nothing.
-	let hydrated = $state(false);
+	// False on the server and until hydration: deleting needs JavaScript, so a page without it
+	// never shows a Delete button that does nothing.
+	let interactive = $state(false);
 	let confirmingDelete = $state(false);
 	onMount(() => {
-		hydrated = true;
+		interactive = true;
 	});
 </script>
 
@@ -35,7 +35,7 @@
 		>
 			Edit
 		</a>
-		{#if hydrated}
+		{#if interactive}
 			<button
 				type="button"
 				onclick={() => (confirmingDelete = true)}

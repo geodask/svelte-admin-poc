@@ -57,6 +57,8 @@ export function restProvider(baseUrl: string) {
 			resource: R
 		): Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>> {
 			const resourceUrl = `${base}/${encodeURIComponent(resource.name)}`;
+			/** A record's URL: the id is always one path segment. */
+			const recordUrl = (id: IdOf<R>) => `${resourceUrl}/${idPathSegment(id)}`;
 
 			return {
 				async getList({ fetch }, { page, perPage, search }) {
@@ -73,8 +75,7 @@ export function restProvider(baseUrl: string) {
 				},
 
 				async getOne({ fetch }, id) {
-					const url = `${resourceUrl}/${idPathSegment(id)}`;
-					return (await requestJson(fetch, 'GET', url)) as RecordOf<R>;
+					return (await requestJson(fetch, 'GET', recordUrl(id))) as RecordOf<R>;
 				},
 
 				async create({ fetch }, data) {
@@ -82,13 +83,11 @@ export function restProvider(baseUrl: string) {
 				},
 
 				async update({ fetch }, { id, data }) {
-					const url = `${resourceUrl}/${idPathSegment(id)}`;
-					return (await requestJson(fetch, 'PUT', url, data)) as RecordOf<R>;
+					return (await requestJson(fetch, 'PUT', recordUrl(id), data)) as RecordOf<R>;
 				},
 
 				async deleteOne({ fetch }, id) {
-					const url = `${resourceUrl}/${idPathSegment(id)}`;
-					const response = await request(fetch, 'DELETE', url);
+					const response = await request(fetch, 'DELETE', recordUrl(id));
 					// Nothing is read from the response, so free its body.
 					await response.body?.cancel();
 				}

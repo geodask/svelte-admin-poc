@@ -40,11 +40,11 @@ const MAX_REFRESHED_LISTS = 25;
  * - `deleteOne` is a remote command, so it needs JavaScript. It takes the typed id, and after
  *   the delete refreshes the list queries the client asks for (`deleteOne(id).updates(getList)`).
  *
- * From a read or a delete, a Provider error becomes an HTTP error with its message: `NotFoundError` a 404,
- * `InvalidInputError` a 400 and `ConflictError` a 409. From a save, it keeps the user on the
- * form with what they typed, as a schema issue would: each issue of a `FieldError` shows under
- * the input its path names (or at the top of the form when it names none), and any other
- * Provider error shows its message at the top of the form. On edit, a `NotFoundError` reads
+ * From a read or a delete, a Provider error becomes an HTTP error with its message:
+ * `NotFoundError` a 404, `InvalidInputError` a 400 and `ConflictError` a 409. From a save, it
+ * keeps the user on the form with what they typed, as a schema issue would: each issue of a
+ * `FieldError` shows under the input its path names (or at the top of the form when it names
+ * none), and any other Provider error shows its message at the top of the form. On edit, a `NotFoundError` reads
  * "This record no longer exists". Anything else a Provider throws is an unexpected error, which
  * Kit masks as a 500 (and the core's `handleError` logs). So is a record the Provider returns
  * that doesn't match the schema.
