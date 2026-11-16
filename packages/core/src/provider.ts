@@ -24,7 +24,7 @@ type IdOfRecord<T> = T extends { id: infer Id } ? Id : never;
  * The adapter that carries out a Resource's data operations against a backend. Its record
  * type must be the Resource schema's output type, and its ids the schema's id type. `Create` is
  * what `create` receives: the record without its id. `Edit` is what `update` receives as its
- * `data`: every editable Field. Deleting comes next.
+ * `data`: every editable Field.
  */
 export type Provider<T, Id = IdOfRecord<T>, Create = Omit<T, 'id'>, Edit = Create> = {
 	getList(ctx: ProviderContext, params: ListParams): Promise<ListResult<T>>;
@@ -46,4 +46,10 @@ export type Provider<T, Id = IdOfRecord<T>, Create = Omit<T, 'id'>, Edit = Creat
 	 * the same id.
 	 */
 	update(ctx: ProviderContext, input: { id: Id; data: Edit }): Promise<T>;
+	/**
+	 * Delete one record by its id, which arrives with the schema's id type. Throw
+	 * `NotFoundError` for a record that doesn't exist (e.g. one deleted meanwhile), so the user
+	 * sees why instead of a generic failure.
+	 */
+	deleteOne(ctx: ProviderContext, id: Id): Promise<void>;
 };

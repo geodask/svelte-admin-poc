@@ -27,7 +27,7 @@ type Sent = { method: string; url: string; contentType: string | null; body: unk
 
 /**
  * A fake `fetch` that records each request (its URL in `requests`, and all of it in `sent`)
- * and answers with `body`.
+ * and answers with `body` (or none for a 204).
  */
 function fakeFetch(body: unknown, init: ResponseInit = { status: 200 }) {
 	const requests: string[] = [];
@@ -42,7 +42,8 @@ function fakeFetch(body: unknown, init: ResponseInit = { status: 200 }) {
 			contentType: request.headers.get('content-type'),
 			body: text ? JSON.parse(text) : undefined
 		});
-		return new Response(JSON.stringify(body), {
+		// A 204 has no body at all.
+		return new Response(init.status === 204 ? null : JSON.stringify(body), {
 			...init,
 			headers: { 'content-type': 'application/json' }
 		});
@@ -245,6 +246,40 @@ describe('the bundled REST Provider', () => {
 			expect(result).toEqual(record);
 		});
 	});
+
+	describe('deleteOne', () => {
+		it('sends DELETE {base}/{resource}/{id} with no body', async () => {
+			const { fetch, sent } = fakeFetch(null, { status: 204 });
+			const provider = restProvider('http://api.test/v1/').for(recipes);
+
+			await provider.deleteOne(context(fetch), 7);
+
+			expect(sent).toEqual([
+				{
+					method: 'DELETE',
+					url: 'http://api.test/v1/recipes/7',
+					contentType: null,
+					body: undefined
+				}
+			]);
+		});
+
+		it('writes the id as one encoded path segment', async () => {
+			const { fetch, requests } = fakeFetch(null, { status: 204 });
+
+			await restProvider('http://api.test').for(users).deleteOne(context(fetch), '../users/1');
+
+			expect(requests).toEqual(['http://api.test/users/..%2Fusers%2F1']);
+		});
+
+		it('resolves with nothing, whatever a 200 sends back', async () => {
+			const { fetch } = fakeFetch({ id: 7, name: 'Pad Thai' });
+
+			await expect(
+				restProvider('http://api.test').for(recipes).deleteOne(context(fetch), 7)
+			).resolves.toBeUndefined();
+		});
+	});
 });
 
 describe('the bundled REST Provider, when the backend answers with an error status', () => {
@@ -260,7 +295,9 @@ describe('the bundled REST Provider, when the backend answers with an error stat
 		update: (fetch: typeof globalThis.fetch) =>
 			restProvider('http://api.test')
 				.for(recipes)
-				.update(context(fetch), { id: 7, data: { name: 'Pad Thai' } })
+				.update(context(fetch), { id: 7, data: { name: 'Pad Thai' } }),
+		deleteOne: (fetch: typeof globalThis.fetch) =>
+			restProvider('http://api.test').for(recipes).deleteOne(context(fetch), 7)
 	};
 
 	/** The request each call makes, as an unexpected error names it for the server log. */
@@ -268,7 +305,8 @@ describe('the bundled REST Provider, when the backend answers with an error stat
 		getList: 'GET http://api.test/recipes',
 		getOne: 'GET http://api.test/recipes/7',
 		create: 'POST http://api.test/recipes',
-		update: 'PUT http://api.test/recipes/7'
+		update: 'PUT http://api.test/recipes/7',
+		deleteOne: 'DELETE http://api.test/recipes/7'
 	};
 
 	describe.each(Object.entries(calls))('%s', (name, call) => {
