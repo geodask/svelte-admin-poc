@@ -137,7 +137,7 @@ export function canonicalFilters<F extends ListFilter>(
  * that needs five letters). A date keeps the Field's own type: an ISO date or datetime string,
  * or a `Date`.
  */
-function filterValueSchema(field: Field, schema: z.ZodType): z.ZodType<FilterValue> {
+export function filterValueSchema(field: Field, schema: z.ZodType): z.ZodType<FilterValue> {
 	switch (field.kind) {
 		case 'text':
 			return z.string();

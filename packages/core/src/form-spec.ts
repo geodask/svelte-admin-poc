@@ -11,6 +11,7 @@ import {
 	type IsWrapped,
 	type UnwrappedSchema
 } from './fields.ts';
+import { dateInputValue, datetimeInputValue, LOCAL_DATETIME } from './date-input.ts';
 import { idFromParam } from './ids.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -412,18 +413,9 @@ function inputValue(spec: FormInputSpec, value: unknown): unknown {
 		case 'select':
 			return String(value);
 		case 'date':
-			return value instanceof Date ? value.toISOString().slice(0, 10) : String(value);
-		case 'datetime': {
-			const date = new Date(String(value));
-			if (Number.isNaN(date.getTime())) return String(value);
-			// `2024-03-01T23:30:15.250Z` is written `2024-03-01T23:30:15.250`, and without the
-			// seconds and milliseconds when they are zero.
-			return date
-				.toISOString()
-				.replace(/Z$/, '')
-				.replace(/\.000$/, '')
-				.replace(/:00$/, '');
-		}
+			return value instanceof Date ? dateInputValue(value) : String(value);
+		case 'datetime':
+			return datetimeInputValue(String(value));
 		case 'list': {
 			if (!Array.isArray(value)) return undefined;
 			const items = value.map((item) =>
@@ -459,9 +451,6 @@ export function rowCount(value: unknown): number {
 export function withoutRow(value: unknown, index: number): unknown[] {
 	return (Array.isArray(value) ? value : []).filter((_, row) => row !== index);
 }
-
-/** A `datetime-local` input's value: a date and a time, to the minute or finer, with no zone. */
-const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/;
 
 /** What an empty input means for a Field: `undefined`, or `null` for a Field only `nullable`. */
 function noValue(schema: z.ZodType): undefined | null {

@@ -5,9 +5,13 @@
 //                                     one page: { data, total }, or { data, hasNextPage } for
 //                                     posts, which stand in for a backend that can't count. Any
 //                                     other param filters any Resource by the Field it names:
-//                                     bare, the Field's value written as text equals it (eq);
-//                                     repeated, equals one of them (in). A param with an
-//                                     operator suffix (`name.contains`) is a 400 for now. Every
+//                                     bare, the Field's value written as text equals it exactly
+//                                     (eq); repeated, equals one of them (in). With a suffix:
+//                                     `name.contains=piz` holds the text, ignoring case;
+//                                     `.lt`, `.lte`, `.gt` and `.gte` compare numbers as numbers
+//                                     and text (ISO dates) as text. A record without the value
+//                                     matches none of them. Any other suffix, or a range bound
+//                                     that is no number on a number Field, is a 400. Every
 //                                     filter must match (AND). sort
 //                                     names any Field to sort by, with order asc (the default) or
 //                                     desc (anything else is a 400): numbers as numbers, text and
@@ -144,24 +148,63 @@ function sortBy(records: Records, key: string, order: 'asc' | 'desc'): Records {
 /** The list query's own params; any other names a filter. */
 const listQueryKeys = new Set(['page', 'perPage', 'sort', 'order', 'q']);
 
+/** The operators a filter param can name with a suffix, and whether a value passes each. */
+const suffixOperators: Record<string, (value: unknown, given: string) => boolean | undefined> = {
+	contains: (value, given) =>
+		typeof value === 'string' && value.toLowerCase().includes(given.toLowerCase()),
+	lt: (value, given) => compareBound(value, given, (order) => order < 0),
+	lte: (value, given) => compareBound(value, given, (order) => order <= 0),
+	gt: (value, given) => compareBound(value, given, (order) => order > 0),
+	gte: (value, given) => compareBound(value, given, (order) => order >= 0)
+};
+
 /**
- * The records that match every filter in the query, or `undefined` when a filter has an operator
- * suffix, which this backend can't do yet (the caller answers 400). For each Field a filter names,
- * the record's value written as text must be one of the values given (one for `eq`, several for
- * `in`).
+ * Whether a record's value passes a range bound: numbers as numbers, text (ISO dates) as text.
+ * A missing value passes no bound, and `undefined` means the bound is no number on a number.
+ */
+function compareBound(
+	value: unknown,
+	given: string,
+	passes: (order: number) => boolean
+): boolean | undefined {
+	if (typeof value === 'number') {
+		const bound = Number(given);
+		if (given.trim() === '' || !Number.isFinite(bound)) return undefined;
+		return passes(value - bound);
+	}
+	if (typeof value !== 'string') return false;
+	return passes(value < given ? -1 : value > given ? 1 : 0);
+}
+
+/**
+ * The records that match every filter in the query, or `undefined` when a filter can't be done
+ * (an unknown operator suffix, or a range bound that is no number on a number Field), which the
+ * caller answers with a 400. A bare param is `eq`, a repeated one `in`: the record's value written
+ * as text must be one of the values given, exactly. A param with a suffix (`name.contains`,
+ * `prepTimeMinutes.gte`) applies that operator (`suffixOperators`).
  */
 function matchingFilters(records: Records, query: URLSearchParams): Records | undefined {
-	const filters = new Map<string, string[]>();
-	for (const key of new Set(query.keys())) {
-		if (listQueryKeys.has(key)) continue;
-		if (key.includes('.')) return undefined;
-		filters.set(key, query.getAll(key));
+	const tests: ((record: Record<string, unknown>) => boolean | undefined)[] = [];
+	for (const param of new Set(query.keys())) {
+		if (listQueryKeys.has(param)) continue;
+		const dot = param.indexOf('.');
+		if (dot === -1) {
+			const values = query.getAll(param);
+			tests.push((record) => values.includes(String(record[param])));
+			continue;
+		}
+		const [key, operator] = [param.slice(0, dot), param.slice(dot + 1)];
+		if (!Object.hasOwn(suffixOperators, operator)) return undefined;
+		const given = query.get(param) ?? '';
+		tests.push((record) => suffixOperators[operator](record[key], given));
 	}
-	return records.filter((record) =>
-		[...filters].every(([key, values]) =>
-			values.includes(String((record as Record<string, unknown>)[key]))
-		)
-	);
+	const matching: Records = [];
+	for (const record of records) {
+		const results = tests.map((test) => test(record as Record<string, unknown>));
+		if (results.includes(undefined)) return undefined;
+		if (results.every(Boolean)) matching.push(record);
+	}
+	return matching;
 }
 
 let db = fresh();
@@ -235,7 +278,7 @@ const server = Bun.serve({
 			const name = segments[0];
 			let records = matchingFilters(db[name], url.searchParams);
 			if (records === undefined) {
-				return json({ message: 'Only eq and in filters are supported' }, 400);
+				return json({ message: 'A filter has an unknown operator or a bad value' }, 400);
 			}
 			const sort = url.searchParams.get('sort');
 			const order = url.searchParams.get('order') ?? 'asc';

@@ -8,6 +8,8 @@ export {
 	createListView,
 	type BulkDeleteResult,
 	type FilterControl,
+	type FilterInput,
+	type FilterInputType,
 	type FilterOption,
 	type KeptForm,
 	type ListSelection,

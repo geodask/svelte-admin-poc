@@ -11,8 +11,9 @@ export const posts = defineResource({
 	schema: z.object({
 		id: field(z.number(), { sortable: true }),
 		title: field(z.string(), { sortable: true }),
-		// A plain number for now; it becomes a Reference to users in M4.
-		userId: field(z.number(), { label: 'Author ID' }),
+		// A plain number for now; it becomes a Reference to users in M4. Filtered with one number
+		// input (`eq`), since it allows no range.
+		userId: field(z.number(), { label: 'Author ID', filterable: ['eq'] }),
 		status: field(z.enum(['draft', 'published']), { filterable: true }),
 		tags: z.array(z.string()),
 		body: field(z.string(), { list: false }),

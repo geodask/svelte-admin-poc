@@ -12,11 +12,23 @@ export const recipes = defineResource({
 	schema: z.object({
 		id: z.number(),
 		// The demo backend can sort by any Field; these four are offered as the list's sort.
-		name: field(z.string(), { placeholder: 'e.g. Classic Margherita Pizza', sortable: true }),
-		cuisine: field(z.string(), { placeholder: 'e.g. Italian' }),
+		// Filtered with a text box that matches part of the name (`contains`).
+		name: field(z.string(), {
+			placeholder: 'e.g. Classic Margherita Pizza',
+			sortable: true,
+			filterable: true
+		}),
+		// Narrowed to exact matches: a text box that filters with `eq`, never `contains`. The URL
+		// takes several values too, as `in`.
+		cuisine: field(z.string(), { placeholder: 'e.g. Italian', filterable: ['eq', 'in'] }),
 		// Filtered with a checkbox per difficulty: one gives `eq`, several `in`.
 		difficulty: field(z.enum(['Easy', 'Medium', 'Hard']), { filterable: true }),
-		prepTimeMinutes: field(z.number(), { label: 'Prep time (min)', sortable: true }),
+		// Filtered with a from and a to input (`gte` and `lte`).
+		prepTimeMinutes: field(z.number(), {
+			label: 'Prep time (min)',
+			sortable: true,
+			filterable: true
+		}),
 		servings: z.number(),
 		// Metadata set before `.optional()` still applies. Some recipes have no calorie count,
 		// and those come last in either order.
@@ -31,7 +43,8 @@ export const recipes = defineResource({
 			.min(1, 'Add at least one ingredient'),
 		// Counted by the backend: it starts at 0, and no form can set it.
 		reviewCount: field(z.number(), { readOnly: true }),
-		publishedAt: field(z.iso.datetime(), { sortable: true }),
+		// Filtered with a from and a to date and time, in UTC.
+		publishedAt: field(z.iso.datetime(), { sortable: true, filterable: true }),
 		// A number or a slug: no built-in Kind fits, so it shows as unknown. The forms have no
 		// input for it either, so it must be read-only (the backend sets it) or hidden.
 		sourceId: field(z.union([z.string(), z.number()]), { readOnly: true }),

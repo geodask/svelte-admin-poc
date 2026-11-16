@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { BACKEND_URL } from '../backend/config.ts';
-import { hydrated } from './fixtures.ts';
+import { expect, hydrated, test } from './fixtures.ts';
 
 /** The value shown beside a top-level Field label on the detail View. */
 export const valueOf = (page: Page, label: string) =>
@@ -134,4 +134,46 @@ export async function backendRequestsDuring(request: APIRequestContext, act: () 
 	const before = (await backendLog(request)).length;
 	await act();
 	return (await backendLog(request)).slice(before);
+}
+
+/** The Name cell of each recipe row: the third cell, after the selection checkbox and the ID. */
+export const names = (page: Page) => dataRows(page).locator('td:nth-child(3)');
+
+/** The toolbar's "Filters" disclosure, which shows the count of filters on. */
+export const filtersToggle = (page: Page) => page.locator('summary', { hasText: 'Filters' });
+
+/** The filter panel's form. */
+export const filterForm = (page: Page) => page.getByRole('form', { name: 'Filters' });
+
+/** Open the filter panel, unless it is open already (with JavaScript it stays open after Apply). */
+export async function openFilters(page: Page) {
+	if (!(await filterForm(page).isVisible())) await filtersToggle(page).click();
+	await expect(filterForm(page)).toBeVisible();
+}
+
+/** Open the filter panel, set its controls with `choose`, and apply them. */
+export async function applyFilters(
+	page: Page,
+	choose: (form: ReturnType<typeof filterForm>) => Promise<void>
+) {
+	await openFilters(page);
+	await choose(filterForm(page));
+	await filterForm(page).getByRole('button', { name: 'Apply' }).click();
+}
+
+/** Whether the current test runs with JavaScript on. */
+export const isJs = () => test.info().project.name === 'js';
+
+/**
+ * Expect the URL a filter form lands on: with JavaScript, the clean one; without, the same params
+ * plus the empty ones the form posts for the controls left blank (or at "Any"), wherever they fall.
+ */
+export async function expectLanded(page: Page, clean: string) {
+	if (isJs()) return expect(page).toHaveURL(clean);
+	const sorted = (url: URL) => {
+		const params = new URLSearchParams([...url.searchParams].filter(([, value]) => value !== ''));
+		params.sort();
+		return `${url.pathname}?${params}`;
+	};
+	await expect(page).toHaveURL((url) => sorted(url) === sorted(new URL(clean, url)));
 }
