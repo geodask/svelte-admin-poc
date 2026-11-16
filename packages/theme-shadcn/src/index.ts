@@ -1,8 +1,8 @@
 // The shadcn Theme's entry point and its public API. It renders the admin on top of the
 // headless core: the shell and the Views a route passes a Resource to. It also exports the
-// parts its list and detail Views are built from, so an app that replaces one View with a
-// route of its own can reuse them and still match the rest of the admin. Each part takes what
-// it needs as props (the core's list View helper, a Field, a value), never from context.
+// parts its Views are built from, so an app that replaces one View with a route of its own can
+// reuse them and still match the rest of the admin. Each part takes what it needs as props (the
+// core's View helpers, a Field, a value), never from context.
 // Nothing else in the package is public: import only from here.
 
 // The shell and the Views.
@@ -23,6 +23,11 @@ export {
 
 // Parts for a replaced detail View, driven by the core's `createDetailView`.
 export { default as DeleteDialog, type DeleteDialogProps } from './DeleteDialog.svelte';
+
+// Parts for a replaced create or edit View, driven by the core's `createFormView`.
+export { default as FieldInput, type FieldInputProps } from './FieldInput.svelte';
+export { default as FieldIssues, type FieldIssuesProps } from './FieldIssues.svelte';
+export { default as FormActions, type FormActionsProps } from './FormActions.svelte';
 
 // The Field display: a Field's value by its Kind, in a list View cell or on the detail View.
 export { default as FieldCell, type FieldCellProps } from './FieldCell.svelte';

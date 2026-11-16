@@ -144,6 +144,7 @@ export type Post = {
 	status: 'draft' | 'published';
 	tags: string[];
 	body: string;
+	viewCount: number;
 };
 
 const topics = [
@@ -174,7 +175,8 @@ export const posts: Post[] = Array.from({ length: 60 }, (_, index) => {
 		userId: (index % 5) + 1,
 		status: index % 4 === 3 ? 'draft' : 'published',
 		tags: [topic, index % 2 === 0 ? 'Guide' : 'Story'],
-		body: `Notes on ${topic.toLowerCase()}.`
+		body: `Notes on ${topic.toLowerCase()}.`,
+		viewCount: ((index * 37) % 500) + 10
 	};
 });
 

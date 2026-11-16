@@ -1,18 +1,31 @@
 // Type-level tests, checked by `tsc` (`bun run check`), never run. Each `@ts-expect-error`
 // fails the check if the line below it stops being a type error.
+import { form } from '$app/server';
 import type { Component } from 'svelte';
+import { expectTypeOf } from 'vitest';
 import { z } from 'zod';
 import {
 	defineAdmin,
 	defineResource,
+	field,
+	formSchema,
+	type CreateData,
+	type EditData,
+	type FormInput,
 	type IdOf,
 	type Provider,
+	type ProviderContext,
 	type RecordOf,
+	type RemoteFormFieldLike,
+	type RemoteFormLike,
 	type Resource,
-	type ResourceRemote
+	type ResourceRemote,
+	type StandardSchemaV1
 } from '@svelte-admin/core';
+import { restProvider } from '@svelte-admin/core/rest';
 import { serveResource } from '@svelte-admin/core/server';
 import {
+	createFormView,
 	createListView,
 	type BulkDeleteResult,
 	type ListSelection,
@@ -323,3 +336,270 @@ const productList: ListViewState = createListView(
 );
 void anyResource;
 void productList;
+
+// ---------------------------------------------------------------------------------------------
+// Typed form input: what a replaced create or edit View's `fields` are typed from, and what the
+// Provider's writes receive. The Resources mirror the demo's recipes and users.
+
+const formRecipes = defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	schema: z.object({
+		id: z.number(),
+		name: field(z.string(), { placeholder: 'e.g. Classic Margherita Pizza' }),
+		difficulty: z.enum(['Easy', 'Medium', 'Hard']),
+		servings: z.number(),
+		caloriesPerServing: field(z.number(), { label: 'Calories' }).optional(),
+		vegetarian: z.boolean(),
+		tags: field(z.array(z.string()), { input: 'lines' }),
+		ingredients: z
+			.array(z.object({ name: z.string(), quantity: z.string().optional() }))
+			.min(1, 'Add at least one ingredient'),
+		reviewCount: field(z.number(), { readOnly: true }),
+		publishedAt: z.iso.datetime(),
+		sourceId: field(z.union([z.string(), z.number()]), { readOnly: true }),
+		nutrition: z.object({ proteinGrams: z.number(), carbsGrams: z.number() }),
+		instructions: field(z.string(), { input: 'textarea' }),
+		internalNotes: field(z.string(), { hidden: true })
+	})
+});
+
+const formUsers = defineResource({
+	name: 'users',
+	label: 'Users',
+	schema: z.object({
+		id: z.number(),
+		name: z.string(),
+		email: field(z.email(), { readOnly: 'afterCreate' }),
+		phone: z.string().optional(),
+		active: z.boolean()
+	})
+});
+
+// Each editable Field maps to what its input sends: text for a string, an enum, a date and a
+// list in lines, a number for a number, an array for a list in rows, and nested values for rows
+// and a group. Booleans are optional, since an unchecked checkbox sends nothing. The id and the
+// read-only and hidden Fields are left out.
+expectTypeOf<FormInput<typeof formRecipes, 'create'>>().toEqualTypeOf<{
+	name: string;
+	difficulty: string;
+	servings: number;
+	caloriesPerServing?: number;
+	vegetarian?: boolean;
+	tags: string;
+	ingredients: { name: string; quantity?: string }[];
+	publishedAt: string;
+	nutrition: { proteinGrams: number; carbsGrams: number };
+	instructions: string;
+}>();
+expectTypeOf<FormInput<typeof formRecipes, 'create'>>().not.toHaveProperty('id');
+expectTypeOf<FormInput<typeof formRecipes, 'create'>>().not.toHaveProperty('reviewCount');
+expectTypeOf<FormInput<typeof formRecipes, 'create'>>().not.toHaveProperty('sourceId');
+expectTypeOf<FormInput<typeof formRecipes, 'create'>>().not.toHaveProperty('internalNotes');
+expectTypeOf<FormInput<typeof formRecipes, 'edit'>>().not.toHaveProperty('reviewCount');
+expectTypeOf<FormInput<typeof formRecipes, 'edit'>>().not.toHaveProperty('internalNotes');
+
+// An `'afterCreate'` Field is on the create form only. The edit form carries the record's typed
+// id as its hidden input instead, which also types `update.for(id)`.
+expectTypeOf<FormInput<typeof formUsers, 'create'>>().toEqualTypeOf<{
+	name: string;
+	email: string;
+	phone?: string;
+	active?: boolean;
+}>();
+expectTypeOf<FormInput<typeof formUsers, 'edit'>>().toEqualTypeOf<{
+	id: number;
+	name: string;
+	phone?: string;
+	active?: boolean;
+}>();
+
+// The form schema's Standard Schema types are `FormInput` in, and the Provider's data out.
+type SchemaInput<S> = S extends StandardSchemaV1<infer I, unknown> ? I : never;
+type SchemaOutput<S> = S extends StandardSchemaV1<unknown, infer O> ? O : never;
+const recipeCreateSchema = formSchema(formRecipes, 'create');
+const userEditSchema = formSchema(formUsers, 'edit');
+void recipeCreateSchema;
+void userEditSchema;
+expectTypeOf<SchemaInput<typeof recipeCreateSchema>>().toEqualTypeOf<
+	FormInput<typeof formRecipes, 'create'>
+>();
+expectTypeOf<SchemaOutput<typeof recipeCreateSchema>>().toEqualTypeOf<
+	CreateData<typeof formRecipes>
+>();
+expectTypeOf<SchemaInput<typeof userEditSchema>>().toEqualTypeOf<
+	FormInput<typeof formUsers, 'edit'>
+>();
+expectTypeOf<SchemaOutput<typeof userEditSchema>>().toEqualTypeOf<
+	EditData<typeof formUsers> & { id: number }
+>();
+
+// `CreateData` and `EditData` are the record as the schema gives it, minus what the form leaves out.
+expectTypeOf<CreateData<typeof formRecipes>>().toEqualTypeOf<{
+	name: string;
+	difficulty: 'Easy' | 'Medium' | 'Hard';
+	servings: number;
+	caloriesPerServing?: number | undefined;
+	vegetarian: boolean;
+	tags: string[];
+	ingredients: { name: string; quantity?: string | undefined }[];
+	publishedAt: string;
+	nutrition: { proteinGrams: number; carbsGrams: number };
+	instructions: string;
+}>();
+expectTypeOf<CreateData<typeof formUsers>>().toEqualTypeOf<{
+	name: string;
+	email: string;
+	phone?: string | undefined;
+	active: boolean;
+}>();
+expectTypeOf<EditData<typeof formUsers>>().toEqualTypeOf<{
+	name: string;
+	phone?: string | undefined;
+	active: boolean;
+}>();
+
+// Kit's `form()` takes the form schema as it is: every boolean in its input is optional.
+const recipeForm = form(formSchema(formRecipes, 'create'), async (data) => {
+	const name: string = data.name;
+	// @ts-expect-error the backend owns `reviewCount`, so the form never gives it
+	void data.reviewCount;
+	void name;
+});
+// `fields` is typed from the Resource.
+const nameField = recipeForm.fields.name.as('text');
+void nameField;
+// @ts-expect-error a read-only Field has no input on the form
+void recipeForm.fields.reviewCount;
+const userUpdate = form(formSchema(formUsers, 'edit'), async () => {});
+// The edit form's instance is keyed by the record's typed id.
+void userUpdate.for(1);
+// @ts-expect-error a user id is a number
+void userUpdate.for('1');
+// @ts-expect-error users' email is set once, on create
+void userUpdate.fields.email;
+
+// The Provider's writes get exactly that data, and `serveResource` infers it from the Resource.
+type FormRecipe = RecordOf<typeof formRecipes>;
+const formRecipeProvider: Provider<
+	FormRecipe,
+	number,
+	CreateData<typeof formRecipes>,
+	EditData<typeof formRecipes>
+> = {
+	getList: async () => ({ data: [], total: 0 }),
+	getOne: async () => ({}) as FormRecipe,
+	create: async (_ctx, data) => {
+		// @ts-expect-error `create` never receives a Field the backend owns
+		void data.reviewCount;
+		return { ...data, id: 1, reviewCount: 0, sourceId: 'local-1', internalNotes: '' };
+	},
+	update: async (_ctx, { id, data }) => ({
+		...data,
+		id,
+		reviewCount: 0,
+		sourceId: 'local-1',
+		internalNotes: ''
+	}),
+	deleteOne: async () => {}
+};
+serveResource(formRecipes, formRecipeProvider);
+serveResource(formRecipes, restProvider('https://api.example.com').for(formRecipes));
+
+// A Provider whose `create` expects data the form never sends is rejected.
+const wrongCreateProvider = {
+	...formRecipeProvider,
+	create: async (
+		_ctx: ProviderContext,
+		data: CreateData<typeof formRecipes> & { reviewCount: number }
+	) => ({ ...data, id: 1, sourceId: 'local-1', internalNotes: '' }) as FormRecipe
+};
+// @ts-expect-error `create` would need `reviewCount`, which the form never gives
+serveResource(formRecipes, wrongCreateProvider);
+
+// A Provider whose `update` expects users' email, set once on create, is rejected too.
+type FormUser = RecordOf<typeof formUsers>;
+const wrongUpdateProvider: Provider<FormUser> = {
+	getList: async () => ({ data: [], total: 0 }),
+	getOne: async (_ctx, id) => ({ id, name: 'Ada', email: 'ada@example.com', active: true }),
+	create: async (_ctx, data) => ({ id: 1, ...data }),
+	update: async (_ctx, { id, data }) => ({ id, ...data }),
+	deleteOne: async () => {}
+};
+// @ts-expect-error `update` would need `email`, which the edit form never gives
+serveResource(formUsers, wrongUpdateProvider);
+
+// The brand survives `optional`, `nullable` and `default`, whether `field()` sits inside or
+// outside them, as the runtime lookup does.
+const wrapped = defineResource({
+	name: 'wrapped',
+	label: 'Wrapped',
+	schema: z.object({
+		id: z.string(),
+		outerOptional: field(z.number(), { readOnly: true }).optional(),
+		innerOptional: field(z.number().optional(), { readOnly: true }),
+		outerNullable: field(z.string(), { hidden: true }).nullable(),
+		innerDefault: field(z.string().default('draft'), { readOnly: 'afterCreate' }),
+		outerDefault: field(z.boolean(), { readOnly: true }).default(false),
+		twice: field(z.string(), { readOnly: 'afterCreate' }).optional().nullable(),
+		chained: field(z.string(), { hidden: true }).min(1),
+		labelled: field(z.string(), { label: 'Plain' }).optional()
+	})
+});
+expectTypeOf<keyof FormInput<typeof wrapped, 'create'>>().toEqualTypeOf<
+	'innerDefault' | 'twice' | 'labelled'
+>();
+expectTypeOf<keyof FormInput<typeof wrapped, 'edit'>>().toEqualTypeOf<'id' | 'labelled'>();
+expectTypeOf<keyof CreateData<typeof wrapped>>().toEqualTypeOf<
+	'innerDefault' | 'twice' | 'labelled'
+>();
+expectTypeOf<keyof EditData<typeof wrapped>>().toEqualTypeOf<'labelled'>();
+void wrapped;
+// `field()` still returns a schema of the same Zod type.
+const plain: z.ZodOptional<z.ZodNumber> = field(z.number(), { readOnly: true }).optional();
+void plain;
+
+// `createFormView` keeps the remote form's type, so a replaced create or edit View gets typed
+// `fields` from the remote functions `serveResource` returns.
+const formRecipesRemote = serveResource(formRecipes, formRecipeProvider);
+const recipeCreateView = createFormView(formRecipes, formRecipesRemote, 'create');
+void recipeCreateView.form.fields.name.as('text');
+void recipeCreateView.form.fields.servings.as('number');
+void recipeCreateView.form.fields.vegetarian.as('checkbox');
+void recipeCreateView.form.fields.ingredients[0].name.as('text');
+// @ts-expect-error the backend owns `reviewCount`, so the create form has no input for it
+void recipeCreateView.form.fields.reviewCount;
+// @ts-expect-error hidden Fields are in no form
+void recipeCreateView.form.fields.internalNotes;
+// @ts-expect-error `servings` is a number input, not a text one
+void recipeCreateView.form.fields.servings.as('text');
+
+const formUsersRemote = serveResource(
+	formUsers,
+	{} as Provider<
+		RecordOf<typeof formUsers>,
+		number,
+		CreateData<typeof formUsers>,
+		EditData<typeof formUsers>
+	>
+);
+const userEditView = createFormView(formUsers, formUsersRemote, 'edit', 1);
+void userEditView.form.fields.id.as('hidden', 1);
+void userEditView.form.fields.name.as('text');
+// @ts-expect-error users' email is set once, on create, so the edit form has no input for it
+void userEditView.form.fields.email;
+// @ts-expect-error a user id is a number
+createFormView(formUsers, formUsersRemote, 'edit', '1');
+
+// The typed inputs are what the Theme's parts take for one Field, as are the untyped ones.
+const typedInput: RemoteFormFieldLike = recipeCreateView.form.fields.name;
+const typedRows: RemoteFormFieldLike = recipeCreateView.form.fields.ingredients;
+const untypedInput: RemoteFormFieldLike = recipeCreateView.inputs.name;
+void typedInput;
+void typedRows;
+void untypedInput;
+
+// The Theme's stock Views, which take any Resource, get the untyped form.
+const anyCreateView = createFormView(formRecipes as Resource, {} as ResourceRemote, 'create');
+const looseForm: RemoteFormLike = anyCreateView.form;
+void looseForm;

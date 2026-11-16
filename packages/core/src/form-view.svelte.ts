@@ -8,7 +8,13 @@ import {
 } from './form-spec.ts';
 import { listPathOfCreateView, listPathOfEditView, recordPath } from './ids.ts';
 import { recordTitle } from './record-title.ts';
-import type { RemoteFormIssue, RemoteFormLike, RemoteRead, ResourceRemote } from './remote.ts';
+import type {
+	RemoteFormFields,
+	RemoteFormIssue,
+	RemoteFormLike,
+	RemoteRead,
+	ResourceRemote
+} from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /**
@@ -32,9 +38,15 @@ import type { IdOf, RecordOf, Resource } from './resource.ts';
  * it fills them with the record's values, on the server too, and Kit skips it after a failed
  * submit, so the user's input survives.
  *
+ * `form` keeps the type of the remote form passed in, so a View that replaces the create or edit
+ * View gets `form.fields` typed from the Resource (`FormInput`): `form.fields.name` is checked,
+ * and a Field no form sets has no input there. `inputs` holds the same inputs untyped, for
+ * parts that render any Field, such as the Theme's `FieldInput`.
+ *
  * @example
  * const view = createFormView(users, remote, 'create');
  * // <form {...view.form} novalidate oninput={view.revalidate}>
+ * //   <input {...view.form.fields.name.as('text')} />
  *
  * @example
  * const view = createFormView(users, remote, 'edit', id);
@@ -43,17 +55,19 @@ import type { IdOf, RecordOf, Resource } from './resource.ts';
  * // <form {...view.form} novalidate oninput={view.revalidate}>
  * //   <input {...view.form.fields.id.as('hidden', view.id)} />
  */
-export function createFormView<R extends Resource>(
+export function createFormView<
+	R extends Resource,
+	Remote extends ResourceRemote<RecordOf<R>, IdOf<R>>
+>(resource: R, remote: Remote, mode: 'create'): FormView<R, 'create', Remote['create']>;
+export function createFormView<
+	R extends Resource,
+	Remote extends ResourceRemote<RecordOf<R>, IdOf<R>>
+>(
 	resource: R,
-	remote: ResourceRemote<RecordOf<R>, IdOf<R>>,
-	mode: 'create'
-): FormView<R, 'create'>;
-export function createFormView<R extends Resource>(
-	resource: R,
-	remote: ResourceRemote<RecordOf<R>, IdOf<R>>,
+	remote: Remote,
 	mode: 'edit',
 	id: IdOf<R>
-): FormView<R, 'edit'>;
+): FormView<R, 'edit', ReturnType<Remote['update']['for']>>;
 export function createFormView<R extends Resource>(
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>, IdOf<R>>,
@@ -77,8 +91,17 @@ export function createFormView<R extends Resource>(
 		mode,
 		/** The record's id, for the edit form's hidden `id` input. `undefined` on create. */
 		id: editing ? id : undefined,
-		/** The remote form: spread it onto the `<form>`, and read each input from `form.fields`. */
+		/**
+		 * The remote form: spread it onto the `<form>`, and read each input from `form.fields`,
+		 * typed from the Resource when the remote form is.
+		 */
 		form,
+		/**
+		 * The form's inputs by key, untyped: the same as `form.fields`, for parts that render any
+		 * Field (`<FieldInput {spec} field={view.inputs[spec.key]} />`) and the edit form's hidden
+		 * `id` input.
+		 */
+		inputs: form.fields as RemoteFormFields,
 		/** The inputs to render, one per Field the form maps, in schema order. */
 		spec,
 		/** The record being edited. Await it: `$derived(await view.query)`. Only on edit. */
@@ -135,12 +158,16 @@ export function createFormView<R extends Resource>(
 	};
 }
 
-/** What `createFormView` returns, for a Resource and a mode. */
-export type FormView<R extends Resource, M extends FormMode> = {
+/**
+ * What `createFormView` returns, for a Resource, a mode and the type of its remote form: Kit's
+ * typed form for an app's own remote functions, or the untyped `RemoteFormLike`.
+ */
+export type FormView<R extends Resource, M extends FormMode, F = RemoteFormLike> = {
 	readonly resource: R;
 	readonly mode: M;
 	readonly id: IdOf<R> | undefined;
-	readonly form: RemoteFormLike;
+	readonly form: F;
+	readonly inputs: RemoteFormFields;
 	readonly spec: readonly FormFieldSpec[];
 	readonly query: RemoteRead<RecordOf<R>>;
 	refresh(): Promise<void>;
@@ -153,5 +180,5 @@ export type FormView<R extends Resource, M extends FormMode> = {
 	revalidate(): void;
 };
 
-/** What `createFormView` returns. */
+/** What `createFormView` returns, untyped: what the Theme's create and edit Views work with. */
 export type FormViewState<R extends Resource = Resource> = FormView<R, FormMode>;

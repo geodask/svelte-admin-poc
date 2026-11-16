@@ -10,8 +10,9 @@
 //                                     and matched against each record's id written as text
 //   POST /{resource}                  create a record from the JSON body, with the next id (the
 //                                     highest plus one) and the Fields only the backend sets
-//                                     (recipes' sourceId, reviewCount and internalNotes), whatever
-//                                     the body says; answers 201 with the created record. A user
+//                                     (recipes' sourceId, reviewCount and internalNotes, posts'
+//                                     viewCount), whatever the body says; answers 201 with the
+//                                     created record. A user
 //                                     whose email is already taken is a 422 with an issue on email
 //   PUT  /{resource}/{id}             replace a record's editable Fields with the JSON body, keeping
 //                                     its id and the Fields no edit can set (the backend's own, and
@@ -61,12 +62,14 @@ const backendOwned: Record<string, (id: number) => Record<string, unknown>> = {
 		reviewCount: 0,
 		sourceId: `local-${id}`,
 		internalNotes: 'Created in the admin'
-	})
+	}),
+	posts: () => ({ viewCount: 0 })
 };
 
 /** The Fields a PUT keeps as they are, since no edit can set them: the backend's own, and more. */
 const keptOnUpdate: Record<string, string[]> = {
 	recipes: ['reviewCount', 'sourceId', 'internalNotes'],
+	posts: ['viewCount'],
 	// Set once on create.
 	users: ['email']
 };

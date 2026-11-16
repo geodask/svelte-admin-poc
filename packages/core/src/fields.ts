@@ -41,15 +41,86 @@ export type FieldInputChoice = 'textarea' | 'rows' | 'lines';
 /** The Zod registry that holds each Field's metadata. */
 export const fieldRegistry = z.registry<FieldMeta>();
 
+/** The key of a Field schema's type-level brand. It exists in types only, never at runtime. */
+declare const fieldBrand: unique symbol;
+
+/**
+ * What `field()` records in the type of the schema it returns: the metadata the forms' types
+ * depend on. A key the metadata doesn't set (or sets with a type wider than one value) is
+ * `undefined`.
+ */
+export type FieldBrand = {
+	readOnly: FieldReadOnly | undefined;
+	hidden: boolean | undefined;
+	input: FieldInputChoice | undefined;
+};
+
+/** One key of the metadata as a literal type, or `undefined` when it isn't set. */
+type MetaValue<M, K extends keyof FieldBrand> = M extends { readonly [P in K]: infer V }
+	? V
+	: undefined;
+
+/**
+ * A Field's schema as `field()` returns it: the same Zod type, branded in its type with the
+ * metadata the forms' types depend on (`readOnly`, `hidden` and `input`), so `FormInput`,
+ * `CreateData` and `EditData` can leave out the Fields no form sets. The brand survives
+ * `.optional()`, `.nullable()` and `.default()`, which keep the schema's type inside them.
+ */
+export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
+	readonly [fieldBrand]: {
+		readOnly: MetaValue<M, 'readOnly'>;
+		hidden: MetaValue<M, 'hidden'>;
+		input: MetaValue<M, 'input'>;
+	};
+};
+
 /**
  * Attach metadata to a Field's schema and return the same schema, so it can sit inline in
  * `z.object({...})`. It may go inside or outside `.optional()`, `.nullable()` and `.default()`:
- * `field(z.number(), { label: 'Calories' }).optional()` keeps its label.
+ * `field(z.number(), { label: 'Calories' }).optional()` keeps its label. Its type is branded with
+ * `readOnly`, `hidden` and `input`, so write the metadata inline (or `as const`) for the form
+ * types to see it: a read-only Field is then left out of a replaced form View's typed `fields`
+ * and of the Provider's write data.
  */
-export function field<T extends z.ZodType>(schema: T, meta: FieldMeta): T {
+export function field<T extends z.ZodType, const M extends FieldMeta>(
+	schema: T,
+	meta: M
+): FieldSchema<T, M> {
 	(schema as z.ZodType).register(fieldRegistry, meta);
-	return schema;
+	return schema as FieldSchema<T, M>;
 }
+
+/** The schema inside an `optional`, `nullable` or `default` wrapper, in types; `never` for any other. */
+type InnerSchema<S> =
+	S extends z.ZodOptional<infer I>
+		? I
+		: S extends z.ZodNullable<infer I>
+			? I
+			: S extends z.ZodDefault<infer I>
+				? I
+				: never;
+
+/** A Field schema's type inside any `optional`, `nullable` and `default` wrappers. */
+export type UnwrappedSchema<S> = [InnerSchema<S>] extends [never]
+	? S
+	: UnwrappedSchema<InnerSchema<S>>;
+
+/** Whether a Field schema's type sits in any `optional`, `nullable` or `default` wrapper. */
+export type IsWrapped<S> = [InnerSchema<S>] extends [never] ? false : true;
+
+/**
+ * One key of a Field's branded metadata, looked up on the schema's type and every wrapper
+ * inside it, as `describeField` does at runtime: where both set it, the outer one wins.
+ */
+export type FieldBrandOf<S, K extends keyof FieldBrand> = (
+	S extends { readonly [fieldBrand]: infer B extends FieldBrand } ? B[K] : undefined
+) extends infer Own
+	? [Own] extends [undefined]
+		? [InnerSchema<S>] extends [never]
+			? undefined
+			: FieldBrandOf<InnerSchema<S>, K>
+		: Own
+	: never;
 
 /** The built-in Kinds a Field's Zod type maps to. Named Kinds and Kind registration come later. */
 export type KindName =

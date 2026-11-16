@@ -1,6 +1,14 @@
 // The core's server-only entry point. It imports `$app/server`, so only `.remote.ts` files and
 // server-only modules may import it. The shared entry (`@svelte-admin/core`) never re-exports it.
-import { command, form, getRequestEvent, query, requested } from '$app/server';
+import {
+	command,
+	form,
+	getRequestEvent,
+	query,
+	requested,
+	type RemoteForm,
+	type RemoteFormInput
+} from '$app/server';
 import { error, invalid, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { FieldError, NotFoundError, ProviderError } from './errors.ts';
@@ -10,7 +18,10 @@ import {
 	toFormSpec,
 	type CreateData,
 	type EditData,
-	type FormMode
+	type FormInput,
+	type FormMode,
+	type FormOutput,
+	type FormValues
 } from './form-spec.ts';
 import {
 	decodeSegment,
@@ -24,6 +35,7 @@ import { listParamsSchema } from './list-params.ts';
 import type { ListResult, Provider, ProviderContext } from './provider.ts';
 import type { DeleteManyReport, ServedFailure } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
+import type { StandardSchemaV1 } from './standard-schema.ts';
 import { describeUnexpected, UNEXPECTED_MESSAGE } from './unexpected.ts';
 
 /** How many of the client's list queries a write refreshes at most. */
@@ -111,7 +123,7 @@ export function serveResource<R extends Resource>(
 		return record as RecordOf<R>;
 	});
 
-	const create = form(formSchema(resource, 'create'), async (data) => {
+	const create = form(kitFormSchema(resource, 'create'), async (data) => {
 		// Before the Provider is called, so a form posted from the wrong page creates nothing.
 		const { pathname } = getRequestEvent().url;
 		const listPath = listPathOfCreateView(pathname);
@@ -129,7 +141,7 @@ export function serveResource<R extends Resource>(
 		redirect(303, hasPathSegment(id) ? recordPath(listPath, id) : listPath);
 	});
 
-	const update = form(formSchema(resource, 'edit'), async ({ id, ...data }) => {
+	const update = form(kitFormSchema(resource, 'edit'), async ({ id, ...data }) => {
 		// Before the Provider is called, so a form posted from the wrong page changes nothing:
 		// the page must be the edit View of the record the hidden id names.
 		const { pathname } = getRequestEvent().url;
@@ -190,8 +202,32 @@ export function serveResource<R extends Resource>(
 		return failure ? { deleted, failure } : { deleted };
 	});
 
-	return { getList, getOne, create, update, deleteOne, deleteMany };
+	return {
+		getList,
+		getOne,
+		// Typed from the Resource, so an app's replaced create or edit View gets typed `fields`.
+		create: create as unknown as WithInput<typeof create, FormInput<R, 'create'>>,
+		update: update as unknown as WithInput<typeof update, FormInput<R, 'edit'>>,
+		deleteOne,
+		deleteMany
+	};
 }
+
+/**
+ * A Resource's form schema as `serveResource` hands it to Kit's `form()`, with its input typed
+ * loosely. Kit checks a form schema's input type for booleans that aren't optional, a check it
+ * can't settle for a Resource that is still a type parameter. `FormInput` makes every boolean
+ * optional (the type tests check that Kit takes `formSchema` as it is for a concrete Resource),
+ * and the remote forms `serveResource` returns are typed with it.
+ */
+function kitFormSchema<R extends Resource, M extends FormMode>(resource: R, mode: M) {
+	return formSchema(resource, mode) as StandardSchemaV1<FormValues, FormOutput<R, M>>;
+}
+
+/** A remote form typed with another input type, keeping its output. */
+type WithInput<F, Input extends RemoteFormInput> =
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any -- whatever its input type was
+	F extends RemoteForm<any, infer Output> ? RemoteForm<Input, Output> : never;
 
 /**
  * Why a bulk delete stopped, reported rather than thrown: a Provider error keeps its status and

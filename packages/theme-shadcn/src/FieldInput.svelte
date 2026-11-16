@@ -13,31 +13,40 @@
 	a fieldset of its Fields' inputs. A list, rows or a group renders its items' and Fields'
 	inputs with this same component, and shows its own issues (a rule about the whole Field)
 	at its foot, while an item's issues show under that item's input.
--->
-<script lang="ts">
-	import { onMount, type Snippet } from 'svelte';
-	import {
-		rowCount,
-		withoutRow,
-		type FormInputSpec,
-		type RemoteFormField
-	} from '@svelte-admin/core';
-	import FieldInput from './FieldInput.svelte';
-	import FieldIssues from './FieldIssues.svelte';
 
-	let {
-		spec,
-		field,
-		labelHidden = false
-	}: {
+	A Theme part, exported for a replaced create or edit View: give it one Field's spec from the
+	core's `createFormView` and that Field's input from the view's form.
+-->
+<script module lang="ts">
+	import type { FormInputSpec, RemoteFormFieldLike } from '@svelte-admin/core';
+
+	export type FieldInputProps = {
+		/** The Field's input spec, one of the core's `createFormView(...).spec`. */
 		spec: FormInputSpec;
-		field: RemoteFormField;
+		/**
+		 * The Field's input on the remote form: typed (`view.form.fields.status`) or untyped
+		 * (`view.inputs.status`).
+		 */
+		field: RemoteFormFieldLike;
 		/**
 		 * Keep the label for assistive technology only, e.g. for each item of a list. Only for a
 		 * Field that is one input, not a checkbox.
 		 */
 		labelHidden?: boolean;
-	} = $props();
+	};
+</script>
+
+<script lang="ts">
+	import { onMount, type Snippet } from 'svelte';
+	import { rowCount, withoutRow, type RemoteFormField } from '@svelte-admin/core';
+	import FieldInput from './FieldInput.svelte';
+	import FieldIssues from './FieldIssues.svelte';
+
+	let { spec, field: given, labelHidden = false }: FieldInputProps = $props();
+
+	// Every input of a remote form is one at runtime, typed or not: read its items, its Fields
+	// and its attributes untyped, as for any Field.
+	const field = $derived(given as RemoteFormField);
 
 	type ListSpec = Extract<FormInputSpec, { kind: 'list' }>;
 	type RowsSpec = Extract<FormInputSpec, { kind: 'rows' }>;

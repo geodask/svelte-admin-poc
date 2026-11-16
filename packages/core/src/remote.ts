@@ -1,4 +1,4 @@
-import type { FormInput } from './form-spec.ts';
+import type { FormValues } from './form-spec.ts';
 import type { ListParams, ListResult } from './provider.ts';
 import type { StandardSchemaV1 } from './standard-schema.ts';
 
@@ -12,10 +12,10 @@ export type RemoteRead<T> = Promise<T> & { refresh(): Promise<void> };
 export type RemoteFormIssue = { message: string; path: (string | number)[] };
 
 /**
- * One input of a remote form, or a set of them (a list, a row or a group), as a Theme renders
- * it: `as(type)` gives the attributes to spread onto an input (its name, type, value and
- * `aria-invalid`), and `issues()` the issues that belong to it itself. A list's items and a
- * row's or group's Fields are read by index or key: `fields.tags[0]`,
+ * One input of a remote form, or a set of them (a list, a row or a group), untyped, as a Theme
+ * renders any Field: `as(type)` gives the attributes to spread onto an input (its name, type,
+ * value and `aria-invalid`), and `issues()` the issues that belong to it itself. A list's items
+ * and a row's or group's Fields are read by index or key: `fields.tags[0]`,
  * `fields.ingredients[2].name`. (Kit's own type is stricter; this is the part the core relies
  * on.)
  */
@@ -31,13 +31,50 @@ export type RemoteFormField = {
 	as(type: 'hidden', value: string | number): Record<string, unknown>;
 } & { readonly [key: string | number]: RemoteFormField };
 
+/**
+ * Any one input of a remote form, or set of them, typed or not: what a Theme part that renders
+ * one Field takes. Kit's typed fields (`form.fields.title`, `form.fields.ingredients`) fit it,
+ * and so does an untyped `RemoteFormField`. Every one of them is a `RemoteFormField` at runtime,
+ * so such a part reads it as one. (It leaves out `as`: Kit types it per input, so a text
+ * input's `as` refuses `'number'`, and no one signature fits them all.)
+ */
+export type RemoteFormFieldLike = {
+	value(): unknown;
+	// A method, so Kit's typed `set` fits it.
+	set(value: unknown): unknown;
+	issues(): RemoteFormIssue[] | undefined;
+};
+
 /** The input types a Theme renders a form's Fields with. */
 export type RemoteFormInputType =
 	'text' | 'email' | 'url' | 'number' | 'checkbox' | 'select' | 'date' | 'datetime-local';
 
 /**
+ * A remote form's `fields` as the core relies on them for any Resource: what belongs to the form
+ * as a whole. Its inputs are read by key, typed from the Resource on the form `serveResource`
+ * returns (`form.fields.name`), or untyped as `RemoteFormFields`.
+ */
+export type RemoteFormFieldsLike = {
+	/**
+	 * The issues of the form as a whole, which belong to no input: e.g. a conflict the backend
+	 * reported for a save.
+	 */
+	issues(): RemoteFormIssue[] | undefined;
+	allIssues(): RemoteFormIssue[] | undefined;
+	/**
+	 * Set every input's value, e.g. the edit form's prefill. Kit leaves a submitted form's input
+	 * alone, so a failed save keeps what the user typed. (A method, so Kit's typed `set` fits.)
+	 */
+	set(values: FormValues): unknown;
+};
+
+/** A remote form's `fields`, untyped: what belongs to the whole form, and each input by its key. */
+export type RemoteFormFields = RemoteFormFieldsLike & { readonly [key: string]: RemoteFormField };
+
+/**
  * A remote form, as the core's helpers and a Theme use it: spread it onto a `<form>`, read its
- * inputs from `fields`, and watch `pending` while a submit is in flight.
+ * inputs from `fields`, and watch `pending` while a submit is in flight. The forms
+ * `serveResource` returns fit it, whatever their Resource.
  */
 export type RemoteFormLike = {
 	readonly method: 'POST';
@@ -45,21 +82,9 @@ export type RemoteFormLike = {
 	readonly pending: number;
 	/** Whether the form has been submitted at least once. */
 	readonly submitted: boolean;
-	readonly fields: { readonly [key: string]: RemoteFormField } & {
-		/**
-		 * The issues of the form as a whole, which belong to no input: e.g. a conflict the
-		 * backend reported for a save.
-		 */
-		issues(): RemoteFormIssue[] | undefined;
-		allIssues(): RemoteFormIssue[] | undefined;
-		/**
-		 * Set every input's value, e.g. the edit form's prefill. Kit leaves a submitted form's
-		 * input alone, so a failed save keeps what the user typed.
-		 */
-		set(values: FormInput): void;
-	};
+	readonly fields: RemoteFormFieldsLike;
 	/** Check the input in the browser with `schema` before it is sent. */
-	preflight(schema: StandardSchemaV1<FormInput, unknown>): RemoteFormLike;
+	preflight(schema: StandardSchemaV1<FormValues, unknown>): RemoteFormLike;
 	/** Check the input again now, e.g. as the user edits after a failed submit. */
 	validate(options?: { preflightOnly?: boolean }): Promise<void>;
 };

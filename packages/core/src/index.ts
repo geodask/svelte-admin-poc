@@ -36,6 +36,9 @@ export type {
 	DeleteManyReport,
 	RemoteCommandCall,
 	RemoteFormField,
+	RemoteFormFieldLike,
+	RemoteFormFields,
+	RemoteFormFieldsLike,
 	RemoteFormInputType,
 	RemoteFormIssue,
 	RemoteFormLike,
@@ -52,10 +55,12 @@ export {
 	type FieldInputChoice,
 	type FieldMeta,
 	type FieldReadOnly,
+	type FieldSchema,
 	type KindName
 } from './fields.ts';
 export {
 	formSchema,
+	isInputSpec,
 	rowCount,
 	toFormSpec,
 	toFormValues,
@@ -67,6 +72,7 @@ export {
 	type FormInputSpec,
 	type FormMode,
 	type FormOutput,
-	type FormReadOnlySpec
+	type FormReadOnlySpec,
+	type FormValues
 } from './form-spec.ts';
 export type { StandardSchemaV1 } from './standard-schema.ts';
