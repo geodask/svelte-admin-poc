@@ -88,13 +88,34 @@ export type ResourceRemote<T = any, Id = any> = {
 	 * It rejects with `{ status, body: { message } }` when the delete fails.
 	 */
 	deleteOne: (id: Id) => RemoteCommandCall;
+	/**
+	 * Delete many records: one to 1,000 ids, duplicates ignored. A remote command, so it runs only
+	 * with JavaScript: call `deleteMany(ids).updates(getList)`. It reports how many were deleted,
+	 * and why it stopped if it failed partway, rather than rejecting, so the list queries are
+	 * refreshed either way. The deleted ids are always the first ones sent. It rejects only for
+	 * invalid input (an empty array, more than 1,000 ids, or an id of the wrong type) or when the
+	 * server can't be reached.
+	 */
+	deleteMany: (ids: Id[]) => RemoteCommandCall<DeleteManyReport>;
 };
 
+/** Why a delete failed: a message safe to show, and the HTTP status when the server answered. */
+export type DeleteFailure = { status?: number; message: string };
+
 /**
- * One call of a remote command: a promise of its completion, and `updates` to name the queries
- * the server refreshes along with it (e.g. a Resource's `getList`, for all its instances).
+ * What a bulk delete reports: how many records it deleted (the first that many ids sent, in
+ * order), and, when it stopped before the end, why.
  */
-export type RemoteCommandCall = Promise<void> & {
+export type DeleteManyReport = { deleted: number } | { deleted: number; failure: ServedFailure };
+
+/** A failure the server reports with its status: a Provider error's, or 500 for any other. */
+export type ServedFailure = DeleteFailure & { status: number };
+
+/**
+ * One call of a remote command: a promise of its result, and `updates` to name the queries the
+ * server refreshes along with it (e.g. a Resource's `getList`, for all its instances).
+ */
+export type RemoteCommandCall<T = void> = Promise<T> & {
 	// A method, so Kit's stricter parameter type fits it.
-	updates(...queries: unknown[]): Promise<void>;
+	updates(...queries: unknown[]): Promise<T>;
 };

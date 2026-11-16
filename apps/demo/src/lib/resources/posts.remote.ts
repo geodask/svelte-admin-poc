@@ -1,8 +1,8 @@
 import { serveResource } from '@svelte-admin/core/server';
-import { backend } from '#lib/server/backend.ts';
+import { postsProvider } from '#lib/server/posts-provider.ts';
 import { posts } from './posts.ts';
 
-export const { getList, getOne, create, update, deleteOne } = serveResource(
+export const { getList, getOne, create, update, deleteOne, deleteMany } = serveResource(
 	posts,
-	backend.for(posts)
+	postsProvider
 );

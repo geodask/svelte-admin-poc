@@ -18,6 +18,9 @@
 //                                     users' email, set once on create); a Field missing from the
 //                                     body is removed. Answers with the saved record, or a 404
 //   DELETE /{resource}/{id}           delete a record: a 204, or a 404
+//   DELETE /posts?id=1&id=2           delete many posts at once, all or nothing: a 204, or a 404
+//                                     (deleting none) when any id names no post, or a 400 with no
+//                                     id. Only posts have this bulk route
 //   POST /reset                       restore the seed data and clear any faults (e2e tests call
 //                                     it first)
 //   POST /faults                      test-only: make the next resource request(s) slow or fail.
@@ -44,6 +47,9 @@ function fresh(): Record<string, Records> {
 
 /** The Resources answered with `hasNextPage` instead of `total`. */
 const uncounted = new Set(['posts']);
+
+/** The Resources with a bulk delete route, `DELETE /{resource}?id=1&id=2`. */
+const bulkDeletable = new Set(['posts']);
 
 /**
  * The Fields only the backend sets, which no form sends, and their values for a record created
@@ -220,6 +226,16 @@ const server = Bun.serve({
 			const record = { ...body, ...kept, id: current.id };
 			db[name][index] = record;
 			return json(record);
+		}
+
+		if (request.method === 'DELETE' && segments.length === 1 && bulkDeletable.has(segments[0])) {
+			const name = segments[0];
+			const ids = new Set(url.searchParams.getAll('id'));
+			if (ids.size === 0) return json({ message: 'Name at least one id' }, 400);
+			const kept = db[name].filter((r) => !ids.has(String(r.id)));
+			if (db[name].length - kept.length !== ids.size) return json({ message: 'Not found' }, 404);
+			db[name] = kept;
+			return new Response(null, { status: 204 });
 		}
 
 		if (request.method === 'DELETE' && segments.length === 2 && Object.hasOwn(db, segments[0])) {

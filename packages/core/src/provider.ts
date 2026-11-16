@@ -52,4 +52,11 @@ export type Provider<T, Id = IdOfRecord<T>, Create = Omit<T, 'id'>, Edit = Creat
 	 * sees why instead of a generic failure.
 	 */
 	deleteOne(ctx: ProviderContext, id: Id): Promise<void>;
+	/**
+	 * Optional: delete many records in one request, for a backend with a bulk route. `ids` holds
+	 * one to 1,000 distinct ids, with the schema's id type. Make it all or nothing: when it throws,
+	 * the admin reports that none were deleted and keeps them all selected. Without it, a bulk
+	 * delete calls `deleteOne` for each id in turn, stopping at the first failure.
+	 */
+	deleteMany?(ctx: ProviderContext, ids: Id[]): Promise<void>;
 };

@@ -2,8 +2,9 @@
 	The toolbar above a list View. On a searchable Resource it holds a search box in a GET form:
 	without JavaScript, submitting the form opens the search at page 1 and keeps the page size;
 	with JavaScript, the list follows typing and the URL is updated in place, so the browser
-	history doesn't fill up. Beside it, a count of the selected rows, once any are selected, and at
-	the end a "New" link to the create View. The row is there on every Resource, so the content
+	history doesn't fill up. Beside it, a count of the selected rows, once any are selected, with
+	"Delete selected (N)", which opens the delete dialog for them; and at the end a "New" link to
+	the create View. Bulk delete needs JavaScript, so its button appears only after hydration. The row is there on every Resource, so the content
 	below doesn't move when the count appears.
 	A Theme part, exported for a replaced list View: give it the core's `createListView` helper.
 -->
@@ -17,7 +18,18 @@
 </script>
 
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import DeleteDialog from './DeleteDialog.svelte';
+
 	let { view }: ToolbarProps = $props();
+
+	// False on the server and until hydration: deleting needs JavaScript, so a page without it
+	// never shows a button that does nothing.
+	let interactive = $state(false);
+	let confirmingDelete = $state(false);
+	onMount(() => {
+		interactive = true;
+	});
 
 	const form = $derived(view.searchForm);
 	const searchId = $props.id();
@@ -65,6 +77,25 @@
 			{view.selection.size} selected
 		{/if}
 	</p>
+
+	{#if interactive}
+		{#if view.selection.size > 0}
+			<button
+				type="button"
+				onclick={() => (confirmingDelete = true)}
+				class="inline-flex h-9 items-center rounded-md border border-destructive/50 bg-background px-3 text-sm font-medium text-destructive hover:bg-destructive/10"
+			>
+				Delete selected ({view.selection.size})
+			</button>
+		{/if}
+		<!-- Outside the button's block, so it stays open while the last rows are deleted. -->
+		<DeleteDialog
+			bind:open={confirmingDelete}
+			count={view.selection.size}
+			label={view.resource.label}
+			confirm={view.deleteSelected}
+		/>
+	{/if}
 
 	<a
 		href={view.createHref}

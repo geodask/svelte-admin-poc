@@ -32,6 +32,8 @@ export {
 	type SidebarItem
 } from './admin.ts';
 export type {
+	DeleteFailure,
+	DeleteManyReport,
 	RemoteCommandCall,
 	RemoteFormField,
 	RemoteFormInputType,

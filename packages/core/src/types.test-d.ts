@@ -14,6 +14,7 @@ import {
 import { serveResource } from '@svelte-admin/core/server';
 import {
 	createListView,
+	type BulkDeleteResult,
 	type ListSelection,
 	type ListViewState,
 	type ShellAdmin
@@ -153,6 +154,31 @@ void recipesRemote.deleteOne('1');
 void recipe;
 void listOnlyProvider;
 
+// `deleteMany` is optional: every Provider above lacks it. One that has it gets typed ids.
+const bulkProvider: Provider<Recipe> = {
+	...recipeProvider,
+	deleteMany: async (_ctx, ids) => void ids.map((id) => id.toFixed())
+};
+serveResource(recipes, bulkProvider);
+
+const textIdBulk: Provider<Recipe> = {
+	...recipeProvider,
+	// @ts-expect-error recipe ids arrive as numbers, never as text
+	deleteMany: async (_ctx, ids: string[]) => void ids.map((id) => id.trim())
+};
+void textIdBulk;
+
+// The remote deleteMany takes an array of canonical ids, reports how many were deleted, and
+// fits the remote the Views take.
+const recipesDeleteMany: ResourceRemote<Recipe, number>['deleteMany'] = recipesRemote.deleteMany;
+const report: Promise<{ deleted: number } | { deleted: number; failure: { message: string } }> =
+	recipesDeleteMany([1, 2]).updates(recipesRemote.getList);
+void report;
+// @ts-expect-error recipe ids are numbers
+void recipesRemote.deleteMany(['1']);
+// @ts-expect-error it takes an array of ids, not one
+void recipesRemote.deleteMany(1);
+
 // A string id is fine too.
 defineResource({ name: 'posts', label: 'Posts', schema: z.object({ id: z.string() }) });
 
@@ -248,6 +274,9 @@ void slugged;
 const replacedView = createListView(recipes, recipesRemote);
 const anyList: ListViewState = replacedView;
 void anyList;
+// Its bulk delete reports how many were deleted, whether it succeeded or not.
+const bulkDelete: Promise<BulkDeleteResult> = replacedView.deleteSelected();
+void bulkDelete.then((result) => result.deleted.toFixed());
 
 // `recordTitle` as a key must name one of the schema's Fields.
 const products = defineResource({
