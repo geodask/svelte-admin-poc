@@ -17,6 +17,7 @@
 	import type { FormViewState } from '@svelte-admin/core/views';
 	import FieldInput from './FieldInput.svelte';
 	import FieldValue from './FieldValue.svelte';
+	import FormActions from './FormActions.svelte';
 
 	let {
 		view,
@@ -28,6 +29,7 @@
 	} = $props();
 
 	const form = $derived(view.form);
+	const inputs = $derived(view.inputs);
 </script>
 
 <form
@@ -48,7 +50,7 @@
 	{/if}
 
 	{#if view.id !== undefined}
-		<input {...form.fields.id.as('hidden', view.id)} />
+		<input {...inputs.id.as('hidden', view.id)} />
 	{/if}
 
 	{#each view.spec as spec (spec.key)}
@@ -63,23 +65,9 @@
 				<dd><FieldValue field={spec.field} value={record?.[spec.key]} /></dd>
 			</dl>
 		{:else}
-			<FieldInput {spec} field={form.fields[spec.key]} />
+			<FieldInput {spec} field={inputs[spec.key]} />
 		{/if}
 	{/each}
 
-	<div class="flex items-center gap-2">
-		<button
-			type="submit"
-			disabled={view.saving}
-			class="inline-flex h-9 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-		>
-			{view.saving ? 'Saving…' : 'Save'}
-		</button>
-		<a
-			href={view.cancelHref}
-			class="inline-flex h-9 items-center rounded-md border bg-background px-4 text-sm font-medium hover:bg-muted"
-		>
-			Cancel
-		</a>
-	</div>
+	<FormActions saving={view.saving} cancelHref={view.cancelHref} />
 </form>

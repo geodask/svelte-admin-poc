@@ -3,7 +3,14 @@
 // lives on the shared entry and must never import `$app/server`.
 import { z } from 'zod';
 import type { StandardSchemaV1 } from './standard-schema.ts';
-import { describeField, unwrap, type Field } from './fields.ts';
+import {
+	describeField,
+	unwrap,
+	type Field,
+	type FieldBrandOf,
+	type IsWrapped,
+	type UnwrappedSchema
+} from './fields.ts';
 import { idFromParam } from './ids.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -240,21 +247,121 @@ type FormInputOuter = {
 };
 
 /**
- * What a remote form receives from the browser, as Kit types it: each input's name maps to its
- * value, a list to an array of values, and a group or rows to nested values. The type nests
- * three levels deep; the runtime goes deeper. It is not recursive on purpose: Kit checks a form
- * schema's input type for booleans that aren't optional, and a recursive or `File` type would
- * defeat that check and fail it.
+ * What any Resource's form sends, untyped: each input's name maps to its value, a list to an
+ * array of values, and a group or rows to nested values. It is what the Theme's parts, which
+ * render any Field, work with; a replaced View gets the precise `FormInput` instead. The type
+ * nests three levels deep; the runtime goes deeper. It is not recursive on purpose: Kit checks
+ * a form schema's input type for booleans that aren't optional, and a recursive or `File` type
+ * would defeat that check and fail it.
  */
-export type FormInput = {
+export type FormValues = {
 	[key: string]: FormInputList | FormInputOuter | FormInputOuter[] | undefined;
 };
 
-/** A Resource's record as its create form gives it: everything but the id. */
-export type CreateData<R extends Resource> = Omit<RecordOf<R>, 'id'>;
+/** A type with its intersections flattened into one object, so it reads (and compares) plainly. */
+type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
-/** A Resource's editable Fields as its edit form gives them, for `update`: everything but the id. */
-export type EditData<R extends Resource> = Omit<RecordOf<R>, 'id'>;
+/** A Resource's schema shape: each Field's key and its schema. */
+type ShapeOf<R extends Resource> = R['schema']['shape'];
+
+/**
+ * Whether a form leaves out a top-level Field, by its schema's type, as `toFormSpec` does at
+ * runtime: a hidden Field in both modes, a `readOnly: true` one in both, and an `'afterCreate'`
+ * one on edit.
+ */
+type LeftOutOf<S, M extends FormMode> = [FieldBrandOf<S, 'hidden'>] extends [true]
+	? true
+	: [FieldBrandOf<S, 'readOnly'>] extends [true]
+		? true
+		: [FieldBrandOf<S, 'readOnly'>] extends ['afterCreate']
+			? M extends 'edit'
+				? true
+				: false
+			: false;
+
+/** The keys of the Fields a Resource's form has inputs for in `mode`: never the id. */
+type FormKeys<R extends Resource, M extends FormMode> = {
+	[K in keyof ShapeOf<R>]: K extends 'id'
+		? never
+		: LeftOutOf<ShapeOf<R>[K], M> extends true
+			? never
+			: K;
+}[keyof ShapeOf<R>] &
+	string;
+
+/**
+ * Whether an input may be left out of what the form sends: a Field in a wrapper (`optional`,
+ * `nullable` or `default`), and every boolean, since an unchecked checkbox sends nothing (Kit
+ * requires form schemas to say so).
+ */
+type InputOptional<S> =
+	IsWrapped<S> extends true ? true : z.output<UnwrappedSchema<S>> extends boolean ? true : false;
+
+/** The inputs of an object's Fields (a row's or a group's): every one of them, by its key. */
+type ObjectInput<Shape> = Simplify<
+	{
+		[K in keyof Shape as InputOptional<Shape[K]> extends true ? never : K]: FieldInputOf<Shape[K]>;
+	} & {
+		[K in keyof Shape as InputOptional<Shape[K]> extends true ? K : never]?: FieldInputOf<Shape[K]>;
+	}
+>;
+
+/** What one Field's input sends, by its schema: see `FormInput`. */
+type FieldInputOf<S> = InputOfType<UnwrappedSchema<S>, FieldBrandOf<S, 'input'>>;
+
+/** What an input sends for an unwrapped Zod type, and the Field's `input` choice. */
+type InputOfType<T, Choice> = T extends z.ZodEnum
+	? string
+	: T extends z.ZodArray<infer E>
+		? UnwrappedSchema<E> extends z.ZodObject<infer Shape>
+			? ObjectInput<Shape>[]
+			: Choice extends 'lines'
+				? InputOfType<UnwrappedSchema<E>, undefined> extends string
+					? string
+					: InputOfType<UnwrappedSchema<E>, undefined>[]
+				: InputOfType<UnwrappedSchema<E>, undefined>[]
+		: T extends z.ZodObject<infer Shape>
+			? ObjectInput<Shape>
+			: z.output<T> extends boolean
+				? boolean
+				: z.output<T> extends number
+					? number
+					: string;
+
+/**
+ * What a Resource's create or edit form sends from the browser, typed from its schema: the
+ * Standard Schema input type of `formSchema(resource, mode)`, from which Kit types a remote
+ * form's `fields`. So a View that replaces the create or edit View gets `fields.name` checked,
+ * and no input for a Field the server would ignore.
+ *
+ * Each Field the form has an input for maps to what that input sends: a number for a number,
+ * a boolean for a checkbox, text for any other scalar (a string, an enum's select, a date, a
+ * datetime), an array for a list in rows, text for a list in lines, an array of objects for
+ * rows, and an object for a group. The id and the read-only and hidden Fields are left out, and
+ * `'afterCreate'` Fields appear on create only. A Field in a wrapper may be left out, and so
+ * may every boolean, since an unchecked checkbox sends nothing. The edit form also carries the
+ * record's typed id, its hidden input, which also types `update.for(id)`.
+ *
+ * It reads `readOnly`, `hidden` and `input` from the type `field()` returns, so write that
+ * metadata inline in `field()`.
+ */
+export type FormInput<R extends Resource, M extends FormMode> = Simplify<
+	ObjectInput<Pick<ShapeOf<R>, FormKeys<R, M>>> & (M extends 'edit' ? { id: IdOf<R> } : unknown)
+>;
+
+/**
+ * A Resource's record as its create form gives it, for the Provider's `create`: the record
+ * without its id and its read-only and hidden Fields, already validated with the schema. It is
+ * the output type of `formSchema(resource, 'create')`.
+ */
+export type CreateData<R extends Resource> = Simplify<Pick<RecordOf<R>, FormKeys<R, 'create'>>>;
+
+/**
+ * A Resource's editable Fields as its edit form gives them, for the `data` of the Provider's
+ * `update`: like `CreateData`, but without the `'afterCreate'` Fields either. An optional Field
+ * whose key is absent was cleared.
+ */
+export type EditData<R extends Resource> = Simplify<Pick<RecordOf<R>, FormKeys<R, 'edit'>>>;
 
 /**
  * What a Resource's form schema gives for a mode: the record without its id on create, and on
@@ -275,8 +382,8 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
  * where an item is added, and a list in lines as one item per line. A Field with no value is
  * left out, and so is the id, which the edit form carries as a hidden input.
  */
-export function toFormValues(spec: readonly FormFieldSpec[], record: object): FormInput {
-	return valuesOf(spec, record) as FormInput;
+export function toFormValues(spec: readonly FormFieldSpec[], record: object): FormValues {
+	return valuesOf(spec, record) as FormValues;
 }
 
 /** The input values of an object's Fields: a record's, a row's or a group's. */
@@ -538,7 +645,7 @@ function inputPath(path: readonly PropertyKey[], origins: Origins): (string | nu
 export function formSchema<R extends Resource, M extends FormMode>(
 	resource: R,
 	mode: M
-): StandardSchemaV1<FormInput, FormOutput<R, M>> {
+): StandardSchemaV1<FormInput<R, M>, FormOutput<R, M>> {
 	// Only the inputs: a read-only Field is left out of the schema, not ignored after parsing.
 	const specs = toFormSpec(resource, mode).filter(isInputSpec);
 	const keys: Record<string, true> = Object.fromEntries(specs.map((spec) => [spec.key, true]));
@@ -549,7 +656,7 @@ export function formSchema<R extends Resource, M extends FormMode>(
 			version: 1,
 			vendor: 'svelte-admin',
 			validate(value) {
-				const raw = (typeof value === 'object' && value !== null ? value : {}) as FormInput;
+				const raw = (typeof value === 'object' && value !== null ? value : {}) as FormValues;
 				const origins: Origins = new Map();
 				const input = normalizeObject(specs, resource.schema, raw, [], origins);
 

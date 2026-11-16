@@ -15,7 +15,9 @@ export const posts = defineResource({
 		userId: field(z.number(), { label: 'Author ID' }),
 		status: z.enum(['draft', 'published']),
 		tags: z.array(z.string()),
-		body: field(z.string(), { list: false })
+		body: field(z.string(), { list: false }),
+		// Counted by the backend: it starts at 0, and no form can set it.
+		viewCount: field(z.number(), { label: 'Views', readOnly: true, list: false })
 	}),
 	// Posts have no `name` Field, so the default rule would pick `title` anyway; written out, it
 	// shows the key form of the setting.

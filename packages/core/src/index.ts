@@ -36,6 +36,9 @@ export type {
 	DeleteManyReport,
 	RemoteCommandCall,
 	RemoteFormField,
+	RemoteFormFieldLike,
+	RemoteFormFields,
+	RemoteFormFieldsLike,
 	RemoteFormInputType,
 	RemoteFormIssue,
 	RemoteFormLike,
@@ -52,10 +55,12 @@ export {
 	type FieldInputChoice,
 	type FieldMeta,
 	type FieldReadOnly,
+	type FieldSchema,
 	type KindName
 } from './fields.ts';
 export {
 	formSchema,
+	isInputSpec,
 	rowCount,
 	toFormSpec,
 	toFormValues,
@@ -64,6 +69,7 @@ export {
 	type EditData,
 	type FormFieldSpec,
 	type FormInput,
+	type FormValues,
 	type FormInputSpec,
 	type FormMode,
 	type FormOutput,

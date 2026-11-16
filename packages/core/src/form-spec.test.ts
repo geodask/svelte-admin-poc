@@ -8,7 +8,8 @@ import {
 	toFormSpec,
 	toFormValues,
 	withoutRow,
-	type Resource
+	type Resource,
+	type StandardSchemaV1
 } from '@svelte-admin/core';
 
 /** A Resource with one Field, `value`, of the given type. */
@@ -295,12 +296,15 @@ describe('defineResource, checking every Field the forms would edit has an input
 });
 
 /** Run a form schema on raw input, as Kit does with what the browser sent. */
-async function validate(schema: ReturnType<typeof formSchema>, input: Record<string, unknown>) {
+async function validate(
+	schema: StandardSchemaV1<unknown, unknown>,
+	input: Record<string, unknown>
+) {
 	return schema['~standard'].validate(input);
 }
 
 /** The issues of a failed validation as `path: message`, or the value when it passed. */
-async function outcome(schema: ReturnType<typeof formSchema>, input: Record<string, unknown>) {
+async function outcome(schema: StandardSchemaV1<unknown, unknown>, input: Record<string, unknown>) {
 	const result = await validate(schema, input);
 	if (result.issues === undefined) return { value: result.value };
 	return {
