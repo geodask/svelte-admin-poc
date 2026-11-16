@@ -2,7 +2,8 @@ import type { Page } from '@playwright/test';
 import { expect, hydrated, test } from './fixtures.ts';
 import { dataRows, selectedCount } from './list-helpers.ts';
 
-// Posts set `recordTitle: 'title'`, the key form of the setting.
+// Posts set `recordTitle: 'title'`, the key form of the setting. Their list opens newest first,
+// so these tests sort it by id, ascending, to put the first post on top.
 
 const breadcrumb = (page: Page) => page.getByRole('navigation', { name: 'breadcrumb' });
 const firstPost = 'A beginner guide to weeknight dinners (part 1)';
@@ -16,7 +17,7 @@ test.describe("a post's Record title, from its `recordTitle` key", () => {
 	});
 
 	test("is the list View's link to each post: the title cell, and no other", async ({ page }) => {
-		await page.goto('/admin/posts');
+		await page.goto('/admin/posts?sort=id');
 
 		const row = dataRows(page).first();
 		await expect(row.getByRole('link')).toHaveCount(1);
@@ -30,7 +31,7 @@ test.describe("a post's Record title, from its `recordTitle` key", () => {
 	});
 
 	test('labels the row checkboxes, "Select {title}" @js', async ({ page }) => {
-		await page.goto('/admin/posts');
+		await page.goto('/admin/posts?sort=id');
 		await hydrated(page);
 
 		await page.getByRole('checkbox', { name: `Select ${firstPost}` }).check();

@@ -2,6 +2,9 @@ import type { Page } from '@playwright/test';
 import { expect, hydrated, test } from './fixtures.ts';
 import { dataRows, openInSidebar, pager, selectedCount } from './list-helpers.ts';
 
+/** The first post on the posts list, which opens newest first. */
+const newestPost = 'A week of seasonal vegetables (part 8)';
+
 /** The checkbox that selects one row, by its record's Record title. */
 const rowCheckbox = (page: Page, title: string) =>
 	page.getByRole('checkbox', { name: `Select ${title}` });
@@ -72,7 +75,7 @@ test.describe('row selection @js', () => {
 		await openInSidebar(page, 'Posts');
 
 		await expect(page.getByRole('heading', { level: 1, name: 'Posts' })).toBeVisible();
-		await expect(dataRows(page).first()).toContainText('A beginner guide to weeknight dinners');
+		await expect(dataRows(page).first()).toContainText(newestPost);
 		await expect(selectedRows(page)).toHaveCount(0);
 		await expect(headerCheckbox(page)).not.toBeChecked();
 		await expect(selectedCount(page)).toHaveCount(0);
@@ -97,7 +100,7 @@ test.describe('row selection @js', () => {
 		await page.goBack();
 
 		await expect(page.getByRole('heading', { level: 1, name: 'Posts' })).toBeVisible();
-		await expect(dataRows(page).first()).toContainText('A beginner guide to weeknight dinners');
+		await expect(dataRows(page).first()).toContainText(newestPost);
 		await expect(selectedRows(page)).toHaveCount(0);
 		await expect(selectedCount(page)).toHaveCount(0);
 	});

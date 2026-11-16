@@ -20,19 +20,22 @@ export type ListSort<K extends string = string> = { field: K; order: SortOrder }
 /** What `ListParams` asks of a Resource: whether it is searchable, and its schema's Fields. */
 export type ListParamsResource = Pick<Resource, 'searchable' | 'schema'>;
 
-/** A Resource's schema shape: each Field's key and its schema. */
-type ShapeOf<R extends ListParamsResource> = R['schema']['shape'];
+/**
+ * The keys of an object schema's sortable Fields (`sortable: true`, read from `field()`'s
+ * brand), or `never` when it has none. For a schema whose Fields TypeScript can't see, any key.
+ */
+export type SchemaSortableKey<S extends Resource['schema']> = string extends keyof S['shape']
+	? string
+	: {
+			[K in keyof S['shape']]: [FieldBrandOf<S['shape'][K], 'sortable'>] extends [true] ? K : never;
+		}[keyof S['shape']] &
+			string;
 
 /**
  * The keys of a Resource's sortable Fields (`sortable: true`, read from `field()`'s brand), or
  * `never` when it has none. For a Resource whose Fields TypeScript can't see, any key.
  */
-export type SortableKey<R extends ListParamsResource> = string extends keyof ShapeOf<R>
-	? string
-	: {
-			[K in keyof ShapeOf<R>]: [FieldBrandOf<ShapeOf<R>[K], 'sortable'>] extends [true] ? K : never;
-		}[keyof ShapeOf<R>] &
-			string;
+export type SortableKey<R extends ListParamsResource> = SchemaSortableKey<R['schema']>;
 
 /**
  * The validated params a Resource's `getList` receives, typed from the Resource as `CreateData`
@@ -41,7 +44,9 @@ export type SortableKey<R extends ListParamsResource> = string extends keyof Sha
  * - only for a searchable Resource, an optional `search`, never blank and without the spaces
  *   around it;
  * - only for a Resource with a sortable Field, an optional `sort`, whose `field` is one of the
- *   sortable Fields' keys. It is absent when the list isn't sorted, never empty.
+ *   sortable Fields' keys. It is absent when the list isn't sorted, never empty. When the
+ *   Resource has a `defaultSort`, `serveResource` gives the Provider that sort whenever it is
+ *   asked for none.
  *
  * A Resource that isn't searchable has no `search` at all, and one with no sortable Field no
  * `sort`. Without a Resource (or for one TypeScript can't see), either may come or not, and a

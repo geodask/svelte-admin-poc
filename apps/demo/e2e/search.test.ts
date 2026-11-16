@@ -141,7 +141,7 @@ test.describe('posts, which are not searchable', () => {
 
 		await expect(page.getByRole('search')).toHaveCount(0);
 		await expect(page.getByRole('searchbox')).toHaveCount(0);
-		await expect(dataRows(page)).toHaveCount(25);
+		await expect(dataRows(page)).toHaveCount(20);
 	});
 
 	test('drop q from the URL @js', async ({ page }) => {

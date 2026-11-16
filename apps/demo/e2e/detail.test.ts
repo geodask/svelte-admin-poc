@@ -110,7 +110,8 @@ test.describe('the recipes detail View', () => {
 	});
 
 	test('names a post by its title, its Record title', async ({ page }) => {
-		await page.goto('/admin/posts');
+		// Oldest first, so the first post is on the first page.
+		await page.goto('/admin/posts?sort=id');
 
 		await page
 			.getByRole('link', { name: 'A beginner guide to weeknight dinners (part 1)' })

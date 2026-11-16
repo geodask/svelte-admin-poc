@@ -88,19 +88,21 @@ test.describe('paging through recipes, which the backend counts', () => {
 
 test.describe('paging through posts, which the backend cannot count', () => {
 	test('shows only previous and next, and next is absent on the last page', async ({ page }) => {
+		// Posts page at their own 20 rows, so 60 posts fill exactly 3 pages.
 		await page.goto('/admin/posts');
 
-		await expect(dataRows(page)).toHaveCount(25);
-		await expect(pager(page)).toContainText('Rows 1–25');
+		await expect(dataRows(page)).toHaveCount(20);
+		await expect(pager(page)).toContainText('Rows 1–20');
 		await expect(pager(page)).not.toContainText(' of ');
-		await expect(pager(page).getByRole('link')).toHaveText(['10', '25', '50', '100', 'Next']);
+		await expect(pager(page).getByRole('link')).toHaveText(['10', '20', '25', '50', '100', 'Next']);
 
 		await pager(page).getByRole('link', { name: 'Next' }).click();
 
 		await expect(page).toHaveURL('/admin/posts?page=2');
-		await expect(pager(page)).toContainText('Rows 26–50');
+		await expect(pager(page)).toContainText('Rows 21–40');
 		await expect(pager(page).getByRole('link')).toHaveText([
 			'10',
+			'20',
 			'25',
 			'50',
 			'100',
@@ -110,10 +112,26 @@ test.describe('paging through posts, which the backend cannot count', () => {
 
 		await pager(page).getByRole('link', { name: 'Next' }).click();
 
+		// A full last page: the backend says there is no next one.
 		await expect(page).toHaveURL('/admin/posts?page=3');
+		await expect(dataRows(page)).toHaveCount(20);
+		await expect(pager(page)).toContainText('Rows 41–60');
+		await expect(pager(page).getByRole('link')).toHaveText([
+			'10',
+			'20',
+			'25',
+			'50',
+			'100',
+			'Previous'
+		]);
+	});
+
+	test('a short last page has no next', async ({ page }) => {
+		await page.goto('/admin/posts?page=3&perPage=25');
+
 		await expect(dataRows(page)).toHaveCount(10);
 		await expect(pager(page)).toContainText('Rows 51–60');
-		await expect(pager(page).getByRole('link')).toHaveText(['10', '25', '50', '100', 'Previous']);
+		await expect(pager(page).getByRole('link', { name: 'Next' })).toHaveCount(0);
 	});
 });
 

@@ -2,6 +2,8 @@ import type { Component } from 'svelte';
 import type { z } from 'zod';
 import { assertSortable, describeFields, type Field } from './fields.ts';
 import { assertFormInputs } from './form-spec.ts';
+import { assertListSettings, DEFAULT_PER_PAGE } from './list-params.ts';
+import type { ListSort, SchemaSortableKey } from './provider.ts';
 import { assertRecordTitle } from './record-title.ts';
 
 /** Any Zod object schema. `defineResource` checks that it has a usable `id` Field. */
@@ -58,6 +60,14 @@ export type Resource<
 	// The key is kept as a plain string here: `keyof` the schema's shape would make `Resource`
 	// invariant in its schema, so no Resource would count as a `Resource` any more.
 	readonly recordTitle?: string | RecordTitleFunction<S>;
+	/**
+	 * The order the list View opens in, and the order `getList` gives the Provider when it is
+	 * asked for no sort. None: the backend's order.
+	 */
+	// A plain string key, like `recordTitle`'s, for the same reason.
+	readonly defaultSort?: ListSort;
+	/** How many rows a page of the list View holds when its URL names no page size. */
+	readonly perPage: number;
 };
 
 /** The type of one record of a Resource. */
@@ -122,8 +132,22 @@ export function defineResource<
 	 * hidden, or `defineResource` throws.
 	 */
 	recordTitle?: NoInfer<RecordTitleSetting<S>>;
+	/**
+	 * The order the list View opens in, such as `{ field: 'id', order: 'desc' }` for the newest
+	 * first. `field` must be a sortable Field's key (hidden or not), or `defineResource` throws.
+	 * It is never written to the list URL, and `getList` gives it to the Provider whenever it is
+	 * asked for no sort. Without it, the list keeps the backend's order.
+	 */
+	defaultSort?: NoInfer<ListSort<SchemaSortableKey<S>>>;
+	/**
+	 * How many rows a page of the list View holds when its URL names no page size: 1 to
+	 * `MAX_PER_PAGE` (100), or `defineResource` throws. Defaults to `DEFAULT_PER_PAGE` (25). It is
+	 * never written to the list URL, and the list View offers it beside the stock page sizes.
+	 */
+	perPage?: number;
 }): Resource<N, S, Searchable> {
-	const { name, label, icon, group, schema, recordTitle } = definition;
+	const { name, label, icon, group, schema, recordTitle, defaultSort } = definition;
+	const perPage = definition.perPage ?? DEFAULT_PER_PAGE;
 	// Left out, it is `false`, as the type parameter's default says.
 	const searchable = (definition.searchable ?? false) as Searchable;
 	const fields = describeFields(schema);
@@ -131,5 +155,18 @@ export function defineResource<
 	assertFormInputs(name, fields, schema);
 	assertRecordTitle(name, fields, recordTitle);
 	assertSortable(name, fields);
-	return { name, label, icon, group, schema, searchable, fields, recordTitle };
+	assertListSettings(name, fields, { defaultSort, perPage });
+	return {
+		name,
+		label,
+		icon,
+		group,
+		schema,
+		searchable,
+		fields,
+		recordTitle,
+		// A copy, so the Resource's default can't change from outside.
+		defaultSort: defaultSort && { field: defaultSort.field, order: defaultSort.order },
+		perPage
+	};
 }
