@@ -1,7 +1,15 @@
 // Type-level checks of the demo's own Resources, checked by svelte-check (`bun run check`), never
 // run or imported. The core's `types.test-d.ts` covers the form types in general; these keep the
 // demo's schemas honest. Each `@ts-expect-error` fails the check if its line stops being an error.
-import type { CreateData, EditData, FormInput } from '@svelte-admin/core';
+import type {
+	CreateData,
+	EditData,
+	FormInput,
+	ListParams,
+	Resource,
+	ResourceProvider
+} from '@svelte-admin/core';
+import type { serveResource } from '@svelte-admin/core/server';
 import type { posts } from './posts.ts';
 import type { recipes } from './recipes.ts';
 import type { users } from './users.ts';
@@ -37,3 +45,27 @@ export const userEditData: Pick<EditData<typeof users>, 'email'> = { email: 'lin
 // Posts' views are counted by the backend.
 // @ts-expect-error no form sets them
 export const postViews: FormInput<typeof posts, 'create'>['viewCount'] = 0;
+
+// List params follow each Resource's `searchable`: recipes and users take a search, posts don't.
+export const recipeSearch: ListParams<typeof recipes>['search'] = 'pasta';
+export const userSearch: ListParams<typeof users>['search'] = 'ada';
+// @ts-expect-error posts aren't searchable
+export const postSearch: ListParams<typeof posts>['search'] = 'hello';
+
+// A Provider whose `getList` takes the loose `ListParams` and reads a search, as every Provider
+// did before list params were typed from the Resource, still fits `serveResource` for every demo
+// Resource.
+const looseGetList = async (_ctx: unknown, { page, perPage, search }: ListParams) => ({
+	data: [],
+	total: page + perPage + (search?.length ?? 0)
+});
+// The rest of each Provider, which this check doesn't look at.
+declare const writes: {
+	recipes: Omit<ResourceProvider<typeof recipes>, 'getList'>;
+	users: Omit<ResourceProvider<typeof users>, 'getList'>;
+	posts: Omit<ResourceProvider<typeof posts>, 'getList'>;
+};
+type Served<R extends Resource> = Parameters<typeof serveResource<R>>[1];
+export const recipesProvider: Served<typeof recipes> = { ...writes.recipes, getList: looseGetList };
+export const usersProvider: Served<typeof users> = { ...writes.users, getList: looseGetList };
+export const postsProvider: Served<typeof posts> = { ...writes.posts, getList: looseGetList };

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
 	ConflictError,
 	defineResource,
+	encodeListParams,
 	FieldError,
 	InvalidInputError,
 	NotFoundError,
@@ -13,7 +14,9 @@ import { restProvider } from '@svelte-admin/core/rest';
 const recipes = defineResource({
 	name: 'recipes',
 	label: 'Recipes',
-	schema: z.object({ id: z.number(), name: z.string() })
+	schema: z.object({ id: z.number(), name: z.string() }),
+	// Searchable, so its `getList` takes a search.
+	searchable: true
 });
 
 const users = defineResource({
@@ -83,6 +86,25 @@ describe('the bundled REST Provider', () => {
 
 			expect(requests).toEqual(['http://api.test/recipes?page=1&perPage=25']);
 		});
+
+		it.each([
+			{ params: { page: 1, perPage: 25 }, query: 'page=1&perPage=25' },
+			{ params: { page: 3, perPage: 100 }, query: 'page=3&perPage=100' },
+			{
+				params: { page: 1, perPage: 25, search: 'pasta & co' },
+				query: 'page=1&perPage=25&q=pasta+%26+co'
+			}
+		])(
+			'sends $query, the list URL encoding with every param written',
+			async ({ params, query }) => {
+				const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+
+				await restProvider('http://api.test').for(recipes).getList(context(fetch), params);
+
+				expect(encodeListParams(params).toString()).toBe(query);
+				expect(requests).toEqual([`http://api.test/recipes?${query}`]);
+			}
+		);
 
 		it('keeps a path in the base URL and ignores a trailing slash', async () => {
 			const { fetch, requests } = fakeFetch({ data: [], total: 0 });

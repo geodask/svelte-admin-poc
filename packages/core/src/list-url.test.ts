@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { listHref, listUrlRewrite, readListParams } from '@svelte-admin/core';
+import { encodeListParams, listHref, listUrlRewrite, readListParams } from '@svelte-admin/core';
 
 // Only whether a Resource is searchable matters to the list URL.
 const searchable = { searchable: true };
@@ -99,6 +99,49 @@ describe('the list URL helper', () => {
 		it('reads back as the params it was written from', () => {
 			const params = { page: 7, perPage: 100, search: 'pasta & co' };
 			expect(read(listHref(url, params).replace('/admin/recipes', ''), searchable)).toEqual(params);
+		});
+	});
+
+	describe('encoding list params', () => {
+		const urlDefaults = { page: 1, perPage: 25 };
+		const encode = (...args: Parameters<typeof encodeListParams>) =>
+			encodeListParams(...args).toString();
+
+		it('writes page, perPage and q, in that order, as the list href does', () => {
+			expect(encode({ page: 2, perPage: 10, search: 'chicken tacos' }, urlDefaults)).toBe(
+				'page=2&perPage=10&q=chicken+tacos'
+			);
+			expect(
+				listHref(new URL('http://admin.test/admin/recipes'), {
+					page: 2,
+					perPage: 10,
+					search: 'chicken tacos'
+				})
+			).toBe('/admin/recipes?page=2&perPage=10&q=chicken+tacos');
+		});
+
+		it('leaves out what is at its default, and a blank search', () => {
+			expect(encode({ page: 1, perPage: 25 }, urlDefaults)).toBe('');
+			expect(encode({ page: 1, perPage: 50, search: '  ' }, urlDefaults)).toBe('perPage=50');
+			expect(encode({ page: 3, perPage: 25, search: 'pasta' }, urlDefaults)).toBe('page=3&q=pasta');
+		});
+
+		it('writes every param when given no defaults', () => {
+			expect(encode({ page: 1, perPage: 25 })).toBe('page=1&perPage=25');
+			expect(encode({ page: 1, perPage: 25, search: 'chicken & rice' })).toBe(
+				'page=1&perPage=25&q=chicken+%26+rice'
+			);
+		});
+
+		it.each([
+			{ page: 1, perPage: 25 },
+			{ page: 4, perPage: 100 },
+			{ page: 1, perPage: 10, search: 'pasta & co' },
+			{ page: 7, perPage: 25, search: ' spaced ' }
+		])('reads back through readListParams as %j', (params) => {
+			for (const defaults of [urlDefaults, undefined]) {
+				expect(read(`?${encode(params, defaults)}`, searchable)).toEqual(params);
+			}
 		});
 	});
 

@@ -11,7 +11,13 @@ export {
 } from './resource.ts';
 export { idFromParam, idPathSegment, recordPath } from './ids.ts';
 export { recordTitle } from './record-title.ts';
-export type { ListParams, ListResult, Provider, ProviderContext } from './provider.ts';
+export type {
+	ListParams,
+	ListResult,
+	Provider,
+	ProviderContext,
+	ResourceProvider
+} from './provider.ts';
 export {
 	ConflictError,
 	FieldError,
@@ -21,7 +27,13 @@ export {
 	type FieldIssue
 } from './errors.ts';
 export { DEFAULT_PER_PAGE, MAX_PER_PAGE, listParamsSchema } from './list-params.ts';
-export { listHref, listUrlRewrite, readListParams } from './list-url.ts';
+export {
+	encodeListParams,
+	listHref,
+	listUrlRewrite,
+	readListParams,
+	type ListParamDefaults
+} from './list-url.ts';
 export {
 	defineAdmin,
 	type AdminEntry,

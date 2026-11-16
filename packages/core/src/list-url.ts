@@ -11,10 +11,16 @@ function urlInt(schema: z.ZodInt, fallback: number) {
 	return z.string().regex(/^\d+$/).transform(Number).pipe(schema).catch(fallback);
 }
 
+/** Values a list param is left out of the encoding at, when they are given. */
+export type ListParamDefaults = { page: number; perPage: number };
+
+/** The defaults a list View's URL falls back to when it leaves a param out, and so leaves out. */
+const URL_DEFAULTS: ListParamDefaults = { page: 1, perPage: DEFAULT_PER_PAGE };
+
 /** How a list View's URL search params map to list params. */
 const listUrlSchema = z.object({
-	page: urlInt(pageParamSchemas.page, 1),
-	perPage: urlInt(pageParamSchemas.perPage, DEFAULT_PER_PAGE)
+	page: urlInt(pageParamSchemas.page, URL_DEFAULTS.page),
+	perPage: urlInt(pageParamSchemas.perPage, URL_DEFAULTS.perPage)
 });
 
 /**
@@ -29,14 +35,37 @@ function nonBlank(value: string | null | undefined): string | undefined {
  * The list params a list View's URL names, with defaults for what it leaves out. The search is
  * read from `q`, and only for a searchable Resource.
  */
-export function readListParams(url: URL, resource: Pick<Resource, 'searchable'>): ListParams {
+export function readListParams<R extends Pick<Resource, 'searchable'>>(
+	url: URL,
+	resource: R
+): ListParams<R> {
 	const { searchParams } = url;
 	const params: ListParams = listUrlSchema.parse({
 		page: searchParams.get('page') ?? undefined,
 		perPage: searchParams.get('perPage') ?? undefined
 	});
 	const search = resource.searchable ? nonBlank(searchParams.get('q')) : undefined;
-	return search === undefined ? params : { ...params, search };
+	// A search only for a searchable Resource, as its type says.
+	return (search === undefined ? params : { ...params, search }) as ListParams<R>;
+}
+
+/**
+ * The one encoding of list params as search params, shared by the list URL and the bundled REST
+ * Provider so the two can't drift: `page`, `perPage`, then the search as `q`. A blank search is
+ * never written. Given `defaults`, a param at its default is left out too, as the list URL does;
+ * without them every other param is written, as the REST Provider does, so a backend never has to
+ * know the defaults. `readListParams` reads it back.
+ */
+export function encodeListParams(
+	params: ListParams,
+	defaults?: ListParamDefaults
+): URLSearchParams {
+	const encoded = new URLSearchParams();
+	if (params.page !== defaults?.page) encoded.set('page', String(params.page));
+	if (params.perPage !== defaults?.perPage) encoded.set('perPage', String(params.perPage));
+	const q = nonBlank(params.search);
+	if (q !== undefined) encoded.set('q', q);
+	return encoded;
 }
 
 /**
@@ -46,12 +75,7 @@ export function readListParams(url: URL, resource: Pick<Resource, 'searchable'>)
  * every other search param is dropped.
  */
 export function listHref(url: URL, params: ListParams): string {
-	const search = new URLSearchParams();
-	if (params.page !== 1) search.set('page', String(params.page));
-	if (params.perPage !== DEFAULT_PER_PAGE) search.set('perPage', String(params.perPage));
-	const q = nonBlank(params.search);
-	if (q !== undefined) search.set('q', q);
-	const query = search.toString();
+	const query = encodeListParams(params, URL_DEFAULTS).toString();
 	return query ? `${url.pathname}?${query}` : url.pathname;
 }
 

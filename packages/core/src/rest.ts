@@ -3,8 +3,8 @@
 import { z } from 'zod';
 import { ConflictError, FieldError, InvalidInputError, NotFoundError } from './errors.ts';
 import { idPathSegment } from './ids.ts';
-import type { CreateData, EditData } from './form-spec.ts';
-import type { ListResult, Provider } from './provider.ts';
+import { encodeListParams } from './list-url.ts';
+import type { ListResult, ResourceProvider } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /** A 422's body that names the Fields the backend rejected. */
@@ -23,7 +23,8 @@ const listResponse = z.union([
  * A Provider for a backend that speaks this convention:
  *
  * - `GET {base}/{resource}?page=&perPage=&q=` returns `{ data, total }` or
- *   `{ data, hasNextPage }`. `q` is the search, sent only when there is one.
+ *   `{ data, hasNextPage }`. The query is the list URL's encoding (`encodeListParams`), with
+ *   `page` and `perPage` always written. `q` is the search, sent only when there is one.
  * - `GET {base}/{resource}/{id}` returns the record. The id is always one path segment
  *   (`idPathSegment`), so `../users/1` is asked for as `..%2Fusers%2F1`.
  * - `POST {base}/{resource}` with the record (without its id) as JSON creates it, and returns
@@ -53,18 +54,16 @@ export function restProvider(baseUrl: string) {
 
 	return {
 		/** The Provider for one Resource, at `{base}/{resource.name}`. */
-		for<R extends Resource>(
-			resource: R
-		): Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>> {
+		for<R extends Resource>(resource: R): ResourceProvider<R> {
 			const resourceUrl = `${base}/${encodeURIComponent(resource.name)}`;
 			/** A record's URL: the id is always one path segment. */
 			const recordUrl = (id: IdOf<R>) => `${resourceUrl}/${idPathSegment(id)}`;
 
 			return {
-				async getList({ fetch }, { page, perPage, search }) {
-					const query = new URLSearchParams({ page: String(page), perPage: String(perPage) });
-					if (search !== undefined) query.set('q', search);
-					const url = `${resourceUrl}?${query}`;
+				async getList({ fetch }, params) {
+					// The list URL's encoding, with every param written, so the backend never has to
+					// know the defaults.
+					const url = `${resourceUrl}?${encodeListParams(params)}`;
 					const parsed = listResponse.safeParse(await requestJson(fetch, 'GET', url));
 					if (!parsed.success) {
 						throw new Error(

@@ -13,12 +13,14 @@ import {
 	type EditData,
 	type FormInput,
 	type IdOf,
+	type ListParams,
 	type Provider,
 	type ProviderContext,
 	type RecordOf,
 	type RemoteFormFieldLike,
 	type RemoteFormLike,
 	type Resource,
+	type ResourceProvider,
 	type ResourceRemote,
 	type StandardSchemaV1
 } from '@svelte-admin/core';
@@ -603,3 +605,94 @@ void untypedInput;
 const anyCreateView = createFormView(formRecipes as Resource, {} as ResourceRemote, 'create');
 const looseForm: RemoteFormLike = anyCreateView.form;
 void looseForm;
+
+// ---------------------------------------------------------------------------------------------
+// Typed list params: what `getList` receives, typed from the Resource as the form data is.
+
+const searchableRecipes = defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	schema: z.object({ id: z.number(), name: z.string() }),
+	searchable: true
+});
+const unsearchableRecipes = defineResource({
+	name: 'recipes',
+	label: 'Recipes',
+	schema: z.object({ id: z.number(), name: z.string() }),
+	searchable: false
+});
+
+// A searchable Resource's list params have an optional search; one that isn't searchable has
+// none, whether it says so or leaves `searchable` out.
+expectTypeOf<ListParams<typeof searchableRecipes>>().toEqualTypeOf<{
+	page: number;
+	perPage: number;
+	search?: string;
+}>();
+expectTypeOf<ListParams<typeof recipes>>().toEqualTypeOf<{ page: number; perPage: number }>();
+expectTypeOf<ListParams<typeof unsearchableRecipes>>().toEqualTypeOf<{
+	page: number;
+	perPage: number;
+}>();
+// For a Resource TypeScript can't see, a search may come or not.
+expectTypeOf<ListParams>().toEqualTypeOf<{ page: number; perPage: number; search?: string }>();
+
+// `serveResource` hands the Provider's `getList` the Resource's own list params.
+serveResource(searchableRecipes, {
+	...recipeProvider,
+	getList: async (_ctx, params) => {
+		expectTypeOf(params).toEqualTypeOf<ListParams<typeof searchableRecipes>>();
+		return { data: [], total: 0 };
+	}
+});
+serveResource(recipes, {
+	...recipeProvider,
+	getList: async (_ctx, params) => {
+		expectTypeOf(params).toEqualTypeOf<{ page: number; perPage: number }>();
+		return { data: [], total: 0 };
+	}
+});
+serveResource(recipes, {
+	...recipeProvider,
+	// @ts-expect-error recipes aren't searchable here, so their `getList` never gets a search
+	getList: async (_ctx, { search }) => ({ data: [], total: search === undefined ? 0 : 1 })
+});
+
+// A Provider whose `getList` takes the loose `ListParams`, as every Provider's did before they
+// were typed from the Resource, still fits every Resource.
+const looseListProvider: Provider<Recipe> = {
+	...recipeProvider,
+	getList: async (_ctx, { page, perPage, search }) => ({
+		data: [],
+		total: page + perPage + (search?.length ?? 0)
+	})
+};
+serveResource(recipes, looseListProvider);
+serveResource(searchableRecipes, looseListProvider);
+serveResource(unsearchableRecipes, looseListProvider);
+
+// `ResourceProvider` names what `serveResource` takes and the REST Provider returns.
+expectTypeOf(restProvider('http://api.test').for(searchableRecipes)).toEqualTypeOf<
+	ResourceProvider<typeof searchableRecipes>
+>();
+
+// The bundled REST Provider's `getList` is typed from the Resource too.
+expectTypeOf(restProvider('http://api.test').for(searchableRecipes).getList)
+	.parameter(1)
+	.toEqualTypeOf<ListParams<typeof searchableRecipes>>();
+expectTypeOf(restProvider('http://api.test').for(recipes).getList)
+	.parameter(1)
+	.toEqualTypeOf<{ page: number; perPage: number }>();
+
+// So is the remote `getList`: a search only for a searchable Resource.
+const searchableRemote = serveResource(searchableRecipes, recipeProvider);
+void searchableRemote.getList({ page: 1, perPage: 25, search: 'pasta' });
+void recipesRemote.getList({ page: 1, perPage: 25 });
+// @ts-expect-error recipes here aren't searchable
+void recipesRemote.getList({ page: 1, perPage: 25, search: 'pasta' });
+
+// And a list View's `params`.
+expectTypeOf(createListView(searchableRecipes, searchableRemote).params).toEqualTypeOf<
+	ListParams<typeof searchableRecipes>
+>();
+expectTypeOf(replacedView.params).toEqualTypeOf<{ page: number; perPage: number }>();

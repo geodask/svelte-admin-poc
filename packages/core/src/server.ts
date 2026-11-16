@@ -16,7 +16,6 @@ import {
 	formSchema,
 	isInputSpec,
 	toFormSpec,
-	type CreateData,
 	type EditData,
 	type FormInput,
 	type FormMode,
@@ -32,7 +31,7 @@ import {
 	recordPath
 } from './ids.ts';
 import { listParamsSchema } from './list-params.ts';
-import type { ListResult, Provider, ProviderContext } from './provider.ts';
+import type { ListResult, ProviderContext, ResourceProvider } from './provider.ts';
 import type { DeleteManyReport, ServedFailure } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 import type { StandardSchemaV1 } from './standard-schema.ts';
@@ -88,10 +87,7 @@ const MAX_BULK_DELETE = 1000;
  * 	backend.for(recipes)
  * );
  */
-export function serveResource<R extends Resource>(
-	resource: R,
-	provider: Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>>
-) {
+export function serveResource<R extends Resource>(resource: R, provider: ResourceProvider<R>) {
 	const records = z.array(resource.schema);
 	const save = {
 		create: formSaver(resource, 'create'),
