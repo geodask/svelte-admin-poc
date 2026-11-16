@@ -4,8 +4,7 @@ import { z } from 'zod';
 import { ConflictError, FieldError, InvalidInputError, NotFoundError } from './errors.ts';
 import { idPathSegment } from './ids.ts';
 import { encodeListParams } from './list-url.ts';
-import type { CreateData, EditData } from './form-spec.ts';
-import type { ListParams, ListResult, Provider } from './provider.ts';
+import type { ListResult, ResourceProvider } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /** A 422's body that names the Fields the backend rejected. */
@@ -55,9 +54,7 @@ export function restProvider(baseUrl: string) {
 
 	return {
 		/** The Provider for one Resource, at `{base}/{resource.name}`. */
-		for<R extends Resource>(
-			resource: R
-		): Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>, ListParams<R>> {
+		for<R extends Resource>(resource: R): ResourceProvider<R> {
 			const resourceUrl = `${base}/${encodeURIComponent(resource.name)}`;
 			/** A record's URL: the id is always one path segment. */
 			const recordUrl = (id: IdOf<R>) => `${resourceUrl}/${idPathSegment(id)}`;

@@ -11,10 +11,16 @@ function urlInt(schema: z.ZodInt, fallback: number) {
 	return z.string().regex(/^\d+$/).transform(Number).pipe(schema).catch(fallback);
 }
 
+/** Values a list param is left out of the encoding at, when they are given. */
+export type ListParamDefaults = { page: number; perPage: number };
+
+/** The defaults a list View's URL falls back to when it leaves a param out, and so leaves out. */
+const URL_DEFAULTS: ListParamDefaults = { page: 1, perPage: DEFAULT_PER_PAGE };
+
 /** How a list View's URL search params map to list params. */
 const listUrlSchema = z.object({
-	page: urlInt(pageParamSchemas.page, 1),
-	perPage: urlInt(pageParamSchemas.perPage, DEFAULT_PER_PAGE)
+	page: urlInt(pageParamSchemas.page, URL_DEFAULTS.page),
+	perPage: urlInt(pageParamSchemas.perPage, URL_DEFAULTS.perPage)
 });
 
 /**
@@ -42,12 +48,6 @@ export function readListParams<R extends Pick<Resource, 'searchable'>>(
 	// A search only for a searchable Resource, as its type says.
 	return (search === undefined ? params : { ...params, search }) as ListParams<R>;
 }
-
-/** Values a list param is left out of the encoding at, when they are given. */
-export type ListParamDefaults = { page: number; perPage: number };
-
-/** The defaults a list View's URL leaves out. */
-const URL_DEFAULTS: ListParamDefaults = { page: 1, perPage: DEFAULT_PER_PAGE };
 
 /**
  * The one encoding of list params as search params, shared by the list URL and the bundled REST

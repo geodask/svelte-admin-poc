@@ -1,6 +1,7 @@
 // `App.Locals` is declared by SvelteKit, which the core peer-depends on.
 /// <reference types="@sveltejs/kit" />
-import type { Resource } from './resource.ts';
+import type { CreateData, EditData } from './form-spec.ts';
+import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /**
  * What every Provider method receives first: the current request's `fetch` and `locals`.
@@ -32,9 +33,8 @@ type IdOfRecord<T> = T extends { id: infer Id } ? Id : never;
  * The adapter that carries out a Resource's data operations against a backend. Its record
  * type must be the Resource schema's output type, and its ids the schema's id type. `Create` is
  * what `create` receives, `Edit` what `update` receives as its `data`, and `List` what `getList`
- * receives. For a Resource, `serveResource` takes
- * `Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>, ListParams<R>>`, which leave out
- * the Fields no form sets and the params the Resource doesn't take; the defaults suit a Resource
+ * receives. For a Resource, `serveResource` takes `ResourceProvider<R>`, which leaves out the
+ * Fields no form sets and the params the Resource doesn't take; the defaults suit a Resource
  * without read-only or hidden Fields, and a `getList` written against the loose `ListParams`
  * fits any Resource.
  */
@@ -83,3 +83,15 @@ export type Provider<
 	 */
 	deleteMany?(ctx: ProviderContext, ids: Id[]): Promise<void>;
 };
+
+/**
+ * The Provider `serveResource` takes for a Resource, and `restProvider(...).for(resource)` returns:
+ * its records, ids, `CreateData`, `EditData` and `ListParams`, all typed from the Resource.
+ */
+export type ResourceProvider<R extends Resource> = Provider<
+	RecordOf<R>,
+	IdOf<R>,
+	CreateData<R>,
+	EditData<R>,
+	ListParams<R>
+>;

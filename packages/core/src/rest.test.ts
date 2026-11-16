@@ -88,16 +88,23 @@ describe('the bundled REST Provider', () => {
 		});
 
 		it.each([
-			{ page: 1, perPage: 25 },
-			{ page: 3, perPage: 100 },
-			{ page: 1, perPage: 25, search: 'pasta & co' }
-		])('sends the list URL encoding of %j, with every param written', async (params) => {
-			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+			{ params: { page: 1, perPage: 25 }, query: 'page=1&perPage=25' },
+			{ params: { page: 3, perPage: 100 }, query: 'page=3&perPage=100' },
+			{
+				params: { page: 1, perPage: 25, search: 'pasta & co' },
+				query: 'page=1&perPage=25&q=pasta+%26+co'
+			}
+		])(
+			'sends $query, the list URL encoding with every param written',
+			async ({ params, query }) => {
+				const { fetch, requests } = fakeFetch({ data: [], total: 0 });
 
-			await restProvider('http://api.test').for(recipes).getList(context(fetch), params);
+				await restProvider('http://api.test').for(recipes).getList(context(fetch), params);
 
-			expect(requests).toEqual([`http://api.test/recipes?${encodeListParams(params)}`]);
-		});
+				expect(encodeListParams(params).toString()).toBe(query);
+				expect(requests).toEqual([`http://api.test/recipes?${query}`]);
+			}
+		);
 
 		it('keeps a path in the base URL and ignores a trailing slash', async () => {
 			const { fetch, requests } = fakeFetch({ data: [], total: 0 });

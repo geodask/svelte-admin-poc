@@ -5,11 +5,9 @@ import type {
 	CreateData,
 	EditData,
 	FormInput,
-	IdOf,
 	ListParams,
-	Provider,
-	RecordOf,
-	Resource
+	Resource,
+	ResourceProvider
 } from '@svelte-admin/core';
 import type { serveResource } from '@svelte-admin/core/server';
 import type { posts } from './posts.ts';
@@ -54,20 +52,20 @@ export const userSearch: ListParams<typeof users>['search'] = 'ada';
 // @ts-expect-error posts aren't searchable
 export const postSearch: ListParams<typeof posts>['search'] = 'hello';
 
-// A Provider written for M2, whose `getList` takes the loose list params and reads a search,
-// still fits `serveResource` for every demo Resource.
-type M2Provider<R extends Resource> = Provider<RecordOf<R>, IdOf<R>, CreateData<R>, EditData<R>>;
+// A Provider whose `getList` takes the loose `ListParams` and reads a search, as every Provider
+// did before list params were typed from the Resource, still fits `serveResource` for every demo
+// Resource.
+const looseGetList = async (_ctx: unknown, { page, perPage, search }: ListParams) => ({
+	data: [],
+	total: page + perPage + (search?.length ?? 0)
+});
 // The rest of each Provider, which this check doesn't look at.
 declare const writes: {
-	recipes: Omit<M2Provider<typeof recipes>, 'getList'>;
-	users: Omit<M2Provider<typeof users>, 'getList'>;
-	posts: Omit<M2Provider<typeof posts>, 'getList'>;
+	recipes: Omit<ResourceProvider<typeof recipes>, 'getList'>;
+	users: Omit<ResourceProvider<typeof users>, 'getList'>;
+	posts: Omit<ResourceProvider<typeof posts>, 'getList'>;
 };
-const m2GetList = async (
-	_ctx: unknown,
-	{ page, perPage, search }: { page: number; perPage: number; search?: string }
-) => ({ data: [], total: page + perPage + (search?.length ?? 0) });
 type Served<R extends Resource> = Parameters<typeof serveResource<R>>[1];
-export const recipesProvider: Served<typeof recipes> = { ...writes.recipes, getList: m2GetList };
-export const usersProvider: Served<typeof users> = { ...writes.users, getList: m2GetList };
-export const postsProvider: Served<typeof posts> = { ...writes.posts, getList: m2GetList };
+export const recipesProvider: Served<typeof recipes> = { ...writes.recipes, getList: looseGetList };
+export const usersProvider: Served<typeof users> = { ...writes.users, getList: looseGetList };
+export const postsProvider: Served<typeof posts> = { ...writes.posts, getList: looseGetList };

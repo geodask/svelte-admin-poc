@@ -101,11 +101,8 @@ export function createListView<R extends Resource>(
 
 	// The search in the URL, if any. Read through the loose `ListParams`, since a Resource that
 	// isn't searchable has no `search` in its own.
-	const urlSearch = (): string | undefined => {
-		const loose: ListParams = params;
-		return loose.search;
-	};
-	const searchText = () => draft ?? urlSearch() ?? '';
+	const urlSearch = $derived((params satisfies ListParams as ListParams).search);
+	const searchText = () => draft ?? urlSearch ?? '';
 
 	const selection = createSelection<IdOf<R>>();
 
@@ -171,8 +168,7 @@ export function createListView<R extends Resource>(
 		 */
 		get emptyMessage(): string {
 			const records = resource.label.toLowerCase();
-			const search = urlSearch();
-			if (search !== undefined) return `No ${records} match “${search}”.`;
+			if (urlSearch !== undefined) return `No ${records} match “${urlSearch}”.`;
 			return `No ${records} ${params.page > 1 ? 'on this page' : 'yet'}.`;
 		},
 		/** The page sizes to offer, as plain links. */

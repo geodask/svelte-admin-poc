@@ -20,6 +20,7 @@ import {
 	type RemoteFormFieldLike,
 	type RemoteFormLike,
 	type Resource,
+	type ResourceProvider,
 	type ResourceRemote,
 	type StandardSchemaV1
 } from '@svelte-admin/core';
@@ -654,20 +655,26 @@ serveResource(recipes, {
 serveResource(recipes, {
 	...recipeProvider,
 	// @ts-expect-error recipes aren't searchable here, so their `getList` never gets a search
-	getList: async (_ctx, { search }) => ({ data: [], total: search.length })
+	getList: async (_ctx, { search }) => ({ data: [], total: search === undefined ? 0 : 1 })
 });
 
-// A Provider written for M2, against the loose list params, still fits every Resource.
-const m2Provider: Provider<Recipe> = {
+// A Provider whose `getList` takes the loose `ListParams`, as every Provider's did before they
+// were typed from the Resource, still fits every Resource.
+const looseListProvider: Provider<Recipe> = {
 	...recipeProvider,
 	getList: async (_ctx, { page, perPage, search }) => ({
 		data: [],
 		total: page + perPage + (search?.length ?? 0)
 	})
 };
-serveResource(recipes, m2Provider);
-serveResource(searchableRecipes, m2Provider);
-serveResource(unsearchableRecipes, m2Provider);
+serveResource(recipes, looseListProvider);
+serveResource(searchableRecipes, looseListProvider);
+serveResource(unsearchableRecipes, looseListProvider);
+
+// `ResourceProvider` names what `serveResource` takes and the REST Provider returns.
+expectTypeOf(restProvider('http://api.test').for(searchableRecipes)).toEqualTypeOf<
+	ResourceProvider<typeof searchableRecipes>
+>();
 
 // The bundled REST Provider's `getList` is typed from the Resource too.
 expectTypeOf(restProvider('http://api.test').for(searchableRecipes).getList)
