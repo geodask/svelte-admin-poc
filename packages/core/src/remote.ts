@@ -123,10 +123,32 @@ export type ResourceRemote<T = any, Id = any, List = any> = {
 	 * server can't be reached.
 	 */
 	deleteMany: (ids: Id[]) => RemoteCommandCall<DeleteManyReport>;
+	/**
+	 * Export every record that matches a search, a sort and filters (the list params without the
+	 * page and the page size) as CSV, up to the Resource's cap. A remote command, so it runs only
+	 * with JavaScript. It rejects with `{ status, body: { message } }` when the export fails, with
+	 * no partial file.
+	 */
+	exportList: (params: Omit<List, 'page' | 'perPage'>) => RemoteCommandCall<ExportReport>;
 };
 
-/** Why a delete failed: a message safe to show, and the HTTP status when the server answered. */
-export type DeleteFailure = { status?: number; message: string };
+/**
+ * What an export holds: how many records, whether it stopped at the cap with more records left,
+ * and the total the Provider counted, when it counts.
+ */
+export type ExportSummary = { rows: number; capped: boolean; total?: number };
+
+/** What an export returns: the CSV file's text, and what it holds (see `ExportSummary`). */
+export type ExportReport = ExportSummary & { csv: string };
+
+/**
+ * Why a remote command (a delete, an export) failed: a message safe to show, and the HTTP status
+ * when the server answered.
+ */
+export type RemoteFailure = { status?: number; message: string };
+
+/** Why a delete failed: see `RemoteFailure`. */
+export type DeleteFailure = RemoteFailure;
 
 /**
  * What a bulk delete reports: how many records it deleted (the first that many ids sent, in
@@ -135,7 +157,7 @@ export type DeleteFailure = { status?: number; message: string };
 export type DeleteManyReport = { deleted: number } | { deleted: number; failure: ServedFailure };
 
 /** A failure the server reports with its status: a Provider error's, or 500 for any other. */
-export type ServedFailure = DeleteFailure & { status: number };
+export type ServedFailure = RemoteFailure & { status: number };
 
 /**
  * One call of a remote command: a promise of its result, and `updates` to name the queries the

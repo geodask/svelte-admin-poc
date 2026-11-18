@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { FILTER_OPERATORS, unwrap, type Field } from './fields.ts';
 import type {
+	ExportParams,
 	FilterValue,
 	ListFilter,
 	ListParams,
@@ -25,7 +26,7 @@ const pageParams = z.strictObject({
  * A list View leaves a blank search out, so `getList` never receives one. The URL keeps the
  * search as typed, and the Provider gets it without the spaces around it.
  */
-const searchableListParams = pageParams.extend({ search: z.string().trim().min(1).optional() });
+const searchSchema = z.string().trim().min(1).optional();
 
 /** The directions a sort can take, as `getList` and the list URL name them. */
 const sortOrder = z.enum(['asc', 'desc']) satisfies z.ZodType<SortOrder>;
@@ -71,15 +72,16 @@ export function assertListSettings(
 }
 
 /**
- * The params `getList` hands its Provider: those it was given, with the Resource's
- * `defaultSort` when they name no sort, so every caller gets the same order.
+ * The params `getList` (or `exportList`) hands its Provider: those it was given, with the
+ * Resource's `defaultSort` when they name no sort, so every caller gets the same order.
  */
-export function withDefaultSort<P extends ListParams>(
+export function withDefaultSort<P extends object>(
 	params: P,
 	resource: Pick<Resource, 'defaultSort'>
 ): P {
 	const { defaultSort } = resource;
-	return params.sort !== undefined || defaultSort === undefined
+	// Read loosely: a Resource with no sortable Field has no `sort` in its params at all.
+	return (params as { sort?: ListSort }).sort !== undefined || defaultSort === undefined
 		? params
 		: { ...params, sort: { ...defaultSort } };
 }
@@ -206,6 +208,25 @@ export function sortableKeys(resource: Pick<Resource, 'fields'>): string[] {
 }
 
 /**
+ * The schema of what a Resource's list is narrowed and ordered by, without the page: a search only
+ * when the Resource is searchable, a sort only when it has a sortable Field, and filters only when
+ * it has a filterable Field. Strict, like `listParamsSchema`.
+ */
+function listQuerySchema(resource: ListSchemaResource) {
+	// The runtime check matches the type: a search only when the Resource is searchable, and a
+	// sort only on a sortable Field.
+	const [first, ...rest] = sortableKeys(resource);
+	const filters = filtersSchema(resource);
+	return z.strictObject({
+		...(resource.searchable ? { search: searchSchema } : {}),
+		...(first === undefined
+			? {}
+			: { sort: z.strictObject({ field: z.enum([first, ...rest]), order: sortOrder }).optional() }),
+		...(filters === undefined ? {} : { filters: filters.optional() })
+	});
+}
+
+/**
  * The input schema of a Resource's `getList` query: a page and a page size, plus a search only
  * when the Resource is searchable, a sort only when it has a sortable Field, on one of those
  * Fields, and filters only when it has a filterable Field, on those Fields with the operators
@@ -220,20 +241,18 @@ export function sortableKeys(resource: Pick<Resource, 'fields'>): string[] {
 export function listParamsSchema<R extends ListSchemaResource>(
 	resource: R
 ): z.ZodType<ListParams<R>, ListParams<R>> {
-	// The runtime check matches the type: a search only when the Resource is searchable, and a
-	// sort only on a sortable Field.
-	const base = resource.searchable ? searchableListParams : pageParams;
-	const [first, ...rest] = sortableKeys(resource);
-	const filters = filtersSchema(resource);
-	const schema = base.extend({
-		...(first === undefined
-			? {}
-			: {
-					sort: z.strictObject({ field: z.enum([first, ...rest]), order: sortOrder }).optional()
-				}),
-		...(filters === undefined ? {} : { filters: filters.optional() })
-	});
+	const schema = listQuerySchema(resource).extend(pageParams.shape);
 	return schema as unknown as z.ZodType<ListParams<R>, ListParams<R>>;
+}
+
+/**
+ * The input schema of a Resource's `exportList` command: `listParamsSchema` without the page and
+ * the page size, with the same rules for the search, the sort and the filters.
+ */
+export function exportParamsSchema<R extends ListSchemaResource>(
+	resource: R
+): z.ZodType<ExportParams<R>, ExportParams<R>> {
+	return listQuerySchema(resource) as unknown as z.ZodType<ExportParams<R>, ExportParams<R>>;
 }
 
 /** The schemas of the page and the page size, for reading them from a URL. */

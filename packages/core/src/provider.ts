@@ -158,6 +158,15 @@ export type ListParams<R extends ListParamsResource = Resource> = Simplify<
 		([ListFilter<R>] extends [never] ? unknown : { filters?: ListFilter<R>[] })
 >;
 
+/**
+ * What a Resource's `exportList` takes: its `ListParams` without the page and the page size, so
+ * the search, the sort and the filters. The export holds every record they match, page after page.
+ */
+export type ExportParams<R extends ListParamsResource = Resource> = Omit<
+	ListParams<R>,
+	'page' | 'perPage'
+>;
+
 /** One page of records, with a total when the backend can count, or else `hasNextPage`. */
 export type ListResult<T> = { data: T[]; total: number } | { data: T[]; hasNextPage: boolean };
 

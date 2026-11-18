@@ -1,11 +1,11 @@
-import type { DeleteFailure } from './remote.ts';
+import type { RemoteFailure } from './remote.ts';
 
 /**
- * Why a remote delete failed, from what it rejected with: Kit rejects with `{ status, body }`, whose
+ * Why a remote command (a delete, an export) failed, from what it rejected with: Kit rejects with `{ status, body }`, whose
  * body is the server's safe `{ message }`. `fallback` is the message when it carries none of its
  * own (e.g. no network).
  */
-export function readDeleteFailure(failure: unknown, fallback: string): DeleteFailure {
+export function readRemoteFailure(failure: unknown, fallback: string): RemoteFailure {
 	const { status, body } = (failure ?? {}) as { status?: unknown; body?: { message?: unknown } };
 	const message = body?.message;
 	return {

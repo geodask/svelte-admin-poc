@@ -4,8 +4,9 @@
 	with JavaScript, the list follows typing and the URL is updated in place, so the browser
 	history doesn't fill up. Next, on a Resource with a filterable Field, the filter panel
 	(`FilterPanel`). Beside them, a count of the selected rows, once any are selected, with
-	"Delete selected (N)", which opens the delete dialog for them; and at the end a "New" link to
-	the create View. Bulk delete needs JavaScript, so its button appears only after hydration. The row is there on every Resource, so the content
+	"Delete selected (N)", which opens the delete dialog for them; then "Export CSV"
+	(`ExportButton`); and at the end a "New" link to the create View. Bulk delete and export need
+	JavaScript, so their buttons appear only after hydration. The row is there on every Resource, so the content
 	below doesn't move when the count appears. Under the row, while any filter is on, a chip per
 	filter that removes it (`ActiveFilters`).
 	A Theme part, exported for a replaced list View: give it the core's `createListView` helper.
@@ -23,6 +24,7 @@
 	import { onMount } from 'svelte';
 	import ActiveFilters from './ActiveFilters.svelte';
 	import DeleteDialog from './DeleteDialog.svelte';
+	import ExportButton from './ExportButton.svelte';
 	import FilterPanel from './FilterPanel.svelte';
 
 	let { view }: ToolbarProps = $props();
@@ -102,6 +104,8 @@
 			confirm={view.deleteSelected}
 		/>
 	{/if}
+
+	<ExportButton {view} />
 
 	<a
 		href={view.createHref}

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { BACKEND_URL } from '../backend/config.ts';
 import { expect, hydrated, test } from './fixtures.ts';
@@ -176,4 +177,54 @@ export async function expectLanded(page: Page, clean: string) {
 		return `${url.pathname}?${params}`;
 	};
 	await expect(page).toHaveURL((url) => sorted(url) === sorted(new URL(clean, url)));
+}
+
+/** The toolbar's export button, whatever it reads ("Export CSV", "Exporting…", "Try again"). */
+export const exportButton = (page: Page) =>
+	page.getByRole('button', { name: /^(Export CSV|Exporting…|Try again)$/ });
+
+/**
+ * The rows of a CSV file as the admin writes it: a byte order mark, then every cell quoted, with
+ * `"` doubled, and every row ending in CRLF. It fails on anything else, so a test also checks
+ * the format.
+ */
+export function parseCsv(text: string): string[][] {
+	expect(text.startsWith('\uFEFF'), 'starts with a byte order mark').toBe(true);
+	const rows: string[][] = [];
+	const cell = /"((?:[^"]|"")*)"(,|\r\n)/y;
+	let row: string[] = [];
+	// After the byte order mark, cell after cell, up to the end of the text.
+	let end = 1;
+	cell.lastIndex = end;
+	for (let match = cell.exec(text); match !== null; match = cell.exec(text)) {
+		end = cell.lastIndex;
+		row.push(match[1].replaceAll('""', '"'));
+		if (match[2] === '\r\n') {
+			rows.push(row);
+			row = [];
+		}
+	}
+	expect(end, 'every cell is quoted and every row ends with CRLF').toBe(text.length);
+	return rows;
+}
+
+/**
+ * Click the export button and wait for the file it downloads: its suggested name and its rows
+ * (see `parseCsv`), the header row first.
+ */
+export async function exportCsv(page: Page) {
+	await hydrated(page);
+	const download = page.waitForEvent('download');
+	await exportButton(page).click();
+	const file = await download;
+	const text = await readFile((await file.path()) ?? '', 'utf8');
+	return { filename: file.suggestedFilename(), rows: parseCsv(text) };
+}
+
+/** One column of exported rows, by its header. */
+export function csvColumn(rows: string[][], header: string): string[] {
+	const [headers = [], ...records] = rows;
+	const index = headers.indexOf(header);
+	if (index === -1) throw new Error(`No column "${header}" among ${JSON.stringify(headers)}`);
+	return records.map((record) => record[index]);
 }

@@ -10,6 +10,8 @@ const clientDir = new URL('../build/client', import.meta.url).pathname;
 const markers = [
 	{ what: 'the demo backend URL', text: new URL(BACKEND_URL).host },
 	{ what: 'the bundled REST Provider', text: 'REST Provider' },
+	// The source of the CSV writer's formula-guard pattern, which minifying keeps as it is.
+	{ what: 'the CSV writer', text: String.raw`[=+\-@\t\r]` },
 	// An error code from the `$app/server` remote-function runtime that survives minification.
 	{ what: 'the $app/server runtime', text: 'remote_query_prerender' }
 ];
