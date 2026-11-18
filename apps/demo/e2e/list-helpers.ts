@@ -140,6 +140,12 @@ export async function captureLookup(
  */
 export const uniquePage = () => 1000 + Math.floor(Math.random() * 1_000_000_000);
 
+/**
+ * A number id no record has and no other test asks for, so a test that sends it finds its own
+ * requests in the backend's request log.
+ */
+export const uniqueId = () => 700_000 + Math.floor(Math.random() * 100_000_000);
+
 /** The requests the demo backend received for `page`, e.g. `GET /recipes?page=…&perPage=25`. */
 export async function backendRequestsFor(request: APIRequestContext, page: number) {
 	const log = await backendLog(request);
@@ -156,7 +162,8 @@ export async function backendLog(request: APIRequestContext): Promise<string[]> 
 /**
  * The requests the demo backend receives while `act` runs. Tests run in parallel, so it may
  * hold other tests' requests too: check it with `toContain`, never `toEqual`, for a request no
- * other test sends (e.g. at a page size no other test asks for).
+ * other test sends (e.g. at a page size no other test asks for). Only the tests that run one at a
+ * time (`writes/` and `request-count/`, see playwright.config.ts) may count every request in it.
  */
 export async function backendRequestsDuring(request: APIRequestContext, act: () => Promise<void>) {
 	const before = (await backendLog(request)).length;

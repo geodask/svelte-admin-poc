@@ -337,6 +337,61 @@ describe('the bundled REST Provider', () => {
 		});
 	});
 
+	describe('getMany', () => {
+		it('requests one page of the list filtered by id, as large as the ids, with the context fetch', async () => {
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+			const provider = restProvider('http://api.test/v1/').for(recipes);
+
+			await provider.getMany!(context(fetch), [7, 3, 12]);
+
+			expect(requests).toEqual(['http://api.test/v1/recipes?page=1&perPage=3&id=7&id=3&id=12']);
+		});
+
+		it('sends one id as one param', async () => {
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+
+			await restProvider('http://api.test').for(recipes).getMany!(context(fetch), [7]);
+
+			expect(requests).toEqual(['http://api.test/recipes?page=1&perPage=1&id=7']);
+		});
+
+		it('encodes string ids as query values', async () => {
+			const { fetch, requests } = fakeFetch({ data: [], total: 0 });
+
+			await restProvider('http://api.test').for(users).getMany!(context(fetch), ['a&b', 'c=d']);
+
+			const query = new URL(requests[0]).searchParams;
+			expect(query.getAll('id')).toEqual(['a&b', 'c=d']);
+			expect(query.get('perPage')).toBe('2');
+		});
+
+		it.each([
+			['{ data, total }', { total: 2 }],
+			['{ data, hasNextPage }', { hasNextPage: false }]
+		])('returns the records of a %s response as the backend sent them', async (_, count) => {
+			const records = [
+				{ id: 3, name: 'Pad Thai' },
+				{ id: 7, name: 'Caprese Salad' }
+			];
+			const { fetch } = fakeFetch({ data: records, ...count });
+
+			const result = await restProvider('http://api.test').for(recipes).getMany!(
+				context(fetch),
+				[7, 3, 12]
+			);
+
+			expect(result).toEqual(records);
+		});
+
+		it('rejects a response that is no list', async () => {
+			const { fetch } = fakeFetch([{ id: 7, name: 'Caprese Salad' }]);
+
+			await expect(
+				restProvider('http://api.test').for(recipes).getMany!(context(fetch), [7])
+			).rejects.toThrow(/REST Provider/);
+		});
+	});
+
 	describe('create', () => {
 		it('sends POST {base}/{resource} with the record as JSON', async () => {
 			const { fetch, sent } = fakeFetch({ id: 9, name: 'Pad See Ew' }, { status: 201 });

@@ -16,6 +16,16 @@ const faultTests = /faults\.test\.ts$/;
  */
 const writeTests = /\/writes\//;
 
+/**
+ * Tests that count every request the demo backend gets for a page (such as the one `getMany` a
+ * page of References makes). Other tests' requests would be counted too, so they run one at a
+ * time with the write tests, though they write nothing.
+ */
+const requestCountTests = /\/request-count\//;
+
+/** The tests the `writes-*` projects run one at a time, after the read-only tests. */
+const writeAndRequestCountTests = [writeTests, requestCountTests];
+
 export default defineConfig({
 	testDir: 'e2e',
 	forbidOnly: !!process.env.CI,
@@ -27,28 +37,28 @@ export default defineConfig({
 	projects: [
 		{
 			name: 'js',
-			testIgnore: [faultTests, writeTests],
+			testIgnore: [faultTests, ...writeAndRequestCountTests],
 			use: { ...devices['Desktop Chrome'] }
 		},
 		{
 			// The admin promises to work without JavaScript, so every test also runs with it off.
 			// Tests that need JavaScript are tagged `@js` and skipped here.
 			name: 'no-js',
-			testIgnore: [faultTests, writeTests],
+			testIgnore: [faultTests, ...writeAndRequestCountTests],
 			grepInvert: /@js/,
 			use: { ...devices['Desktop Chrome'], javaScriptEnabled: false }
 		},
 		{
-			// Writes, with JavaScript on and then off, one test at a time.
+			// Writes and request counts, with JavaScript on and then off, one test at a time.
 			name: 'writes-js',
-			testMatch: writeTests,
+			testMatch: writeAndRequestCountTests,
 			dependencies: ['js', 'no-js'],
 			workers: 1,
 			use: { ...devices['Desktop Chrome'] }
 		},
 		{
 			name: 'writes-no-js',
-			testMatch: writeTests,
+			testMatch: writeAndRequestCountTests,
 			dependencies: ['writes-js'],
 			workers: 1,
 			grepInvert: /@js/,

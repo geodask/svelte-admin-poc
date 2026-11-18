@@ -189,6 +189,33 @@ const textIdBulk: Provider<Recipe> = {
 };
 void textIdBulk;
 
+// `getMany` is optional too: every Provider above lacks it. One that has it gets typed ids and
+// returns records of the schema's type.
+const batchProvider: Provider<Recipe> = {
+	...recipeProvider,
+	getMany: async (_ctx, ids) => ids.map((id) => ({ id: Math.abs(id), name: 'Recipe' }))
+};
+serveResource(recipes, batchProvider);
+
+const textIdBatch: Provider<Recipe> = {
+	...recipeProvider,
+	// @ts-expect-error recipe ids arrive as numbers, never as text
+	getMany: async (_ctx, ids: string[]) => ids.map((id) => ({ id: id.length }) as Recipe)
+};
+void textIdBatch;
+
+const userBatch: Provider<Recipe> = {
+	...recipeProvider,
+	// @ts-expect-error getMany returns records of the schema's type
+	getMany: async () => [{ id: '1', email: 'ada@example.com' }]
+};
+void userBatch;
+
+// For a Resource, `getMany` is typed from it, as `getOne` is: its ids and its records.
+type RecipesGetMany = NonNullable<ResourceProvider<typeof recipes>['getMany']>;
+expectTypeOf<Parameters<RecipesGetMany>[1]>().toEqualTypeOf<number[]>();
+expectTypeOf<Awaited<ReturnType<RecipesGetMany>>>().toEqualTypeOf<Recipe[]>();
+
 // The remote deleteMany takes an array of canonical ids, reports how many were deleted, and
 // fits the remote the Views take.
 const recipesDeleteMany: ResourceRemote<Recipe, number>['deleteMany'] = recipesRemote.deleteMany;
