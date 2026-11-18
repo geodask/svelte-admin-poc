@@ -124,8 +124,28 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 				id: decoded === undefined ? undefined : idFromParam(entry.resource, decoded)
 			} as AdminLocation<M>;
 		}
-	};
+	} satisfies Admin;
 }
+
+/**
+ * Any admin `defineAdmin` returns: what the shell, the Views and their helpers take, so a View
+ * can reach the admin's other Resources, not only its own. Each admin's own type keeps its
+ * Resources' names and id types, and fits this one.
+ */
+export type Admin = {
+	/** Where the admin is mounted, e.g. `/admin`. */
+	readonly basePath: string;
+	/** Its Resources by name, as admin.ts lists them. */
+	readonly resources: Readonly<Record<string, AdminEntry>>;
+	/** The sidebar: the Resources grouped by their group. */
+	readonly sidebar: readonly SidebarGroup[];
+	/** The param matcher for a Resource segment. */
+	matchResource(param: string): string | undefined;
+	/** Where the admin's index leads: the first Resource's list, if there is one. */
+	readonly homeHref: string | undefined;
+	/** The Resource a path is on, which of its Views, and the record's typed id. */
+	locate(pathname: string): AdminLocation<Record<string, AdminEntry>> | undefined;
+};
 
 /** Which of a Resource's Views a path is on. */
 export type AdminView = 'list' | 'detail' | 'create' | 'edit';

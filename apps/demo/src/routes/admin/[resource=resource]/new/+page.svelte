@@ -9,4 +9,4 @@
 	const remote = $derived(await entry.remote());
 </script>
 
-<CreateView resource={entry.resource} {remote} />
+<CreateView {admin} resource={entry.resource} {remote} />

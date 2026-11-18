@@ -1,8 +1,8 @@
 <!--
 	The edit View: the create View's form, prefilled with the record's current values, under a
-	heading that names the record by its Record title. It takes the Resource, its remote
-	functions and the record's typed id as props, so a route passes them from admin.ts. It is
-	built on the core's headless `createFormView`.
+	heading that names the record by its Record title. It takes the admin, the Resource, its
+	remote functions and the record's typed id as props, so a route passes them from admin.ts.
+	It is built on the core's headless `createFormView`.
 
 	It works without JavaScript, like the create View, and the prefill is rendered by the server
 	too. A failed save keeps what the user typed. Save replaces every editable Field: an optional
@@ -15,19 +15,26 @@
 	again and the record can't load, so the "not found" message says it instead.
 -->
 <script lang="ts">
-	import type { Resource, ResourceRemote } from '@svelte-admin/core';
+	import type { Admin, Resource, ResourceRemote } from '@svelte-admin/core';
 	import { createFormView } from '@svelte-admin/core/views';
 	import EditBody from './EditBody.svelte';
 	import LoadError from './LoadError.svelte';
 
 	let {
+		admin,
 		resource,
 		remote,
 		id
-	}: { resource: Resource; remote: ResourceRemote; id: string | number } = $props();
+	}: {
+		/** The admin from admin.ts. */
+		admin: Admin;
+		resource: Resource;
+		remote: ResourceRemote;
+		id: string | number;
+	} = $props();
 
 	// Derived, so the View follows the route to another record or Resource.
-	const view = $derived(createFormView(resource, remote, 'edit', id));
+	const view = $derived(createFormView(admin, resource, remote, 'edit', id));
 </script>
 
 <div class="flex max-w-2xl flex-col gap-5">

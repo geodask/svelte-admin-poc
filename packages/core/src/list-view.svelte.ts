@@ -3,6 +3,7 @@ import { page } from '$app/state';
 import { untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { activeFilters, type ActiveFilter } from './active-filters.ts';
+import type { Admin } from './admin.ts';
 import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
 import type { Field, FilterOperator } from './fields.ts';
 import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
@@ -121,8 +122,8 @@ export type FilterControl = { field: Field; operators: readonly FilterOperator[]
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
  * the hrefs that change page, page size and sort, each record's href, the search box's state, and
  * the filter controls, form and active filters.
- * The Theme's list View is built on it, and so can a replaced View. It takes the Resource as an
- * argument, not from context.
+ * The Theme's list View is built on it, and so can a replaced View. It takes the admin from
+ * `admin.ts` and the Resource as arguments, not from context.
  *
  * The URL holds the list params. A bad value or an unknown param in it is dropped, and with
  * JavaScript the URL is rewritten in place (`replace`, so no history entry is added). On a
@@ -140,10 +141,12 @@ export type FilterControl = { field: Field; operators: readonly FilterOperator[]
  * with a selection of its own that starts empty.
  *
  * @example
- * const view = createListView(recipes, remote);
+ * const view = createListView(admin, recipes, remote);
  * const result = $derived(await view.query);
  */
 export function createListView<R extends Resource>(
+	// Not read yet: it is how the list View will reach the admin's other Resources.
+	admin: Admin,
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>, IdOf<R>, ListParams<R>>
 ) {

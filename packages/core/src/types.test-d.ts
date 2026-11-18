@@ -7,6 +7,7 @@ import { z } from 'zod';
 import {
 	defineAdmin,
 	defineResource,
+	type Admin,
 	field,
 	formSchema,
 	type CreateData,
@@ -31,6 +32,7 @@ import {
 import { restProvider } from '@svelte-admin/core/rest';
 import { serveResource } from '@svelte-admin/core/server';
 import {
+	createDetailView,
 	createFormView,
 	createListView,
 	type BulkDeleteResult,
@@ -259,6 +261,25 @@ if (here?.name === 'recipes') {
 const shellAdmin: ShellAdmin = admin;
 void shellAdmin;
 
+// It is also what the Views' helpers take, first, as the shell does. Any admin fits `Admin`.
+const anyAdmin: Admin = admin;
+void anyAdmin;
+void createListView(admin, recipes, recipesRemote);
+void createDetailView(admin, recipes, recipesRemote, 1);
+void createFormView(admin, recipes, recipesRemote, 'create');
+void createFormView(admin, recipes, recipesRemote, 'edit', 1);
+// Something that isn't an admin is refused: a Resource, the shell's part of one, or nothing.
+// @ts-expect-error a Resource is not an admin
+void createListView(recipes, recipes, recipesRemote);
+// @ts-expect-error the shell's part of an admin is not a whole one
+void createListView(shellAdmin, recipes, recipesRemote);
+// @ts-expect-error the admin can't be left out
+void createListView(recipes, recipesRemote);
+// @ts-expect-error a base path alone is not an admin
+void createDetailView({ basePath: '/admin' }, recipes, recipesRemote, 1);
+// @ts-expect-error the remote functions are not an admin
+void createFormView(recipesRemote, recipes, recipesRemote, 'create');
+
 // A list View's selection keeps the Resource's canonical id type: recipe ids stay numbers.
 declare const recipeList: ListViewState<typeof recipes>;
 const selected: number[] = recipeList.selection.ids;
@@ -290,7 +311,7 @@ void slugged;
 // list View), so an app's replaced View can hand its own straight to them. (The value from
 // `createListView` itself, not `ListViewState<typeof recipes>`, which TypeScript compares by
 // its type argument alone.)
-const replacedView = createListView(recipes, recipesRemote);
+const replacedView = createListView(admin, recipes, recipesRemote);
 const anyList: ListViewState = replacedView;
 void anyList;
 // Its bulk delete reports how many were deleted, whether it succeeded or not.
@@ -337,6 +358,7 @@ defineResource({
 // A Resource with a `recordTitle` still counts as a Resource, so the admin and the helpers take it.
 const anyResource: Resource = products;
 const productList: ListViewState = createListView(
+	admin,
 	products,
 	{} as ResourceRemote<RecordOf<typeof products>, IdOf<typeof products>>
 );
@@ -568,7 +590,7 @@ void plain;
 // `createFormView` keeps the remote form's type, so a replaced create or edit View gets typed
 // `fields` from the remote functions `serveResource` returns.
 const formRecipesRemote = serveResource(formRecipes, formRecipeProvider);
-const recipeCreateView = createFormView(formRecipes, formRecipesRemote, 'create');
+const recipeCreateView = createFormView(admin, formRecipes, formRecipesRemote, 'create');
 void recipeCreateView.form.fields.name.as('text');
 void recipeCreateView.form.fields.servings.as('number');
 void recipeCreateView.form.fields.vegetarian.as('checkbox');
@@ -589,13 +611,13 @@ const formUsersRemote = serveResource(
 		EditData<typeof formUsers>
 	>
 );
-const userEditView = createFormView(formUsers, formUsersRemote, 'edit', 1);
+const userEditView = createFormView(admin, formUsers, formUsersRemote, 'edit', 1);
 void userEditView.form.fields.id.as('hidden', 1);
 void userEditView.form.fields.name.as('text');
 // @ts-expect-error users' email is set once, on create, so the edit form has no input for it
 void userEditView.form.fields.email;
 // @ts-expect-error a user id is a number
-createFormView(formUsers, formUsersRemote, 'edit', '1');
+createFormView(admin, formUsers, formUsersRemote, 'edit', '1');
 
 // The typed inputs are what the Theme's parts take for one Field, as are the untyped ones.
 const typedInput: RemoteFormFieldLike = recipeCreateView.form.fields.name;
@@ -606,7 +628,12 @@ void typedRows;
 void untypedInput;
 
 // The Theme's stock Views, which take any Resource, get the untyped form.
-const anyCreateView = createFormView(formRecipes as Resource, {} as ResourceRemote, 'create');
+const anyCreateView = createFormView(
+	admin,
+	formRecipes as Resource,
+	{} as ResourceRemote,
+	'create'
+);
 const looseForm: RemoteFormLike = anyCreateView.form;
 void looseForm;
 
@@ -711,7 +738,7 @@ void recipesRemote.getList({ page: 1, perPage: 25 });
 void recipesRemote.getList({ page: 1, perPage: 25, search: 'pasta' });
 
 // And a list View's `params`.
-expectTypeOf(createListView(searchableRecipes, searchableRemote).params).toEqualTypeOf<
+expectTypeOf(createListView(admin, searchableRecipes, searchableRemote).params).toEqualTypeOf<
 	ListParams<typeof searchableRecipes>
 >();
 expectTypeOf(replacedView.params).toEqualTypeOf<{ page: number; perPage: number }>();
@@ -825,7 +852,7 @@ void recipesRemote.getList({ page: 1, perPage: 25, sort: { field: 'name', order:
 void sortableOnlyRemote;
 
 // A list View's sort state and hrefs take the sortable keys.
-const sortableView = createListView(sortableRecipes, sortableRemote);
+const sortableView = createListView(admin, sortableRecipes, sortableRemote);
 expectTypeOf(sortableView.params.sort).toEqualTypeOf<
 	ListSort<SortableKey<typeof sortableRecipes>> | undefined
 >();
@@ -1083,7 +1110,7 @@ void filterableRemote.getList({
 void recipesRemote.getList({ page: 1, perPage: 25, filters: [] });
 
 // A list View's `params` carry the typed filters.
-const filterableView = createListView(filterableRecipes, filterableRemote);
+const filterableView = createListView(admin, filterableRecipes, filterableRemote);
 expectTypeOf(filterableView.params.filters).toEqualTypeOf<
 	ListFilter<FilterableRecipes>[] | undefined
 >();

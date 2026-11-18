@@ -40,6 +40,14 @@ export default ts.config(
 		}
 	},
 	{
+		// No raw HTML anywhere: a value rendered with `{@html}` can run a script (the proof of
+		// concept's XSS pattern). Stated here so it stays on whatever the recommended set does.
+		files: ['**/*.svelte'],
+		rules: {
+			'svelte/no-at-html-tags': 'error'
+		}
+	},
+	{
 		// Links and navigation must go through `resolve()`, so they respect the base path.
 		files: ['**/*.svelte', '**/*.ts', '**/*.js'],
 		rules: {

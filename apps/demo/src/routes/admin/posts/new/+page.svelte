@@ -13,10 +13,11 @@
 	import { isInputSpec, type FormInput, type FormInputSpec } from '@svelte-admin/core';
 	import { createFormView } from '@svelte-admin/core/views';
 	import { FieldInput, FieldIssues, FormActions } from '@svelte-admin/theme-shadcn';
+	import { admin } from '#lib/admin.ts';
 	import { posts } from '#lib/resources/posts.ts';
 	import * as remote from '#lib/resources/posts.remote.ts';
 
-	const view = createFormView(posts, remote, 'create');
+	const view = createFormView(admin, posts, remote, 'create');
 	const { form } = view;
 
 	// @ts-expect-error the backend counts a post's views, so the create form has no input for them

@@ -10,10 +10,11 @@
 	import { recordTitle } from '@svelte-admin/core';
 	import { createListView } from '@svelte-admin/core/views';
 	import { FieldCell, Pager, SelectionCheckbox, Toolbar } from '@svelte-admin/theme-shadcn';
+	import { admin } from '#lib/admin.ts';
 	import { users } from '#lib/resources/users.ts';
 	import * as remote from '#lib/resources/users.remote.ts';
 
-	const view = createListView(users, remote);
+	const view = createListView(admin, users, remote);
 	const result = $derived(await view.query);
 	const details = view.fields.filter((field) => field.key !== 'id' && field !== view.linkField);
 	// A Field names its key as a plain string, so read the record as a plain object.

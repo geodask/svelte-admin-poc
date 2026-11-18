@@ -47,6 +47,7 @@ export {
 } from './list-url.ts';
 export {
 	defineAdmin,
+	type Admin,
 	type AdminEntry,
 	type AdminLocation,
 	type AdminView,

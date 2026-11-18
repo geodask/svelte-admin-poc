@@ -9,4 +9,4 @@
 	const remote = $derived(await entry.remote());
 </script>
 
-<EditView resource={entry.resource} {remote} id={data.id} />
+<EditView {admin} resource={entry.resource} {remote} id={data.id} />

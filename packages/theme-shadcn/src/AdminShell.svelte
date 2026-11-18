@@ -5,7 +5,8 @@
 	works the same without JavaScript.
 -->
 <script lang="ts">
-	import { createShell, type ShellAdmin } from '@svelte-admin/core/views';
+	import type { Admin } from '@svelte-admin/core';
+	import { createShell } from '@svelte-admin/core/views';
 	import type { Snippet } from 'svelte';
 	import AdminHeader from './AdminHeader.svelte';
 	import AdminSidebar from './AdminSidebar.svelte';
@@ -18,7 +19,7 @@
 		children
 	}: {
 		/** The admin from admin.ts. */
-		admin: ShellAdmin;
+		admin: Admin;
 		/** The app's brand, at the top of the sidebar, inside a link to the admin's first Resource. */
 		brand?: Snippet;
 		/** The app's user menu, at the foot of the sidebar. */
@@ -32,7 +33,7 @@
 <Sidebar.Provider data-admin-shell class="bg-background text-foreground">
 	<AdminSidebar {shell} {brand} {userMenu} />
 	<Sidebar.Inset>
-		<AdminHeader {shell} />
+		<AdminHeader {admin} {shell} />
 		<main class="mx-auto w-full max-w-7xl p-4 lg:p-6">
 			{@render children()}
 		</main>

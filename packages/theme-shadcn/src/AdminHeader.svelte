@@ -2,15 +2,22 @@
 	The shell's header: a breadcrumb with the current Resource's label and, on a detail View, the
 	record's Record title, or "New" on the create View. On the edit View it reads Resource /
 	Record title / Edit, with the Record title linking to the detail View. Off the list View the
-	label links back to the list.
+	label links back to the list. It takes the admin from admin.ts for the record's crumb.
 -->
 <script lang="ts">
-	import { recordPath } from '@svelte-admin/core';
+	import { recordPath, type Admin } from '@svelte-admin/core';
 	import type { ShellState } from '@svelte-admin/core/views';
 	import * as Breadcrumb from './components/ui/breadcrumb/index.ts';
 	import RecordCrumb from './RecordCrumb.svelte';
 
-	let { shell }: { shell: ShellState } = $props();
+	let {
+		admin,
+		shell
+	}: {
+		/** The admin from admin.ts. */
+		admin: Admin;
+		shell: ShellState;
+	} = $props();
 </script>
 
 <header class="flex h-12 shrink-0 items-center gap-2 border-b px-4 lg:px-6">
@@ -34,6 +41,7 @@
 					<Breadcrumb.Separator />
 					<Breadcrumb.Item>
 						<RecordCrumb
+							{admin}
 							here={shell.here}
 							{id}
 							href={view === 'edit' ? recordPath(listHref, id) : undefined}
