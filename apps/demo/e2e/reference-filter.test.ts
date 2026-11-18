@@ -5,6 +5,9 @@ import type { Page } from '@playwright/test';
 import { DANGLING_POST, MISSING_USER_ID, posts } from '../backend/seed.ts';
 import { expect, hydrated, test } from './fixtures.ts';
 import {
+	applyFilters,
+	chip,
+	chipList,
 	columnCells,
 	dataRows,
 	expectLanded,
@@ -17,20 +20,12 @@ import { choose, clear, picker, usesJavaScript } from './reference-picker.ts';
 // User 3, Alan Turing, wrote 12 of the 60 posts.
 const TURING_POSTS = posts.filter((post) => post.userId === 3).length;
 
-/** The row of active filter chips, and the chip of one filter by its label. */
-const chipList = (page: Page) => page.getByRole('list', { name: 'Active filters' });
-const chip = (page: Page, label: string) =>
-	chipList(page).getByRole('link', { name: `Remove filter ${label}`, exact: true });
-
 /** Open a list of posts with its filter panel open, ready to type into once hydrated. */
 async function openPosts(page: Page, search = '') {
 	await page.goto(`/admin/posts${search}`);
 	if (usesJavaScript()) await hydrated(page);
 	await openFilters(page);
 }
-
-/** Apply the filter form. */
-const apply = (page: Page) => filterForm(page).getByRole('button', { name: 'Apply' }).click();
 
 /** The authors the list shows, each once. */
 const authorsShown = async (page: Page) =>
@@ -43,8 +38,7 @@ test.describe('filtering posts by author', () => {
 		await openPosts(page, '?page=2&perPage=10&sort=title');
 
 		// With JavaScript, part of the name finds the user.
-		await choose(page, 'Author', 'Alan Turing', 'tur');
-		await apply(page);
+		await applyFilters(page, () => choose(page, 'Author', 'Alan Turing', 'tur'));
 
 		await expectLanded(page, '/admin/posts?perPage=10&sort=title&userId=3');
 		await expect(dataRows(page)).toHaveCount(10);
@@ -81,8 +75,7 @@ test.describe('filtering posts by author', () => {
 		await openPosts(page, '?userId=3');
 		await expect(dataRows(page)).toHaveCount(TURING_POSTS);
 
-		await clear(page, 'Author');
-		await apply(page);
+		await applyFilters(page, () => clear(page, 'Author'));
 
 		await expectLanded(page, '/admin/posts');
 		await expect(dataRows(page)).toHaveCount(20);

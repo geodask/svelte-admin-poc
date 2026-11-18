@@ -125,7 +125,9 @@ export type FilterControl = { field: Field; operators: readonly FilterOperator[]
 	| {
 			type: 'reference';
 			/** Its input: the Field's key, and the id the list is filtered by now, or empty. */
-			value: FilterInput;
+			current: FilterInput;
+			/** The label of the choice that sends an empty value and so filters nothing: "Any". */
+			emptyLabel: string;
 			/** The headless picker, whose current choice is the id the list is filtered by now. */
 			picker: ReferencePicker;
 	  }
@@ -336,8 +338,15 @@ export function createListView<R extends Resource>(
 			}
 			case 'reference': {
 				if (!allows('eq')) return undefined;
-				const value = filterInput(field, 'eq');
-				return { field, operators: ['eq'], type: 'reference', value, picker: picker(field, value) };
+				const current = filterInput(field, 'eq');
+				return {
+					field,
+					operators: ['eq'],
+					type: 'reference',
+					current,
+					emptyLabel: 'Any',
+					picker: picker(field, current)
+				};
 			}
 			default:
 				return undefined;

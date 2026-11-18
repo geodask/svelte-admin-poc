@@ -196,6 +196,13 @@ export async function applyFilters(
 	await filterForm(page).getByRole('button', { name: 'Apply' }).click();
 }
 
+/** The row of active filter chips under the toolbar, shown only while a filter is on. */
+export const chipList = (page: Page) => page.getByRole('list', { name: 'Active filters' });
+
+/** The chip of one filter, by its label. Its link is named "Remove filter …". */
+export const chip = (page: Page, label: string) =>
+	chipList(page).getByRole('link', { name: `Remove filter ${label}`, exact: true });
+
 /** Whether the current test runs with JavaScript on. */
 export const isJs = () => test.info().project.name === 'js';
 

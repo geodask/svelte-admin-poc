@@ -76,26 +76,47 @@
 	const textOf = (value: unknown) =>
 		typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 
-	// The form's input, or none for a filter. Every input of a remote form is one at runtime, typed
-	// or not.
-	const field = $derived(props.filter ? undefined : (props.field as RemoteFormField));
-
 	// On a form, the current choice is read once: afterwards the combobox keeps it, and a form
 	// posted without JavaScript renders the page, and so this part, again. A filter's follows the
 	// list URL.
 	const initialText = untrack(() =>
-		props.filter ? props.filter.value.value : textOf(field?.value())
-	);
-	const currentText = $derived(props.filter ? props.filter.value.value : initialText);
-	const picker = $derived(
-		props.filter ? props.filter.picker : createReferencePicker(props.admin, props.spec, initialText)
+		props.filter ? props.filter.current.value : textOf((props.field as RemoteFormField).value())
 	);
 
-	const label = $derived(props.filter ? props.filter.field.label : props.spec.label);
-	const required = $derived(props.filter ? false : props.spec.required);
-	const description = $derived(props.filter ? undefined : props.spec.description);
-	/** The choice that leaves the Reference empty: no filter, or no record. */
-	const emptyLabel = $derived(props.filter ? 'Any' : required ? 'Choose…' : '—');
+	/**
+	 * What the picker shows and sends, read from where it is: a form's input (named and bound by the
+	 * remote form) or a list's filter (named as the list URL names the filter).
+	 */
+	const place = $derived.by(() => {
+		if (props.filter) {
+			const { field, current, emptyLabel, picker } = props.filter;
+			return {
+				picker,
+				field: undefined,
+				name: current.name,
+				currentText: current.value,
+				label: field.label,
+				required: false,
+				description: undefined,
+				// The choice that leaves the Reference empty: no filter ("Any").
+				emptyLabel
+			};
+		}
+		const { admin, spec } = props;
+		return {
+			picker: createReferencePicker(admin, spec, initialText),
+			// Every input of a remote form is one at runtime, typed or not.
+			field: props.field as RemoteFormField,
+			name: undefined,
+			currentText: initialText,
+			label: spec.label,
+			required: spec.required,
+			description: spec.description,
+			// The choice that leaves the Reference empty: no record.
+			emptyLabel: spec.required ? 'Choose…' : '—'
+		};
+	});
+	const { picker, field, currentText, label, required, description } = $derived(place);
 	const labelHidden = $derived(props.labelHidden ?? false);
 
 	/** The `<select>`'s options, or none (but the current id) when the first page failed. */
@@ -282,13 +303,9 @@
 	// A form's input names and binds its own elements; a filter's are named as the list URL names
 	// the filter.
 	const hiddenAttributes = $derived(
-		field
-			? field.as('hidden', chosenId)
-			: { type: 'hidden', name: props.filter?.value.name, value: chosenId }
+		field ? field.as('hidden', chosenId) : { type: 'hidden', name: place.name, value: chosenId }
 	);
-	const selectAttributes = $derived(
-		field ? field.as('select') : { name: props.filter?.value.name }
-	);
+	const selectAttributes = $derived(field ? field.as('select') : { name: place.name });
 	/**
 	 * Whether the `<select>` starts on the option of `value`: a filter's is the id the list is
 	 * filtered by; a form's input selects its own.
@@ -371,7 +388,7 @@
 			aria-describedby={describedBy}
 			class={[control, 'h-9']}
 		>
-			<option value="" selected={selects('')}>{emptyLabel}</option>
+			<option value="" selected={selects('')}>{place.emptyLabel}</option>
 			{#each loaded.options as option (option.id)}
 				<option value={String(option.id)} selected={selects(String(option.id))}>
 					{option.title}{option.missing ? ' (not found)' : ''}

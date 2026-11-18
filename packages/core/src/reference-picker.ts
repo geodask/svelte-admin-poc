@@ -1,5 +1,5 @@
 // The headless Reference picker: what a Theme needs to let a person choose a Reference's record by
-// its Record title, in a form and, later, in a list filter. Shared and browser-safe: it reaches the
+// its Record title, in a form and in a list View's filter. Shared and browser-safe: it reaches the
 // target through the admin, so it imports no remote module itself.
 import type { z } from 'zod';
 import type { Admin } from './admin.ts';

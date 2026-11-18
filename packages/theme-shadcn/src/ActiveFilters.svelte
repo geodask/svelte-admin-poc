@@ -1,9 +1,11 @@
 <!--
 	The active filter chips of a list View: one per filter the list is filtered by, such as
-	"Cuisine: Italian", each a link with × to the list without that filter. Removing one starts
+	"Cuisine: Italian", or for a Reference its record's Record title, such as "Author: Alan
+	Turing" (the id when the record is missing), each a link with × to the list without that filter. Removing one starts
 	again at page 1 and keeps the search, sort, page size and every other filter. Each chip is a
 	plain link, so it works without JavaScript. It renders nothing while no filter is on. The
-	toolbar (`Toolbar`) shows it under its row.
+	toolbar (`Toolbar`) shows it under its row. It awaits the chips, so a Reference's title is in the
+	server-rendered page too.
 	A Theme part, exported for a replaced list View: give it the core's `createListView` helper.
 -->
 <script module lang="ts">
