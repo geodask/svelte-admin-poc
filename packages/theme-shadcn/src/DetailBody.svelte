@@ -57,7 +57,7 @@
 					<p class="text-xs font-normal text-muted-foreground">{field.description}</p>
 				{/if}
 			</dt>
-			<dd><FieldValue {field} value={record[field.key]} /></dd>
+			<dd><FieldValue {field} value={record[field.key]} {record} admin={view.admin} /></dd>
 		</div>
 	{/each}
 </dl>

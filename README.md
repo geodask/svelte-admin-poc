@@ -51,13 +51,13 @@ Each Resource costs about 4 lines of wiring in the demo:
 
 The admin layout renders the Theme's `AdminShell` with the admin from `admin.ts` and the app's own `brand` and `userMenu` snippets (the shell wraps the brand in a link to the first Resource). The `/admin` index redirects to the first Resource's list.
 
-Each route that renders a View passes it the same admin, beside the Resource and its remote functions: `<ListView {admin} {resource} {remote} />`, and likewise `DetailView`, `CreateView` and `EditView`. The core's headless helpers take it as their first argument: `createListView(admin, resource, remote)`, `createDetailView(admin, resource, remote, id)` and `createFormView(admin, resource, remote, 'create')` (or `'edit', id`). It is always an argument, never context, and it is typed as the core's `Admin`, so anything that isn't an admin is a type error. Nothing reads it yet: it is how the Views will reach the admin's other Resources, for References and Kinds.
+Each route that renders a View passes it the same admin, beside the Resource and its remote functions: `<ListView {admin} {resource} {remote} />`, and likewise `DetailView`, `CreateView` and `EditView`. The core's headless helpers take it as their first argument: `createListView(admin, resource, remote)`, `createDetailView(admin, resource, remote, id)` and `createFormView(admin, resource, remote, 'create')` (or `'edit', id`). It is always an argument, never context, and it is typed as the core's `Admin`, so anything that isn't an admin is a type error. It is how the Views reach the admin's other Resources: a Reference's target, for one (see [References](#references)).
 
 `@svelte-admin/core` is the browser-safe entry. `serveResource` lives in `@svelte-admin/core/server`, the bundled REST Provider in `@svelte-admin/core/rest`, and the export's CSV writer and pager in `@svelte-admin/core/export`; import those only from `.remote.ts` files and server-only modules.
 
 ## Writes
 
-The remote module re-exports `getList`, `getOne`, `create`, `update`, `deleteOne`, `deleteMany` and `exportList` (see [Export](#export)) from `serveResource`, and nothing else. A Provider implements `create(ctx, data)`: it gets the record without its id, already validated with the Resource's schema, and returns the record the backend saved. The bundled REST Provider sends it as `POST {base}/{resource}`. It also implements `update(ctx, { id, data })`: `id` has the schema's id type and `data` is the whole editable record, so an optional Field whose key is absent was cleared by the user (there are no partial patches). It returns the saved record, with the same id. The bundled REST Provider sends it as `PUT {base}/{resource}/{id}`, with the id written by `idPathSegment`.
+The remote module re-exports `getList`, `getOne`, `lookup` (see [References](#references)), `create`, `update`, `deleteOne`, `deleteMany` and `exportList` (see [Export](#export)) from `serveResource`, and nothing else. A Provider implements `create(ctx, data)`: it gets the record without its id, already validated with the Resource's schema, and returns the record the backend saved. The bundled REST Provider sends it as `POST {base}/{resource}`. It also implements `update(ctx, { id, data })`: `id` has the schema's id type and `data` is the whole editable record, so an optional Field whose key is absent was cleared by the user (there are no partial patches). It returns the saved record, with the same id. The bundled REST Provider sends it as `PUT {base}/{resource}/{id}`, with the id written by `idPathSegment`.
 
 The create View lives at `{list}/new` (the demo's `src/routes/admin/[resource=resource]/new/+page.svelte` renders the Theme's `CreateView`). Its form is generated from the schema at runtime, and works with and without JavaScript. After a save, `create` redirects to the new record's detail View. It finds that path from the page the form was submitted from: inside a remote form, `getRequestEvent().url` is the page's URL in Kit 3.2, with JavaScript and without, so `serveResource` never needs the admin's base path. A create form posted from a page whose path doesn't end in `/new` is refused before the Provider is called.
 
@@ -128,7 +128,7 @@ These are the rules the forms use for their date inputs, so a filter value is al
 
 The server checks a filter value against the Field's base type only (a string, a finite number, a boolean, an enum member, or its date type), never its refinements, so `name.contains=piz` is fine on a Field that needs five letters.
 
-The bundled REST Provider sends the filters in the same encoding, after `q`: `GET {base}/{resource}?page=1&perPage=25&difficulty=Easy&difficulty=Hard&prepTimeMinutes.gte=10&vegetarian=true`. Values go in the Field's own type rather than as the filter input writes them: an ISO date or datetime string as it is (`publishedAt.gte=2024-03-01T00:00:00.000Z`), and a `Date` as an ISO string. A backend that can't do a declared filter should answer 400. The demo backend filters any Resource before searching and paging: `eq` and `in` match the value exactly, `contains` ignores case, and the range operators compare numbers as numbers and ISO strings as text. In the demo, recipes filter by name (`contains`), cuisine (narrowed to `eq` and `in`), difficulty, prep time, vegetarian and published date; users by role, active and joined date; and posts by author ID (one number, `eq`) and status.
+The bundled REST Provider sends the filters in the same encoding, after `q`: `GET {base}/{resource}?page=1&perPage=25&difficulty=Easy&difficulty=Hard&prepTimeMinutes.gte=10&vegetarian=true`. Values go in the Field's own type rather than as the filter input writes them: an ISO date or datetime string as it is (`publishedAt.gte=2024-03-01T00:00:00.000Z`), and a `Date` as an ISO string. A backend that can't do a declared filter should answer 400. The demo backend filters any Resource before searching and paging: `eq` and `in` match the value exactly, `contains` ignores case, and the range operators compare numbers as numbers and ISO strings as text. In the demo, recipes filter by name (`contains`), cuisine (narrowed to `eq` and `in`), difficulty, prep time, vegetarian and published date; users by role, active and joined date; and posts by author (a Reference, so one user id, `eq`) and status.
 
 ### Default sort and page size
 
@@ -157,13 +157,45 @@ With JavaScript, the list View's toolbar has "Export CSV" (the Theme's `ExportBu
 `serveResource` returns `exportList`, a remote command, which the app's `.remote.ts` re-exports with the rest. It takes the list params without the page and the page size (`ExportParams<R>`: the search, the sort and the filters), checked by the same rules as `getList`'s, and gets the Resource's `defaultSort` when it names no sort. It pages through the Provider's `getList` on the server, in pages of `MAX_PER_PAGE` (or of the cap, when that is smaller), parsing each page with the Resource schema as `getList` does, until the last page (the `total` is reached, `hasNextPage` is false, or a page comes back short) or the cap. So it works the same for a Provider that counts and one that doesn't, and needs no Provider code of its own. It returns `{ csv, rows, capped }`, plus `total` when the Provider gave one. A Provider error on any page fails the whole export with that error's status and message, as on reads; there is never a partial file. Set the cap with `serveResource`'s optional third argument:
 
 ```ts
-export const { getList, getOne, create, update, deleteOne, deleteMany, exportList } = serveResource(
-	posts,
-	postsProvider,
-	{ maxExportRows: 50 }
-);
+export const { getList, getOne, lookup, create, update, deleteOne, deleteMany, exportList } =
+	serveResource(posts, postsProvider, { maxExportRows: 50 });
 ```
 
 The file has one column per Field the detail View shows (every Field that isn't hidden), in schema order, headed by the Field's label. Text is written as it is, numbers as plain decimals (never with an exponent), booleans as `true` and `false`, dates as ISO strings, lists of scalars joined with `, `, and objects (or lists of them) as JSON; a missing value is an empty cell. Every cell is quoted, with `"` doubled, every row ends with CRLF (RFC 4180), and the file starts with a UTF-8 byte order mark, so a spreadsheet shows accented text correctly. A text cell (a header, or a list joined as text, included) that starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a `'` in front, so opening the file can never run a formula. Numbers are never prefixed, so `-5` stays a number.
 
 A replaced list View calls `createListView(...).exportCsv()`, which never rejects: it resolves to `{ ok: true, rows, capped, total? }` after starting the download, or `{ ok: false, message, status? }` with a message that is safe to show. The writer and the pager are pure modules on `@svelte-admin/core/export`, as `toCsv(resource, records)` and `collectPages(getPage, maxRows)`, so they are unit-tested on their own. They are server-only: the client bundle check fails if the CSV writer reaches the client build. In the demo, posts cap their export at 50, so with the 60 seeded posts the cap shows.
+
+## Kinds and References
+
+### References
+
+A Reference is a Field that holds the id of a record of another Resource, its target. Declare one with `ref` in `field()`, a function that returns the target:
+
+```ts
+import { users } from './users.ts';
+
+export const posts = defineResource({
+	name: 'posts',
+	label: 'Posts',
+	schema: z.object({
+		id: z.number(),
+		title: z.string(),
+		userId: field(z.number(), { label: 'Author', ref: () => users, filterable: true })
+	})
+});
+```
+
+The Field is of the built-in Kind `reference`. Its type, without `.optional()`, `.nullable()` or `.default()` (which keep the Reference on either side), must be the target's id type: TypeScript rejects `field(z.string(), { ref: () => users })` when users have number ids, and a Reference whose type isn't a string or a number. `ref` is a function so that `defineResource` never calls it, and two Resources can import each other. A Resource that references itself names the arrow's return type, `ref: (): Resource => comments`, so TypeScript needn't infer the Resource from its own initializer.
+
+The list and detail Views show a Reference as its target record's Record title, linked to that record's detail View (`/admin/users/3`). A target record that doesn't exist, or a lookup that fails, shows the raw id, muted, with "(not found)" for screen readers: a Reference never fails the View. Both resolve during SSR, so they work without JavaScript. The core's `createListView(...).reference(field, value)` and `createDetailView(...).reference(field, value)` give a replaced View the same `{ title, href }`, or `undefined` for an empty value, a missing record or a failed lookup, and the shared entry has it as `resolveReference(admin, field, value)`. The Theme's `FieldCell` and `FieldValue` take the `record` and the `admin` beside the Field and its value; without the admin they show a Reference's raw id.
+
+The Views look a target record up with its Resource's `lookup`, the eighth remote function `serveResource` returns, so every `.remote.ts` re-exports it, including those of Resources nothing references yet. It is a batched query: every `lookup` a page makes in the same tick is one request, which calls the Provider's `getOne` once per distinct id, so a Provider needs no new code. A record the Provider has no record for (a `NotFoundError`) is `null`; each record is parsed with the target's schema, as `getOne` does; any other Provider error fails the whole batch with its status. `lookup` takes one id of the Resource's id type, and the server rejects any other before the Provider runs.
+
+A Reference can be `filterable`, with `eq` only: `getList` receives `{ field: 'userId', operator: 'eq', value: 3 }`, with the value typed as the target's id, and the list URL writes it as a bare param, `?userId=3`. A number id is read by the same rule as a route param, so `userId=3a` or `userId=03` is dropped. A Reference can't be `sortable`, since its order would be its ids'. Until the Reference picker, the filter panel and the create and edit forms show a plain input for the id itself: a number input for a number id, a text input for a string.
+
+The startup checks name the Resource and the Field:
+
+- `defineResource` throws for a sortable Reference, a filter operator other than `eq`, a `ref` inside a nested object or a list (only a top-level Field can be a Reference), a Reference whose type isn't a string or a number, and a `recordTitle` that names a Reference.
+- `defineAdmin` throws when a Reference's target isn't in `admin.ts`, or `admin.ts` lists another Resource object under the target's name.
+
+In the demo, a post's author is a Reference to users, and one seeded post (57) names a user that doesn't exist.

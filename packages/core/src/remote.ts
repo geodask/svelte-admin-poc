@@ -101,6 +101,11 @@ export type ResourceRemote<T = any, Id = any, List = any> = {
 	/** One page of records. `List` is the Resource's `ListParams`, as `serveResource` types it. */
 	getList: (params: List) => RemoteRead<ListResult<T>>;
 	getOne: (id: Id) => RemoteRead<T>;
+	/**
+	 * One record by its id, or `null` when there is none, for a Reference that points to this
+	 * Resource. A batched query: every `lookup` a page makes in the same tick is one request.
+	 */
+	lookup: (id: Id) => RemoteRead<T | null>;
 	/** The create form: it saves a new record and redirects to its detail View. */
 	create: RemoteFormLike;
 	/**

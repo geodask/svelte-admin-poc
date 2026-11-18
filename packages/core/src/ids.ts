@@ -86,13 +86,21 @@ export function decodeSegment(segment: string): string | undefined {
  */
 export function idFromParam<R extends Resource>(resource: R, param: string): IdOf<R> | undefined {
 	if (!hasPathSegment(param) || param === CREATE_SEGMENT) return undefined;
-	const schema = resource.schema.shape.id as z.ZodType;
+	return idFromText(resource.schema.shape.id as z.ZodType, param) as IdOf<R> | undefined;
+}
 
-	const asString = schema.safeParse(param);
-	if (asString.success) return asString.data as IdOf<R>;
+/**
+ * The id written as `text`, read with an id schema, or `undefined` when it names none: the rule a
+ * route param is read by, also used for a Reference's filter value in the list URL. The text goes
+ * through the schema, which never coerces: for a number id, only a number written as
+ * `String(id)` writes it (`1`, not `01`, `1.0` or `1e0`).
+ */
+export function idFromText(schema: z.ZodType, text: string): string | number | undefined {
+	const asString = schema.safeParse(text);
+	if (asString.success) return asString.data as string;
 
-	const number = Number(param);
-	if (!Number.isFinite(number) || String(number) !== param) return undefined;
+	const number = Number(text);
+	if (!Number.isFinite(number) || String(number) !== text) return undefined;
 	const asNumber = schema.safeParse(number);
-	return asNumber.success ? (asNumber.data as IdOf<R>) : undefined;
+	return asNumber.success ? (asNumber.data as number) : undefined;
 }

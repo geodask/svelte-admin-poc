@@ -75,11 +75,13 @@ type AllowedOperators<B, KindOperators> = B extends true
 /**
  * The operators a filter on a Field schema can use: every operator of its Kind for
  * `filterable: true`, those it names (and its Kind has) for a list, and `never` when it isn't
- * filterable.
+ * filterable. A Reference (`ref` in its brand) is of the Kind `reference`, whatever its type.
  */
 type FieldFilterOperators<F> = AllowedOperators<
 	FieldBrandOf<F, 'filterable'>,
-	KindOperatorsOf<UnwrappedSchema<F>>
+	[FieldBrandOf<F, 'ref'>] extends [undefined]
+		? KindOperatorsOf<UnwrappedSchema<F>>
+		: (typeof KIND_OPERATORS)['reference'][number]
 >;
 
 /** The filters on one Field `K` with values `V`: one member for `in`, one for every other operator. */
@@ -109,7 +111,8 @@ export type SchemaListFilter<S extends Resource['schema']> = string extends keyo
 /**
  * One filter a Resource's `getList` may receive: a filterable Field's key, one of the operators
  * it allows, and a value typed by the Field (its output type without `undefined` or `null`: a
- * string, a number, a boolean, an enum member, or the Field's own date type). `in` carries an
+ * string, a number, a boolean, an enum member, the Field's own date type, or for a Reference its
+ * target's id type). `in` carries an
  * array of 2 to 100 distinct values; every other operator one value. `never` for a Resource with
  * no filterable Field. Without a Resource (or for one TypeScript can't see), a filter on any
  * Field with any operator.

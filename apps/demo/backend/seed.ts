@@ -166,13 +166,18 @@ const angles = [
 	'A week of'
 ];
 
+/** The post whose author names no user, and the id it names. */
+export const DANGLING_POST = 57;
+export const MISSING_USER_ID = 99;
+
 export const posts: Post[] = Array.from({ length: 60 }, (_, index) => {
 	const topic = topics[index % topics.length];
 	const angle = angles[index % angles.length];
 	return {
 		id: index + 1,
 		title: `${angle} ${topic.toLowerCase()} (part ${Math.floor(index / topics.length) + 1})`,
-		userId: (index % 5) + 1,
+		// Post 57's author was deleted, so it names no user: the Views show its id, muted.
+		userId: index === DANGLING_POST - 1 ? MISSING_USER_ID : (index % 5) + 1,
 		status: index % 4 === 3 ? 'draft' : 'published',
 		tags: [topic, index % 2 === 0 ? 'Guide' : 'Story'],
 		body: `Notes on ${topic.toLowerCase()}.`,
@@ -180,7 +185,7 @@ export const posts: Post[] = Array.from({ length: 60 }, (_, index) => {
 	};
 });
 
-// Users: posts name their author by `userId`, 1 to 5.
+// Users: posts name their author by `userId`, 1 to 5 (except the dangling post's).
 export type User = {
 	id: number;
 	name: string;

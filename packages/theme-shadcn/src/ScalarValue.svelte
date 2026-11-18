@@ -1,7 +1,8 @@
 <!--
 	A Field's value shown by its Kind, for every Kind that looks the same in a list View cell and
-	on the detail View: text, a number, a boolean, a date and an enum. Anything else (unknown, or
-	a value that doesn't fit its Kind) shows as is, muted. FieldCell and FieldValue render it and
+	on the detail View: text, a number, a boolean, a date, an enum, and a Reference shown by its raw
+	id (where no admin is given to show its record's title). Anything else (unknown, or a value
+	that doesn't fit its Kind) shows as is, muted. FieldCell and FieldValue render it and
 	handle what differs between them: empty values, lists and objects.
 -->
 <script lang="ts">
@@ -21,6 +22,8 @@
 </script>
 
 {#if field.kind === 'text' && typeof value === 'string'}
+	{value}
+{:else if field.kind === 'reference' && (typeof value === 'string' || typeof value === 'number')}
 	{value}
 {:else if field.kind === 'number' && typeof value === 'number'}
 	<span class="tabular-nums">{formatNumber(value)}</span>

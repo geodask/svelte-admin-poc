@@ -1,5 +1,6 @@
 import { defineResource, field } from '@svelte-admin/core';
 import { z } from 'zod';
+import { users } from './users.ts';
 
 export const posts = defineResource({
 	name: 'posts',
@@ -11,9 +12,9 @@ export const posts = defineResource({
 	schema: z.object({
 		id: field(z.number(), { sortable: true }),
 		title: field(z.string(), { sortable: true }),
-		// A plain number for now; it becomes a Reference to users in M4. Filtered with one number
-		// input (`eq`), since it allows no range.
-		userId: field(z.number(), { label: 'Author ID', filterable: ['eq'] }),
+		// A Reference to users: the Views show the author's name, linked to the user. Filtered by
+		// equality, the only operator a Reference has.
+		userId: field(z.number(), { label: 'Author', ref: () => users, filterable: true }),
 		status: field(z.enum(['draft', 'published']), { filterable: true }),
 		tags: z.array(z.string()),
 		body: field(z.string(), { list: false }),

@@ -6,6 +6,7 @@ import {
 	readDatetimeInput
 } from './date-input.ts';
 import { unwrap, type Field, type FilterOperator } from './fields.ts';
+import { idFromText } from './ids.ts';
 import {
 	canonicalValues,
 	filterableFields,
@@ -108,7 +109,8 @@ function schemaOf(resource: Pick<FilterFieldsResource, 'schema'>, field: Field):
 /**
  * One filter value as the list URL writes it, read into the Field's type, or `undefined` when it
  * is empty, blank or malformed: text as written; a number as a number input sends it; a boolean as `true`
- * or `false`; an enum member as written (any other text is no member); and a date as the filter
+ * or `false`; an enum member as written (any other text is no member); a Reference's id by the
+ * rule a route param is read by (`idFromParam`), so `3a` names no number id; and a date as the filter
  * input sends it, with the rules the forms use: a datetime as `YYYY-MM-DDTHH:mm` (seconds
  * optional) in UTC, becoming an ISO datetime string, and a date as `YYYY-MM-DD`, becoming an ISO
  * date string or, for `z.date()`, a `Date` at midnight UTC. The value must then be of the
@@ -130,6 +132,9 @@ function urlValue(field: Field, schema: z.ZodType, text: string): FilterValue | 
 			return text === 'true' ? true : text === 'false' ? false : undefined;
 		case 'number':
 			return INPUT_NUMBER.test(text) ? Number(text) : undefined;
+		case 'reference':
+			// As a route param names a record, so `3a` and `03` name no number id.
+			return idFromText(unwrap(schema), text);
 		case 'date': {
 			const type = dateType(schema);
 			if (type === 'datetime') return readDatetimeInput(text);

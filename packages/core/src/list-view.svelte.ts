@@ -1,9 +1,10 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
-import { untrack } from 'svelte';
+import { settled, untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { activeFilters, type ActiveFilter } from './active-filters.ts';
 import type { Admin } from './admin.ts';
+import { resolveReference, type ReferenceLink } from './reference-link.ts';
 import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
 import type { Field, FilterOperator } from './fields.ts';
 import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
@@ -94,7 +95,8 @@ export type FilterInputType = 'text' | 'number' | 'date' | 'datetime';
  * - `input`: one input. For a text Field a text box, filtering with `contains` when the Field
  *   allows it, else with `eq` (and, when the list is filtered by an `in` from the URL, one box
  *   per value, so the control owns the `in` too); for a number or date Field that doesn't allow a
- *   range, its one value, filtering with `eq`. Empty, it filters nothing.
+ *   range, its one value, filtering with `eq`; for a Reference, the id, filtering with `eq`.
+ *   Empty, it filters nothing.
  * - `range`: a from and a to input, for a number or date Field that allows `gte` and `lte`.
  *   Either may be left empty, to filter one side only.
  */
@@ -145,7 +147,7 @@ export type FilterControl = { field: Field; operators: readonly FilterOperator[]
  * const result = $derived(await view.query);
  */
 export function createListView<R extends Resource>(
-	// Not read yet: it is how the list View will reach the admin's other Resources.
+	// How the list View reaches the admin's other Resources, e.g. a Reference's target.
 	admin: Admin,
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>, IdOf<R>, ListParams<R>>
@@ -168,11 +170,34 @@ export function createListView<R extends Resource>(
 			.map((key) => fields.find((field) => field.key === key))
 			.find(Boolean) ?? fields[0];
 
+	// The admin entries of the Resources the list's References point to.
+	const referenceTargets = fields.flatMap((field) =>
+		field.kind === 'reference' ? [admin.resources[field.ref().name]] : []
+	);
+
 	$effect(() => {
 		const rewrite = listUrlRewrite(url, resource);
-		// The rewrite only cleans the URL the page was opened with, so keep scroll and focus.
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the current list path
-		if (rewrite !== undefined) void goto(rewrite, { replace: true, reset: false });
+		if (rewrite === undefined) return;
+		// A workaround: Kit's router (3.2) crashes on a navigation that starts while hydration still
+		// waits for something the page loads, here the page of records or the remote module of a
+		// Reference's target, which each cell imports to resolve its title. So wait for both
+		// (`getList` answers from the query cache the page already holds, without a request), then
+		// for `settled()`, so the cells that awaited them have rendered too. Drop it once Kit
+		// handles such a navigation.
+		const loading = [remote.getList(params), ...referenceTargets.map((entry) => entry.remote())];
+		// Set when the URL changes first, e.g. a click on the pager: that rewrite is stale then.
+		let stale = false;
+		void Promise.allSettled(loading)
+			.then(() => settled())
+			.then(() => {
+				if (stale) return;
+				// The rewrite only cleans the URL the page was opened with, so keep scroll and focus.
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- the current list path
+				return goto(rewrite, { replace: true, reset: false });
+			});
+		return () => {
+			stale = true;
+		};
 	});
 
 	// Search text typed but not yet in the URL, or `undefined` while the URL holds what was typed.
@@ -284,6 +309,13 @@ export function createListView<R extends Resource>(
 				const values = [filterInput(field, 'eq')];
 				return { field, operators: ['eq'], type: 'input', input, values };
 			}
+			case 'reference': {
+				// Until the Reference picker: one input for the id, of the id's type.
+				if (!allows('eq')) return undefined;
+				const input = field.id === 'number' ? 'number' : 'text';
+				const values = [filterInput(field, 'eq')];
+				return { field, operators: ['eq'], type: 'input', input, values };
+			}
 			default:
 				return undefined;
 		}
@@ -328,6 +360,17 @@ export function createListView<R extends Resource>(
 
 	return {
 		resource,
+		/** The admin from `admin.ts`, which the Theme's parts take to show References. */
+		admin,
+		/**
+		 * What a Reference's value links to: the target record's Record title and the href of its
+		 * detail View, or `undefined` when the record doesn't exist or the lookup failed, so the
+		 * View shows the raw id. The References a page shows share one request per target, and they
+		 * resolve during SSR. Await it, e.g. `$derived(await view.reference(field, value))`.
+		 */
+		reference(field: Field, value: unknown): Promise<ReferenceLink | undefined> {
+			return resolveReference(admin, field, value);
+		},
 		/** The Fields the list View shows, in schema order. */
 		fields,
 		/**

@@ -2,7 +2,5 @@ import { serveResource } from '@svelte-admin/core/server';
 import { backend } from '#lib/server/backend.ts';
 import { recipes } from './recipes.ts';
 
-export const { getList, getOne, create, update, deleteOne, deleteMany, exportList } = serveResource(
-	recipes,
-	backend.for(recipes)
-);
+export const { getList, getOne, lookup, create, update, deleteOne, deleteMany, exportList } =
+	serveResource(recipes, backend.for(recipes));

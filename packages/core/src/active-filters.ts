@@ -58,11 +58,14 @@ function filterLabel(resource: ListUrlResource, field: Field, filter: ListFilter
 }
 
 /**
- * A filter value as the Views show it: Yes or No for a boolean, a number with the `en` grouping,
- * a date as the list shows it (`Mar 1, 2024`, in UTC), and text and enum members as they are. A
- * datetime adds its time in UTC unless it is midnight, since a filter holds it to the minute.
+ * A filter value as the Views show it: a Reference's id as written, Yes or No for a boolean, a
+ * number with the `en` grouping, a date as the list shows it (`Mar 1, 2024`, in UTC), and text and
+ * enum members as they are. A datetime adds its time in UTC unless it is midnight, since a filter
+ * holds it to the minute.
  */
 function valueText(resource: ListUrlResource, field: Field, value: FilterValue): string {
+	// An id, as the URL writes it: `1234`, never `1,234`.
+	if (field.kind === 'reference') return String(value);
 	if (typeof value === 'boolean') return value ? 'Yes' : 'No';
 	if (typeof value === 'number') return numberFormat.format(value);
 	if (field.kind !== 'date') return String(value);

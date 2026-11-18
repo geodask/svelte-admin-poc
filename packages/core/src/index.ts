@@ -11,6 +11,7 @@ export {
 } from './resource.ts';
 export { idFromParam, idPathSegment, recordPath } from './ids.ts';
 export { recordTitle } from './record-title.ts';
+export { resolveReference, type ReferenceLink } from './reference-link.ts';
 export type {
 	ExportParams,
 	FilterableKey,
@@ -84,7 +85,8 @@ export {
 	type FieldMeta,
 	type FieldReadOnly,
 	type FieldSchema,
-	type KindName
+	type KindName,
+	type ReferenceKind
 } from './fields.ts';
 export {
 	formSchema,
