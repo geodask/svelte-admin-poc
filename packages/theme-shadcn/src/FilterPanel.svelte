@@ -2,9 +2,11 @@
 	The filter panel of a list View: a "Filters" disclosure, with the count of filters on, that
 	opens without JavaScript (a native `<details>`). Inside, a GET form with one control per
 	filterable Field the core offers one for: a checkbox per option for an enum, Any / Yes / No
-	for a boolean, a text box for a text Field, and a from and a to input for a number or a date
-	(or one input, when the Field allows no range). Date and time inputs are in UTC, and labelled
-	so, as in the forms. "Apply" filters the list from page 1 and keeps the search, sort and page size;
+	for a boolean, a text box for a text Field, a from and a to input for a number or a date
+	(or one input, when the Field allows no range), and for a Reference the ReferencePicker, which
+	chooses the record by its Record title (a `<select>` without JavaScript, a combobox once
+	hydrated) and sends its id, with "Any" for no filter. Date and time inputs are in UTC, and
+	labelled so, as in the forms. "Apply" filters the list from page 1 and keeps the search, sort and page size;
 	"Clear filters" links to the list without filters. Without JavaScript the form posts its empty
 	controls too, which the list URL ignores; with it, the form goes through `applyFilters`, so the
 	URL holds no empty params. It renders nothing for a Resource with no filter control.
@@ -21,6 +23,7 @@
 
 <script lang="ts">
 	import ListFilterIcon from '@lucide/svelte/icons/list-filter';
+	import ReferencePicker from './ReferencePicker.svelte';
 
 	let { view }: FilterPanelProps = $props();
 
@@ -108,6 +111,8 @@
 							)}
 						{/each}
 					</div>
+				{:else if control.type === 'reference'}
+					<ReferencePicker filter={control} />
 				{:else if control.type === 'range'}
 					<fieldset class="flex flex-col gap-2">
 						<legend class="mb-1 text-sm font-medium">

@@ -1,9 +1,12 @@
 // The filters a list is filtered by, each with a readable label and the href that removes it:
-// the active filter chips under a list View's toolbar. Shared, pure.
+// the active filter chips under a list View's toolbar. Shared and browser-safe: it reaches a
+// Reference's target through the admin, so it imports no remote module itself.
+import type { Admin } from './admin.ts';
 import { datetimeInputValue } from './date-input.ts';
 import type { Field, FilterOperator } from './fields.ts';
 import { dateInputType, listHref, readListParams, type ListUrlResource } from './list-url.ts';
 import type { FilterValue, ListFilter, ListParams } from './provider.ts';
+import { resolveReference } from './reference-link.ts';
 
 /**
  * One filter the list is filtered by: its described Field, its operator and value (an array of
@@ -20,18 +23,28 @@ type DescribedFilter<F extends ListFilter> = F extends ListFilter
 /**
  * Each filter a list URL names, in the canonical order, whatever its operator and whether or not
  * its Field is hidden, so a person can always see and remove what narrows the list.
+ *
+ * A Reference filter is labelled by the record it names, as in "Author: Ada Lovelace", read
+ * through the target's `lookup` in `admin`, so the chips of a page share one request per target.
+ * It shows the id instead when the record doesn't exist, when the lookup fails, and without the
+ * admin.
  */
-export function activeFilters(url: URL, resource: ListUrlResource): ActiveFilter[] {
+export async function activeFilters(
+	url: URL,
+	resource: ListUrlResource,
+	admin?: Admin
+): Promise<ActiveFilter[]> {
 	const params: ListParams = readListParams(url, resource);
 	const filters = params.filters ?? [];
-	return filters.flatMap((filter) => {
+	const chips = filters.map(async (filter): Promise<ActiveFilter | undefined> => {
 		const field = resource.fields.find((candidate) => candidate.key === filter.field);
-		if (field === undefined) return [];
+		if (field === undefined) return undefined;
 		const others = filters.filter((other) => other !== filter);
 		const paramsWithout = { ...params, page: 1, filters: others.length > 0 ? others : undefined };
-		const label = filterLabel(resource, field, filter);
-		return [{ ...filter, field, label, href: listHref(url, paramsWithout, resource) }];
+		const label = await filterLabel(resource, field, filter, admin);
+		return { ...filter, field, label, href: listHref(url, paramsWithout, resource) };
 	});
+	return (await Promise.all(chips)).filter((chip) => chip !== undefined);
 }
 
 // The Views' formats: a fixed `en` locale and dates in UTC, so the server and the browser write
@@ -50,10 +63,24 @@ const OPERATOR_TEXT: Record<FilterOperator, string> = {
 	gte: ' ≥ '
 };
 
-/** A filter's label: the Field's label, the operator, and the value (each value of an `in`). */
-function filterLabel(resource: ListUrlResource, field: Field, filter: ListFilter): string {
-	const text = (value: FilterValue) => valueText(resource, field, value);
-	const values = filter.operator === 'in' ? filter.value.map(text).join(', ') : text(filter.value);
+/**
+ * A filter's label: the Field's label, the operator, and the value (each value of an `in`), with
+ * a Reference's record by its Record title when the admin can find it.
+ */
+async function filterLabel(
+	resource: ListUrlResource,
+	field: Field,
+	filter: ListFilter,
+	admin: Admin | undefined
+): Promise<string> {
+	const text = async (value: FilterValue) => {
+		const link = admin && (await resolveReference(admin, field, value));
+		return link?.title ?? valueText(resource, field, value);
+	};
+	const values =
+		filter.operator === 'in'
+			? (await Promise.all(filter.value.map(text))).join(', ')
+			: await text(filter.value);
 	return `${field.label}${OPERATOR_TEXT[filter.operator]}${values}`;
 }
 

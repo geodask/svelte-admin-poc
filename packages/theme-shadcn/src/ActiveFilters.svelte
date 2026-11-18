@@ -20,7 +20,8 @@
 
 	let { view }: ActiveFiltersProps = $props();
 
-	const filters = $derived(view.activeFilters);
+	// Awaited, so a Reference filter is labelled by its record during SSR too.
+	const filters = $derived(await view.activeFilters);
 </script>
 
 {#if filters.length > 0}

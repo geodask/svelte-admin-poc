@@ -316,36 +316,36 @@ describe('a Reference on the create and edit forms', () => {
 	});
 });
 
-describe("a Reference's link, for the list and detail Views", () => {
-	const ada = { id: 3, name: 'Ada Lovelace' };
-	const bread = { id: 'bread/rye', name: 'Bread' };
+const ada = { id: 3, name: 'Ada Lovelace' };
+const bread = { id: 'bread/rye', name: 'Bread' };
 
-	/** An admin whose `lookup`s answer from `records`, recording each id they are asked for. */
-	function adminWith(lookup: (id: string | number) => Promise<unknown>) {
-		const asked: (string | number)[] = [];
-		const targetRemote = async () =>
-			({
-				lookup: (id: string | number) => {
-					asked.push(id);
-					return lookup(id);
-				}
-			}) as unknown as ResourceRemote;
-		const admin = defineAdmin({
-			basePath: '/admin',
-			resources: {
-				posts: { resource: posts, remote },
-				users: { resource: users, remote: targetRemote },
-				tags: { resource: tags, remote: targetRemote }
+/** An admin whose `lookup`s answer from `records`, recording each id they are asked for. */
+function adminWith(lookup: (id: string | number) => Promise<unknown>) {
+	const asked: (string | number)[] = [];
+	const targetRemote = async () =>
+		({
+			lookup: (id: string | number) => {
+				asked.push(id);
+				return lookup(id);
 			}
-		});
-		return { admin, asked };
-	}
+		}) as unknown as ResourceRemote;
+	const admin = defineAdmin({
+		basePath: '/admin',
+		resources: {
+			posts: { resource: posts, remote },
+			users: { resource: users, remote: targetRemote },
+			tags: { resource: tags, remote: targetRemote }
+		}
+	});
+	return { admin, asked };
+}
 
-	const known = async (id: string | number) =>
-		[ada, bread].find((record) => record.id === id) ?? null;
-	const author = posts.fields.find((candidate) => candidate.key === 'userId')!;
-	const tag = posts.fields.find((candidate) => candidate.key === 'tagId')!;
+const known = async (id: string | number) =>
+	[ada, bread].find((record) => record.id === id) ?? null;
+const author = posts.fields.find((candidate) => candidate.key === 'userId')!;
+const tag = posts.fields.find((candidate) => candidate.key === 'tagId')!;
 
+describe("a Reference's link, for the list and detail Views", () => {
 	it("is the target record's Record title, linked to its detail View under the base path", async () => {
 		const { admin, asked } = adminWith(known);
 
@@ -391,9 +391,52 @@ describe("a Reference's link, for the list and detail Views", () => {
 });
 
 describe('a Reference filter chip', () => {
-	it('names the id as the URL writes it', () => {
-		const url = new URL('http://admin.test/admin/posts?userId=1234');
-		const [chip] = activeFilters(url, posts);
-		expect(chip?.label).toBe('Author: 1234');
+	const chips = async (search: string, admin?: Parameters<typeof activeFilters>[2]) =>
+		(await activeFilters(new URL(`http://admin.test/admin/posts${search}`), posts, admin)).map(
+			({ label, href }) => ({ label, href })
+		);
+
+	it("names the record by its Record title, through the target's lookup", async () => {
+		const { admin, asked } = adminWith(known);
+
+		expect(await chips('?userId=3', admin)).toEqual([
+			{ label: 'Author: Ada Lovelace', href: '/admin/posts' }
+		]);
+		expect(asked).toEqual([3]);
+	});
+
+	it('names a string id by its record too', async () => {
+		const { admin } = adminWith(known);
+
+		expect(await chips('?tagId=bread%2Frye', admin)).toEqual([
+			{ label: 'Tag ID: Bread', href: '/admin/posts' }
+		]);
+	});
+
+	it('names the id as the URL writes it when the record is missing', async () => {
+		const { admin } = adminWith(known);
+
+		expect(await chips('?userId=1234', admin)).toEqual([
+			{ label: 'Author: 1234', href: '/admin/posts' }
+		]);
+	});
+
+	it('names the id when the lookup fails, so the list never fails for it', async () => {
+		const { admin } = adminWith(async () => {
+			throw { status: 500, body: { message: 'Internal Error' } };
+		});
+
+		expect(await chips('?userId=3', admin)).toEqual([{ label: 'Author: 3', href: '/admin/posts' }]);
+	});
+
+	it('names the id without the admin, which reaches the target', async () => {
+		expect(await chips('?userId=3')).toEqual([{ label: 'Author: 3', href: '/admin/posts' }]);
+	});
+
+	it('asks nothing for a list with no Reference filter', async () => {
+		const { admin, asked } = adminWith(known);
+
+		expect(await chips('?q=x', admin)).toEqual([]);
+		expect(asked).toEqual([]);
 	});
 });

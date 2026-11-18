@@ -22,21 +22,21 @@ const recipes = defineResource({
 });
 
 /** The label and href of each chip for a URL of the recipes list. */
-const chips = (search: string) =>
-	activeFilters(new URL(`http://admin.test/admin/recipes${search}`), recipes).map(
+const chips = async (search: string) =>
+	(await activeFilters(new URL(`http://admin.test/admin/recipes${search}`), recipes)).map(
 		({ label, href }) => ({ label, href })
 	);
 
 describe('the active filters', () => {
-	it('shows an enum eq as the Field label and the value', () => {
-		expect(chips('?difficulty=Easy')).toEqual([
+	it('shows an enum eq as the Field label and the value', async () => {
+		expect(await chips('?difficulty=Easy')).toEqual([
 			{ label: 'Difficulty: Easy', href: '/admin/recipes' }
 		]);
 	});
 
-	it('is empty while no filter is on', () => {
-		expect(chips('')).toEqual([]);
-		expect(chips('?q=pasta&sort=name&page=2&difficulty=')).toEqual([]);
+	it('is empty while no filter is on', async () => {
+		expect(await chips('')).toEqual([]);
+		expect(await chips('?q=pasta&sort=name&page=2&difficulty=')).toEqual([]);
 	});
 
 	it.each([
@@ -62,22 +62,26 @@ describe('the active filters', () => {
 		['publishedAt.gte=2024-03-01T00:00', 'Published at ≥ Mar 1, 2024'],
 		['publishedAt.lte=2024-03-01T23:30', 'Published at ≤ Mar 1, 2024, 23:30 UTC'],
 		['publishedAt.gt=2024-03-01T09:05:30', 'Published at > Mar 1, 2024, 09:05:30 UTC']
-	])('labels the filter %s as %j', (query, label) => {
-		expect(chips(`?${query}`).map((chip) => chip.label)).toEqual([label]);
+	])('labels the filter %s as %j', async (query, label) => {
+		expect((await chips(`?${query}`)).map((chip) => chip.label)).toEqual([label]);
 	});
 
-	it('gives a filter on a hidden Field a chip too, by its label', () => {
-		expect(chips('?internalNotes=draft')).toEqual([
+	it('gives a filter on a hidden Field a chip too, by its label', async () => {
+		expect(await chips('?internalNotes=draft')).toEqual([
 			{ label: 'Internal notes: draft', href: '/admin/recipes' }
 		]);
 	});
 
-	it('names the Field, operator and value of each filter, in the canonical order', () => {
+	it('names the Field, operator and value of each filter, in the canonical order', async () => {
 		const url = new URL(
 			'http://admin.test/admin/recipes?vegetarian=true&difficulty=Hard&difficulty=Easy&prepTimeMinutes.gte=10'
 		);
 		expect(
-			activeFilters(url, recipes).map(({ field, operator, value }) => [field.key, operator, value])
+			(await activeFilters(url, recipes)).map(({ field, operator, value }) => [
+				field.key,
+				operator,
+				value
+			])
 		).toEqual([
 			['difficulty', 'in', ['Easy', 'Hard']],
 			['prepTimeMinutes', 'gte', 10],
@@ -86,10 +90,12 @@ describe('the active filters', () => {
 	});
 
 	describe('the href that removes a filter', () => {
-		it('keeps the search, sort, page size and every other filter, at page 1', () => {
+		it('keeps the search, sort, page size and every other filter, at page 1', async () => {
 			expect(
-				chips(
-					'?page=3&perPage=10&sort=name&order=desc&q=pasta&difficulty=Easy&difficulty=Hard&prepTimeMinutes.gte=10&prepTimeMinutes.lte=30&vegetarian=true'
+				(
+					await chips(
+						'?page=3&perPage=10&sort=name&order=desc&q=pasta&difficulty=Easy&difficulty=Hard&prepTimeMinutes.gte=10&prepTimeMinutes.lte=30&vegetarian=true'
+					)
 				).map((chip) => chip.href)
 			).toEqual([
 				'/admin/recipes?perPage=10&sort=name&order=desc&q=pasta&prepTimeMinutes.lte=30&prepTimeMinutes.gte=10&vegetarian=true',
@@ -99,9 +105,9 @@ describe('the active filters', () => {
 			]);
 		});
 
-		it('writes the other filters as the filter form sends them', () => {
+		it('writes the other filters as the filter form sends them', async () => {
 			expect(
-				chips('?vegetarian=true&publishedAt.gte=2024-03-01T10:30&cookedOn=2024-12-31').map(
+				(await chips('?vegetarian=true&publishedAt.gte=2024-03-01T10:30&cookedOn=2024-12-31')).map(
 					(chip) => chip.href
 				)
 			).toEqual([
@@ -111,7 +117,7 @@ describe('the active filters', () => {
 			]);
 		});
 
-		it("leaves out the Resource's own page size and default sort", () => {
+		it("leaves out the Resource's own page size and default sort", async () => {
 			const posts = defineResource({
 				name: 'posts',
 				label: 'Posts',
@@ -123,11 +129,11 @@ describe('the active filters', () => {
 				perPage: 20
 			});
 			const url = new URL('http://admin.test/admin/posts?page=2&status=draft');
-			expect(activeFilters(url, posts).map((chip) => chip.href)).toEqual(['/admin/posts']);
+			expect((await activeFilters(url, posts)).map((chip) => chip.href)).toEqual(['/admin/posts']);
 		});
 
-		it('drops what the URL holds that the list ignores', () => {
-			expect(chips('?foo=1&vegetarian=true&prepTimeMinutes.gte=abc')).toEqual([
+		it('drops what the URL holds that the list ignores', async () => {
+			expect(await chips('?foo=1&vegetarian=true&prepTimeMinutes.gte=abc')).toEqual([
 				{ label: 'Vegetarian: Yes', href: '/admin/recipes' }
 			]);
 		});

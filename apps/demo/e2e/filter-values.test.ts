@@ -174,24 +174,6 @@ test.describe('a number range', () => {
 		expect(to).toContain(`GET /recipes?page=1&perPage=${perPage}&prepTimeMinutes.lte=10`);
 		expect((await numbersIn(page, 'Prep time (min)')).every((n) => n <= 10)).toBe(true);
 	});
-
-	test('posts filter by author with a single id input, until the Reference filter', async ({
-		page
-	}) => {
-		await page.goto('/admin/posts');
-		await openFilters(page);
-		// One input, since a Reference is filtered by equality only: no from and to.
-		await expect(filterForm(page).getByRole('group', { name: 'Author' })).toHaveCount(0);
-
-		await applyFilters(page, (form) => form.getByRole('spinbutton', { name: 'Author' }).fill('3'));
-
-		await expectLanded(page, '/admin/posts?userId=3');
-		await expect(dataRows(page)).toHaveCount(12);
-		// User 3 wrote every one of them.
-		expect(new Set(await (await columnCells(page, 'Author')).allInnerTexts())).toEqual(
-			new Set(['Alan Turing'])
-		);
-	});
 });
 
 test.describe('a date range on a datetime Field', () => {
