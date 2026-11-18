@@ -15,8 +15,8 @@ import {
 	filterInputValue
 } from './list-url.ts';
 import { titleKeys } from './record-title.ts';
-import type { DeleteFailure, ResourceRemote } from './remote.ts';
-import { readDeleteFailure } from './delete-failure.ts';
+import type { DeleteFailure, ExportSummary, RemoteFailure, ResourceRemote } from './remote.ts';
+import { readRemoteFailure } from './remote-failure.ts';
 import { downloadCsv, today } from './download.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -45,13 +45,12 @@ export type BulkDeleteResult =
 	{ ok: true; deleted: number } | ({ ok: false; deleted: number } & DeleteFailure);
 
 /**
- * How an export of the list ended: the file was downloaded, with how many records it holds,
- * whether it stopped at the cap with more left, and the total the Provider counted when it can
- * count; or it failed, with a message that is safe to show and, when the server answered, its
- * HTTP status. A failed export downloads nothing.
+ * How an export of the list ended: the file was downloaded, with what it holds (how many records,
+ * whether it stopped at the cap with more left, and the Provider's total when it counts); or it
+ * failed, with a message that is safe to show and, when the server answered, its HTTP status. A
+ * failed export downloads nothing.
  */
-export type ExportResult =
-	{ ok: true; rows: number; capped: boolean; total?: number } | ({ ok: false } & DeleteFailure);
+export type ExportResult = ({ ok: true } & ExportSummary) | ({ ok: false } & RemoteFailure);
 
 /** One choice of a list View's filter control: a checkbox or a radio button. */
 export type FilterOption = {
@@ -453,7 +452,7 @@ export function createListView<R extends Resource>(
 			try {
 				report = await remote.deleteMany(ids).updates(remote.getList);
 			} catch (failure) {
-				return { ok: false, deleted: 0, ...readDeleteFailure(failure, BULK_DELETE_FAILED) };
+				return { ok: false, deleted: 0, ...readRemoteFailure(failure, BULK_DELETE_FAILED) };
 			}
 			// The deleted ids are the first ones sent, in order.
 			selection.setAll(ids.slice(0, report.deleted), false);
@@ -476,11 +475,11 @@ export function createListView<R extends Resource>(
 			try {
 				report = await remote.exportList(query);
 			} catch (failure) {
-				return { ok: false, ...readDeleteFailure(failure, EXPORT_FAILED) };
+				return { ok: false, ...readRemoteFailure(failure, EXPORT_FAILED) };
 			}
-			downloadCsv(report.csv, `${resource.name}-${today()}.csv`);
-			const { rows, capped, total } = report;
-			return total === undefined ? { ok: true, rows, capped } : { ok: true, rows, capped, total };
+			const { csv, ...summary } = report;
+			downloadCsv(csv, `${resource.name}-${today()}.csv`);
+			return { ok: true, ...summary };
 		},
 		/**
 		 * The GET form the search box sits in, so search works without JavaScript too: where it

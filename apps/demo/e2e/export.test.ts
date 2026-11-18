@@ -16,7 +16,7 @@ async function backendRecords(request: APIRequestContext, resource: string, quer
 }
 
 /** The note an export that stopped at the cap shows beside the button. */
-const exportNote = (page: Page) => page.getByRole('status').filter({ hasText: /^Exported/ });
+const exportNote = (page: Page) => page.getByText(/^Exported the first/);
 
 test.describe('exporting a list as CSV', () => {
 	test('downloads every record matching the search, sort and filters, across pages, in order @js', async ({

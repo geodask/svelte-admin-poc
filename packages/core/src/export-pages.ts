@@ -3,7 +3,7 @@ import type { ListResult } from './provider.ts';
 
 /**
  * What `collectPages` gathered: the records, in order, at most the cap; whether it stopped at the
- * cap with more records left; and the total the backend counted, when it counts.
+ * cap with more records left; and the total the Provider counted, when it counts.
  */
 export type CollectedPages<T> = { records: T[]; capped: boolean; total?: number };
 

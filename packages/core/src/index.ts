@@ -58,6 +58,7 @@ export type {
 	DeleteFailure,
 	DeleteManyReport,
 	ExportReport,
+	ExportSummary,
 	RemoteCommandCall,
 	RemoteFormField,
 	RemoteFormFieldLike,
@@ -65,6 +66,7 @@ export type {
 	RemoteFormFieldsLike,
 	RemoteFormInputType,
 	RemoteFormIssue,
+	RemoteFailure,
 	RemoteFormLike,
 	RemoteRead,
 	ResourceRemote

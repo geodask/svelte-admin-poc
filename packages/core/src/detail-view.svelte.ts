@@ -3,7 +3,7 @@ import { page } from '$app/state';
 import { EDIT_SEGMENT, recordPath } from './ids.ts';
 import { recordTitle } from './record-title.ts';
 import type { DeleteFailure, ResourceRemote } from './remote.ts';
-import { readDeleteFailure } from './delete-failure.ts';
+import { readRemoteFailure } from './remote-failure.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /**
@@ -77,7 +77,7 @@ export function createDetailView<R extends Resource>(
 			try {
 				await remote.deleteOne(id).updates(remote.getList);
 			} catch (failure) {
-				return { ok: false, ...readDeleteFailure(failure, DELETE_FAILED) };
+				return { ok: false, ...readRemoteFailure(failure, DELETE_FAILED) };
 			}
 			// The delete succeeded whatever happens to the navigation: one the user started
 			// meanwhile may supersede it, and that is theirs to keep.

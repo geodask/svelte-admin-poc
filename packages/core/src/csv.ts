@@ -21,7 +21,7 @@ const FORMULA_START = /^[=+\-@\t\r]/;
  * A Resource's records as a CSV file: one column per Field the detail View shows (every Field
  * that isn't hidden), in schema order, headed by the Field's label, and one row per record.
  *
- * - Text as it is; numbers as decimals (`1250`, `-5`, `45.5`); booleans `true` and `false`; a
+ * - Text as it is; numbers as plain decimals (`1250`, `-5`, `45.5`, never with an exponent); booleans `true` and `false`; a
  *   `Date` as an ISO string, and an ISO date or datetime string as it is; a list of scalars
  *   joined with `, `; an object, or a list holding one, as JSON; a missing (or `null`) value as
  *   an empty cell.
@@ -45,8 +45,26 @@ export function toCsv(
 
 /** One value as the text of its cell, guarded unless it is a number. */
 function cell(value: unknown): string {
-	if (typeof value === 'number') return String(value);
+	if (typeof value === 'number') return plainDecimal(value);
 	return guarded(text(value));
+}
+
+/**
+ * A number as a plain decimal, as a spreadsheet reads it: `String` writes one, except for numbers
+ * from 1e21 up and below 1e-6, which it writes with an exponent (`1e+21`, `1e-7`). Those are
+ * spelled out (`1000000000000000000000`, `0.0000001`).
+ */
+function plainDecimal(value: number): string {
+	const written = String(value);
+	const exponential = /^(-?)(\d)(?:\.(\d+))?e([+-]\d+)$/.exec(written);
+	if (exponential === null) return written;
+	const [, sign, whole, fraction = '', exponent] = exponential;
+	const digits = whole + fraction;
+	const shift = Number(exponent);
+	// From 1e21 up, the digits never reach past the decimal point: 21 places outnumber them.
+	return shift > 0
+		? sign + digits.padEnd(shift + 1, '0')
+		: `${sign}0.${'0'.repeat(-shift - 1)}${digits}`;
 }
 
 /** One value as text: see `toCsv`. */
@@ -70,6 +88,7 @@ function guarded(value: string): string {
 	return FORMULA_START.test(value) ? `'${value}` : value;
 }
 
+/** A cell's text in quotes, with any `"` in it doubled (RFC 4180). */
 function quoted(value: string): string {
 	return `"${value.replaceAll('"', '""')}"`;
 }

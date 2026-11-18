@@ -4,7 +4,7 @@
 	the button renders only after hydration, and a page without JavaScript never shows it. While
 	the export runs it reads "Exporting…" and is disabled. An export that stopped at the cap says
 	so beside the button ("Exported the first 50 of 60 records", or without the total when the
-	backend can't count). A failed export downloads nothing: the reason shows beside the button,
+	Provider can't count). A failed export downloads nothing: the reason shows beside the button,
 	which becomes "Try again". It never leaves a rejection unhandled.
 	A Theme part, exported for a replaced list View: give it the core's `createListView` helper.
 	`Toolbar` composes it.
@@ -71,7 +71,10 @@
 		{#if result?.ok === false}
 			<p role="alert" class="text-sm text-destructive">{result.message}</p>
 		{/if}
-		<!-- Always in the page, so a screen reader announces the note as it appears. -->
-		<p role="status" class="text-sm text-muted-foreground">{capNote ?? ''}</p>
+		<!--
+			Always in the page, so a screen reader announces the note as it appears. A live region, not
+			a status role, which the list View keeps for its refresh indicator.
+		-->
+		<p aria-live="polite" class="text-sm text-muted-foreground">{capNote ?? ''}</p>
 	</div>
 {/if}

@@ -125,6 +125,28 @@ describe('the CSV writer', () => {
 		);
 	});
 
+	it('writes very large and very small numbers as plain decimals, never with an exponent', () => {
+		const ledger = defineResource({
+			name: 'ledger',
+			label: 'Ledger',
+			schema: z.object({ id: z.number(), amount: z.number() })
+		});
+
+		const csv = toCsv(ledger, [
+			{ id: 1, amount: 1e21 },
+			{ id: 2, amount: -1.5e22 },
+			{ id: 3, amount: 1e-7 },
+			{ id: 4, amount: -2.5e-8 }
+		]);
+
+		expect(lines(csv).slice(1)).toEqual([
+			'"1","1000000000000000000000"',
+			'"2","-15000000000000000000000"',
+			'"3","0.0000001"',
+			'"4","-0.000000025"'
+		]);
+	});
+
 	describe('the formula guard', () => {
 		it.each(['=SUM(A1:A2)', '+1', '-1+2', '@cmd', '\tTabbed', '\rReturned'])(
 			'prefixes a text cell starting %j with an apostrophe',

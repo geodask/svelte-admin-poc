@@ -82,10 +82,10 @@ export type ServeResourceOptions = {
  *   Provider's `getList` with `collectPages` (in pages of `MAX_PER_PAGE`, or of the cap when
  *   that is smaller), parsing each page with the Resource schema, until the last page (the
  *   `total` is reached, `hasNextPage` is false, or a page comes back short) or the cap: 10,000
- *   records, or `options.maxExportRows`. It returns the records as CSV (see `toCsv`), how many it holds,
- *   whether it stopped at the cap with more left, and the Provider's `total` when it gave one. A
- *   Provider error on any page fails the whole export with its status and message, as on reads;
- *   there is never a partial file.
+ *   records, or the `maxExportRows` option. It returns the records as CSV (see `toCsv`), how
+ *   many it holds, whether it stopped at the cap with more left, and the Provider's `total` when
+ *   it gave one. A Provider error on any page fails the whole export with its status and
+ *   message, as on reads; there is never a partial file.
  *
  * From a read or a delete, a Provider error becomes an HTTP error with its message:
  * `NotFoundError` a 404, `InvalidInputError` a 400 and `ConflictError` a 409. From a save, it
@@ -237,14 +237,14 @@ export function serveResource<R extends Resource>(
 		async (params): Promise<ExportReport> => {
 			// Asked for no sort, the export gets the default, in the same order as the list View.
 			const query = withDefaultSort(params, resource);
-			const { records: rows, ...report } = await collectPages(async (page, perPage) => {
+			const { records: exported, ...summary } = await collectPages(async (page, perPage) => {
 				const listParams = { ...query, page, perPage } as ListParams<R>;
 				// A Provider error fails the whole export, as on a read: there is no partial file.
 				const result = await served(() => provider.getList(providerContext(), listParams));
 				// Like `getList`, a record that doesn't match the schema is an unexpected error.
 				return { ...result, data: records.parse(result.data) as RecordOf<R>[] };
 			}, maxExportRows);
-			return { csv: toCsv(resource, rows), rows: rows.length, ...report };
+			return { csv: toCsv(resource, exported), rows: exported.length, ...summary };
 		}
 	);
 
