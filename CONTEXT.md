@@ -21,7 +21,7 @@ What a Field is for display and input purposes (text, number, date, an enum, a l
 _Avoid_: Type (clashes with schema and TypeScript types), widget, field type
 
 **Reference**:
-A Field that holds the id of a record of another Resource, shown as that record's Record title.
+A Field that holds the id of a record of its **target**, another Resource or its own, shown as that record's Record title.
 _Avoid_: Relation, foreign key, association
 
 **Record title**:

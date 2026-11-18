@@ -1,6 +1,12 @@
 import type { Component } from 'svelte';
 import type { z } from 'zod';
-import { assertFilterable, assertSortable, describeFields, type Field } from './fields.ts';
+import {
+	assertFilterable,
+	assertReferences,
+	assertSortable,
+	describeFields,
+	type Field
+} from './fields.ts';
 import { assertFormInputs } from './form-spec.ts';
 import { assertListSettings, DEFAULT_PER_PAGE } from './list-params.ts';
 import type { ListSort, SchemaSortableKey, UnusableFilterKey } from './provider.ts';
@@ -138,7 +144,7 @@ export function defineResource<
 	 * of the record, such as `(order) => \`Order #${order.number}\``. When it is a key, the list
 	 * View links that Field's cell to the detail View. Without it, a record is named by its
 	 * `name` Field, else its `title` Field, else its id. A key must name a Field that isn't
-	 * hidden, or `defineResource` throws.
+	 * hidden and isn't a Reference, or `defineResource` throws.
 	 */
 	recordTitle?: NoInfer<RecordTitleSetting<S>>;
 	/**
@@ -159,6 +165,8 @@ export function defineResource<
 	const perPage = definition.perPage ?? DEFAULT_PER_PAGE;
 	// Left out, it is `false`, as the type parameter's default says.
 	const searchable = (definition.searchable ?? false) as Searchable;
+	// Before the Fields are described, which needs every Reference to hold an id.
+	assertReferences(name, schema);
 	const fields = describeFields(schema);
 	// Fail at startup, not on a form that could never be saved.
 	assertFormInputs(name, fields, schema);

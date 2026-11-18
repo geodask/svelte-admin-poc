@@ -108,6 +108,33 @@ export async function captureGetList(
 }
 
 /**
+ * Learn the URL of a batched remote query (a Resource's `lookup`) from the browser's own call,
+ * made by `navigate`, and return a function that calls it again with other args, each encoded
+ * as Kit encodes one. A batched query is a POST of the args' payloads, so this waits for the
+ * first remote POST. Like `captureGetList`, it waits for hydration first and for the response.
+ */
+export async function captureLookup(
+	page: Page,
+	request: APIRequestContext,
+	navigate: () => Promise<void>
+) {
+	await hydrated(page);
+	const remoteResponse = page.waitForResponse(
+		(r) => r.url().includes('/_app/remote/') && r.request().method() === 'POST'
+	);
+	await navigate();
+	const { origin, pathname } = new URL((await remoteResponse).url());
+	return (args: unknown[]) =>
+		request.post(pathname, {
+			// Kit refuses a remote POST from another origin, as a browser's would be.
+			headers: { origin },
+			data: {
+				payloads: args.map((arg) => Buffer.from(JSON.stringify([arg])).toString('base64url'))
+			}
+		});
+}
+
+/**
  * A page number no other test asks for. Tests run in parallel against one demo backend, so a
  * test that checks the backend's request log asks for this page and looks only at its requests.
  */

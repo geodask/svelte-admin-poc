@@ -1,21 +1,26 @@
 // Type-level checks of the demo's own Resources, checked by svelte-check (`bun run check`), never
 // run or imported. The core's `types.test-d.ts` covers the form types in general; these keep the
 // demo's schemas honest. Each `@ts-expect-error` fails the check if its line stops being an error.
-import type {
-	CreateData,
-	EditData,
-	FilterableKey,
-	FormInput,
-	ListFilter,
-	ListParams,
-	Resource,
-	ResourceProvider,
-	SortableKey
+import {
+	field,
+	type CreateData,
+	type EditData,
+	type FilterableKey,
+	type FormInput,
+	type IdOf,
+	type ListFilter,
+	type ListParams,
+	type RecordOf,
+	type Resource,
+	type ResourceProvider,
+	type ResourceRemote,
+	type SortableKey
 } from '@svelte-admin/core';
 import type { serveResource } from '@svelte-admin/core/server';
+import { z } from 'zod';
 import type { posts } from './posts.ts';
 import type { recipes } from './recipes.ts';
-import type { users } from './users.ts';
+import { users } from './users.ts';
 
 type RecipeCreate = FormInput<typeof recipes, 'create'>;
 type RecipeEdit = FormInput<typeof recipes, 'edit'>;
@@ -115,9 +120,40 @@ export const recipeCuisineFilter: ListParams<typeof recipes>['filters'] = [
 	{ field: 'cuisine', operator: 'contains', value: 'Thai' }
 ];
 export const postUserRange: ListParams<typeof posts>['filters'] = [
-	// @ts-expect-error a post's author is filtered by one id only
+	// @ts-expect-error a post's author is a Reference, filtered by equality only
 	{ field: 'userId', operator: 'gte', value: 3 }
 ];
+// A post's author is a Reference to users: its filter value is a user's id, a number...
+export const postAuthorFilter: Exactly<
+	Extract<ListFilter<typeof posts>, { field: 'userId' }>,
+	{ field: 'userId'; operator: 'eq'; value: IdOf<typeof users> }
+> = true;
+export const postAuthorText: ListParams<typeof posts>['filters'] = [
+	// @ts-expect-error users have number ids
+	{ field: 'userId', operator: 'eq', value: '3' }
+];
+// ...it isn't sortable...
+// @ts-expect-error a Reference can't be sortable
+export const postSortByAuthor: ListParams<typeof posts>['sort'] = { field: 'userId', order: 'asc' };
+// ...and until the Reference picker, the forms send the user's id itself.
+export const postAuthorInput: FormInput<typeof posts, 'create'>['userId'] = 3;
+// @ts-expect-error users have number ids
+export const postAuthorTextInput: FormInput<typeof posts, 'create'>['userId'] = '3';
+// A Reference whose type isn't its target's id type is rejected.
+// @ts-expect-error users have number ids
+export const textAuthor = field(z.string(), { ref: () => users });
+// @ts-expect-error a Reference can't be sortable
+export const sortableAuthor = field(z.number(), { ref: () => users, sortable: true });
+// `lookup` gives a user, or `null` when there is none.
+export const userLookup: Exactly<
+	Awaited<ReturnType<ReturnType<typeof serveResource<typeof users>>['lookup']>>,
+	RecordOf<typeof users> | null
+> = true;
+// The users remote module's `lookup` takes a user's id.
+export const userLookupId: Exactly<
+	Parameters<ResourceRemote<RecordOf<typeof users>, IdOf<typeof users>>['lookup']>,
+	[id: number]
+> = true;
 export const joinedAtDate: ListParams<typeof users>['filters'] = [
 	// @ts-expect-error joinedAt is an ISO string, not a Date
 	{ field: 'joinedAt', operator: 'gte', value: new Date() }

@@ -67,6 +67,7 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 			);
 		}
 	}
+	assertTargetsMounted(resources);
 
 	type Name = keyof M & string;
 
@@ -165,6 +166,31 @@ export type AdminLocation<M> = {
 			}
 		: never;
 }[keyof M & string];
+
+/**
+ * Fails at startup when a Reference's target isn't mounted in admin.ts: no entry under the
+ * target's name, or an entry that holds another Resource object. The Views reach a target
+ * through its entry, so a Reference to a Resource that isn't there would link to nowhere.
+ */
+function assertTargetsMounted(resources: Readonly<Record<string, AdminEntry>>): void {
+	for (const { resource } of Object.values(resources)) {
+		for (const field of resource.fields) {
+			if (field.kind !== 'reference') continue;
+			// Every Resource module has loaded by now, so the target is defined.
+			const target: Resource | undefined = field.ref();
+			const name = target?.name;
+			const mounted =
+				name !== undefined && Object.hasOwn(resources, name) ? resources[name].resource : undefined;
+			if (mounted === target) continue;
+			const where = `Resource "${resource.name}": the Field "${field.key}" references "${name}"`;
+			throw new Error(
+				mounted === undefined
+					? `${where}, which is not in admin.ts. Add it to the admin's \`resources\`.`
+					: `${where}, but admin.ts lists another Resource under that name. Mount the one the Field references.`
+			);
+		}
+	}
+}
 
 function sidebarGroups(entries: AdminEntry[], href: (name: string) => string): SidebarGroup[] {
 	const groups = new Map<string | undefined, SidebarGroup>();

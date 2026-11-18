@@ -1,6 +1,8 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
 import type { Admin } from './admin.ts';
+import type { Field } from './fields.ts';
+import { resolveReference, type ReferenceLink } from './reference-link.ts';
 import { EDIT_SEGMENT, recordPath } from './ids.ts';
 import { recordTitle } from './record-title.ts';
 import type { DeleteFailure, ResourceRemote } from './remote.ts';
@@ -33,7 +35,7 @@ const DELETE_FAILED = "Couldn't delete this record.";
  * const record = $derived(await view.query);
  */
 export function createDetailView<R extends Resource>(
-	// Not read yet: it is how the detail View will reach the admin's other Resources.
+	// How the detail View reaches the admin's other Resources, e.g. a Reference's target.
 	admin: Admin,
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>, IdOf<R>>,
@@ -44,6 +46,17 @@ export function createDetailView<R extends Resource>(
 
 	return {
 		resource,
+		/** The admin from `admin.ts`, which the Theme's parts take to show References. */
+		admin,
+		/**
+		 * What a Reference's value links to: the target record's Record title and the href of its
+		 * detail View, or `undefined` when the record doesn't exist or the lookup failed, so the
+		 * View shows the raw id. The References a page shows share one request per target, and they
+		 * resolve during SSR. Await it, e.g. `$derived(await view.reference(field, value))`.
+		 */
+		reference(field: Field, value: unknown): Promise<ReferenceLink | undefined> {
+			return resolveReference(admin, field, value);
+		},
 		/** The Fields the detail View shows: every Field that isn't hidden, in schema order. */
 		fields: resource.fields.filter((field) => field.detail),
 		/** The record. Await it: `$derived(await view.query)`. */

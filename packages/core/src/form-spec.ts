@@ -123,6 +123,11 @@ function inputFor(field: Field, schema: z.ZodType): InputOf | undefined {
 		}
 		case 'number':
 			return { kind: 'number', integer: (type as z.ZodNumber).isInt };
+		case 'reference':
+			// Until the Reference picker: an input for the id itself, of the id's type.
+			return field.id === 'number'
+				? { kind: 'number', integer: (type as z.ZodNumber).isInt }
+				: { kind: 'text', format: 'text' };
 		case 'boolean':
 			return { kind: 'checkbox' };
 		case 'enum':

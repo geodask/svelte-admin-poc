@@ -35,8 +35,7 @@ const titleInput = (page: Page) => page.getByRole('textbox', { name: 'Title', ex
 const bodyInput = (page: Page) => page.getByRole('textbox', { name: 'Body', exact: true });
 const firstTag = (page: Page) => page.getByRole('textbox', { name: 'Tags 1', exact: true });
 const statusSelect = (page: Page) => page.getByRole('combobox', { name: 'Status', exact: true });
-const authorInput = (page: Page) =>
-	page.getByRole('spinbutton', { name: 'Author ID', exact: true });
+const authorInput = (page: Page) => page.getByRole('spinbutton', { name: 'Author', exact: true });
 /** The box beside the body that holds the status and the author. */
 const publishing = (page: Page) => page.getByRole('complementary', { name: 'Publishing' });
 
@@ -60,7 +59,7 @@ test.describe('the replaced posts create View', () => {
 		await expect(page).toHaveTitle('New · Posts');
 		// The status and the author sit in their own box, beside the body.
 		await expect(publishing(page).getByRole('combobox', { name: 'Status' })).toBeVisible();
-		await expect(publishing(page).getByRole('spinbutton', { name: 'Author ID' })).toBeVisible();
+		await expect(publishing(page).getByRole('spinbutton', { name: 'Author' })).toBeVisible();
 		await expect(publishing(page).getByRole('textbox')).toHaveCount(0);
 		// No input for the Field the backend owns.
 		await expect(page.getByLabel('Views')).toHaveCount(0);
@@ -83,7 +82,7 @@ test.describe('the replaced posts create View', () => {
 			page.getByRole('heading', { level: 1, name: 'Sourdough at altitude' })
 		).toBeVisible();
 		await expect(valueOf(page, 'Status')).toHaveText('draft');
-		await expect(valueOf(page, 'Author ID')).toHaveText('3');
+		await expect(valueOf(page, 'Author')).toHaveText('Alan Turing');
 		await expect(valueOf(page, 'Tags')).toHaveText('Baking bread');
 		// The backend counts the views, starting at 0.
 		await expect(valueOf(page, 'Views')).toHaveText('0');

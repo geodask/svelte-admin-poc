@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { IdOf, Resource } from './resource.ts';
 
 /**
  * The operators a list filter can use, in their canonical order: the order a Field's
@@ -16,7 +17,7 @@ export type FilterOperator = (typeof FILTER_OPERATORS)[number];
 /**
  * The metadata a Field can carry, attached with `field()`: `label`, `description`, `hidden` (in
  * no View), `list: false` (left off the list View only), `readOnly`, `placeholder`, `input`,
- * `sortable` and `filterable`.
+ * `sortable`, `filterable` and `ref`.
  */
 export type FieldMeta = {
 	label?: string;
@@ -62,6 +63,16 @@ export type FieldMeta = {
 	 * `defineResource` throws otherwise. Write it inline (or `as const`), so `ListParams` sees it.
 	 */
 	filterable?: true | readonly FilterOperator[];
+	/**
+	 * The Resource whose records this Field points to, which makes it a Reference: it holds the id
+	 * of a record of that Resource, and the Views show it by that record's Record title, linked to
+	 * its detail View. Written as a function (`ref: () => users`), which only `defineAdmin` and the
+	 * Views call, so two Resources may reference each other and a Resource itself. The Field's type
+	 * (without `undefined` or `null`) must be the target's id type, the target must be in
+	 * `admin.ts`, and only a top-level Field can be a Reference. A Reference can't be `sortable`,
+	 * and `filterable` allows `eq` only. Write it inline, so the types see it.
+	 */
+	ref?: () => Resource;
 };
 
 /** Who may set a Field the backend owns: never (`true`), or only on create. See `FieldMeta.readOnly`. */
@@ -87,6 +98,7 @@ export type FieldBrand = {
 	input: FieldInputChoice | undefined;
 	sortable: true | undefined;
 	filterable: true | readonly FilterOperator[] | undefined;
+	ref: (() => Resource) | undefined;
 };
 
 /** One key of the metadata as a literal type, or `undefined` when it isn't set. */
@@ -96,9 +108,9 @@ type MetaValue<M, K extends keyof FieldBrand> = M extends { readonly [P in K]: i
 
 /**
  * A Field's schema as `field()` returns it: the same Zod type, branded in its type with the
- * metadata the forms' and the list's types depend on (`readOnly`, `hidden`, `input`, `sortable`
- * and `filterable`), so `FormInput`, `CreateData` and `EditData` can leave out the Fields no form
- * sets, and `ListParams` can name the sortable and filterable ones. The brand survives
+ * metadata the forms' and the list's types depend on (`readOnly`, `hidden`, `input`, `sortable`,
+ * `filterable` and `ref`), so `FormInput`, `CreateData` and `EditData` can leave out the Fields no
+ * form sets, and `ListParams` can name the sortable and filterable ones. The brand survives
  * `.optional()`, `.nullable()` and `.default()`, which keep the schema's type inside them.
  */
 export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
@@ -108,23 +120,46 @@ export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
 		input: MetaValue<M, 'input'>;
 		sortable: MetaValue<M, 'sortable'>;
 		filterable: MetaValue<M, 'filterable'>;
+		ref: MetaValue<M, 'ref'>;
 	};
 };
+
+/** What a Reference's metadata is asked for when its type isn't its target's id type: never met. */
+type RefTypeMatches = {
+	"A Reference's type, without undefined or null, must be its target's id type": true;
+};
+
+/**
+ * What `field()` asks of a Reference's metadata, besides `FieldMeta`: no `sortable`, and a type
+ * that is its target's id type. A target whose id type TypeScript can't see takes any id type.
+ */
+type RefRules<T extends z.ZodType, M> = M extends { readonly ref: () => infer R extends Resource }
+	? { sortable?: never } & (string | number extends IdOf<R>
+			? unknown
+			: [NonNullable<z.output<T>>] extends [IdOf<R>]
+				? [IdOf<R>] extends [NonNullable<z.output<T>>]
+					? unknown
+					: RefTypeMatches
+				: RefTypeMatches)
+	: unknown;
 
 /**
  * Attach metadata to a Field's schema and return the same schema, so it can sit inline in
  * `z.object({...})`. It may go inside or outside `.optional()`, `.nullable()` and `.default()`:
  * `field(z.number(), { label: 'Calories' }).optional()` keeps its label. Its type is branded with
- * `readOnly`, `hidden`, `input`, `sortable` and `filterable`, so write the metadata inline (or
- * `as const`) for the types to see it: a read-only Field is then left out of a replaced form
+ * `readOnly`, `hidden`, `input`, `sortable`, `filterable` and `ref`, so write the metadata inline
+ * (or `as const`) for the types to see it: a read-only Field is then left out of a replaced form
  * View's typed `fields` and of the Provider's write data, a sortable one is in `ListParams`' sort,
- * and a filterable one in its filters.
+ * and a filterable one in its filters. A Reference (`ref`) whose type isn't its target's id type,
+ * or that is `sortable`, is a type error.
  */
 export function field<T extends z.ZodType, const M extends FieldMeta>(
 	schema: T,
-	meta: M
+	meta: M & NoInfer<RefRules<T, M>>
 ): FieldSchema<T, M> {
-	(schema as z.ZodType).register(fieldRegistry, meta);
+	// Zod's registry rewrites the metadata type in depth, which a Resource in `ref` (its schema
+	// included) doesn't survive; `M` is a `FieldMeta`, so the registry holds what it expects.
+	(schema as z.ZodType).register(fieldRegistry, meta as z.core.$replace<FieldMeta, z.ZodType>);
 	return schema as FieldSchema<T, M>;
 }
 
@@ -160,35 +195,50 @@ export type FieldBrandOf<S, K extends keyof FieldBrand> = (
 		: Own
 	: never;
 
-/** The built-in Kinds a Field's Zod type maps to. Named Kinds and Kind registration come later. */
+/**
+ * The built-in Kinds: the ones the core finds from a Field's Zod type, and `reference`, found from
+ * its `ref`. Named Kinds and Kind registration come later.
+ */
 export type KindName =
-	'text' | 'number' | 'boolean' | 'date' | 'enum' | 'list' | 'object' | 'unknown';
+	'text' | 'number' | 'boolean' | 'date' | 'enum' | 'list' | 'object' | 'unknown' | 'reference';
 
+/** The Kind `detectKind` finds from a Field's Zod type, with an enum's options. */
 export type DetectedKind =
-	{ kind: Exclude<KindName, 'enum'> } | { kind: 'enum'; options: readonly (string | number)[] };
+	| { kind: Exclude<KindName, 'enum' | 'reference'> }
+	| { kind: 'enum'; options: readonly (string | number)[] };
 
 /**
- * The operators a filter on a Field of each scalar Kind can use, in the canonical order. Its keys
- * are the scalar Kinds: the ones a Field can be sorted and filtered by.
+ * A Reference's Kind: its target, as the function `ref` names it (call it only once every
+ * Resource module has loaded, as `defineAdmin` and the Views do), and its id type.
+ */
+export type ReferenceKind = { kind: 'reference'; ref: () => Resource; id: 'string' | 'number' };
+
+/**
+ * The operators a filter on a Field of each Kind can use, in the canonical order. Its keys are the
+ * Kinds a Field can be filtered by: the scalar Kinds, and a Reference, by equality.
  */
 export const KIND_OPERATORS = {
 	text: ['eq', 'in', 'contains'],
 	number: ['eq', 'lt', 'lte', 'gt', 'gte'],
 	date: ['eq', 'lt', 'lte', 'gt', 'gte'],
 	enum: ['eq', 'in'],
-	boolean: ['eq']
+	boolean: ['eq'],
+	reference: ['eq']
 } as const satisfies Partial<Record<KindName, readonly FilterOperator[]>>;
 
-/** The Kinds a Field can be sorted and filtered by: text, number, date, enum and boolean. */
-export type ScalarKindName = keyof typeof KIND_OPERATORS;
+/** The Kinds a Field can be filtered by: text, number, date, enum, boolean and reference. */
+export type FilterableKindName = keyof typeof KIND_OPERATORS;
 
-const SCALAR_KINDS: ReadonlySet<KindName> = new Set(Object.keys(KIND_OPERATORS) as KindName[]);
+const FILTERABLE_KINDS: ReadonlySet<KindName> = new Set(Object.keys(KIND_OPERATORS) as KindName[]);
+
+/** The scalar Kinds: the ones a Field can be sorted by, and a list can hold. */
+const SCALAR_KINDS: ReadonlySet<KindName> = new Set(['text', 'number', 'date', 'enum', 'boolean']);
 
 /** The list URL's own params, which no filterable Field's key may be. */
 export const RESERVED_LIST_KEYS = ['page', 'perPage', 'sort', 'order', 'q'] as const;
 
-function isScalarKind(kind: KindName): kind is ScalarKindName {
-	return SCALAR_KINDS.has(kind);
+function isFilterableKind(kind: KindName): kind is FilterableKindName {
+	return FILTERABLE_KINDS.has(kind);
 }
 
 /** The operators `filterable` allows on a Field of `kind`, in the canonical order. */
@@ -196,7 +246,7 @@ function filterOperatorsOf(
 	kind: KindName,
 	filterable: FieldMeta['filterable']
 ): readonly FilterOperator[] {
-	if (filterable === undefined || !isScalarKind(kind)) return [];
+	if (filterable === undefined || !isFilterableKind(kind)) return [];
 	if (filterable === true) return KIND_OPERATORS[kind];
 	return FILTER_OPERATORS.filter((operator) => filterable.includes(operator));
 }
@@ -275,8 +325,11 @@ export function defaultLabel(key: string): string {
 	return sentence.charAt(0).toUpperCase() + sentence.slice(1);
 }
 
-/** One Field of a Resource, as the Views need it. Its Kind's details (enum options) sit beside it. */
-export type Field = DetectedKind & {
+/**
+ * One Field of a Resource, as the Views need it. Its Kind's details (an enum's options, a
+ * Reference's target and id type) sit beside it.
+ */
+export type Field = (DetectedKind | ReferenceKind) & {
 	key: string;
 	label: string;
 	description?: string;
@@ -334,7 +387,10 @@ function fieldMeta(schema: z.ZodType): FieldMeta {
 export function describeField(key: string, schema: z.ZodType): Field {
 	const chain = wrapperChain(schema);
 	const meta = fieldMeta(schema);
-	const kind = detectKind(schema);
+	const kind: DetectedKind | ReferenceKind =
+		meta.ref === undefined
+			? detectKind(schema)
+			: { kind: 'reference', ref: meta.ref, id: referenceIdType(schema) ?? 'string' };
 	const hidden = meta.hidden ?? false;
 	const object = kind.kind === 'object' ? nestedObject(schema) : undefined;
 
@@ -357,22 +413,83 @@ export function describeField(key: string, schema: z.ZodType): Field {
 
 /**
  * Fails at startup when a Field that isn't of a scalar Kind (text, number, date, enum, boolean)
- * is sortable: no backend sort of a list, an object or an unknown value could be offered.
+ * is sortable: no backend sort of a list, an object, a Reference or an unknown value could be
+ * offered.
  */
 export function assertSortable(name: string, fields: readonly Field[]): void {
 	for (const field of fields) {
 		if (!field.sortable || SCALAR_KINDS.has(field.kind)) continue;
+		const kind = field.kind === 'reference' ? 'it is a Reference' : `its Kind is ${field.kind}`;
 		throw new Error(
-			`Resource "${name}": the Field "${field.key}" is \`sortable\`, but its Kind is ${field.kind}. ` +
+			`Resource "${name}": the Field "${field.key}" is \`sortable\`, but ${kind}. ` +
 				'Only a text, number, date, enum or boolean Field can be sortable.'
 		);
 	}
 }
 
+/** The id type a Reference's schema holds, or `undefined` when it is neither a string nor a number. */
+function referenceIdType(schema: z.ZodType): ReferenceKind['id'] | undefined {
+	const { type } = unwrap(schema)._zod.def;
+	return type === 'string' || type === 'number' ? type : undefined;
+}
+
 /**
- * Fails at startup when a Field's `filterable` can't work: on a Field that isn't of a scalar Kind,
- * as an empty list, with an operator its Kind doesn't have, or on a key the list URL can't hold
- * as a filter (one of its own params, or one with a `.`, which starts an operator suffix).
+ * The Kind of a Field's schema as `describeField` finds it: a Reference for one with a `ref`, else
+ * the Kind of its Zod type.
+ */
+function kindOf(schema: z.ZodType): KindName {
+	return fieldMeta(schema).ref === undefined ? detectKind(schema).kind : 'reference';
+}
+
+/**
+ * The path, below a Field, of the first `ref` set inside it (in a nested object or as an array's
+ * element), or `undefined` when there is none.
+ */
+function nestedRef(schema: z.ZodType, path: string): string | undefined {
+	const type = unwrap(schema);
+	const inner: [z.ZodType, string][] =
+		type instanceof z.ZodObject
+			? Object.entries(type.shape).map(([key, child]) => [child as z.ZodType, `${path}.${key}`])
+			: type instanceof z.ZodArray
+				? [[type.element as z.ZodType, `${path}[]`]]
+				: [];
+	for (const [child, at] of inner) {
+		if (fieldMeta(child).ref !== undefined) return at;
+		const deeper = nestedRef(child, at);
+		if (deeper !== undefined) return deeper;
+	}
+	return undefined;
+}
+
+/**
+ * Fails at startup when a Reference can't work in this version: one whose type is neither a
+ * string nor a number (an id is one), and a `ref` inside a nested object or an array, since only a
+ * top-level Field can be a Reference. It never calls a `ref`, so the target may still be loading.
+ */
+export function assertReferences(name: string, schema: z.ZodObject): void {
+	for (const [key, fieldSchema] of Object.entries(schema.shape)) {
+		const nested = nestedRef(fieldSchema as z.ZodType, key);
+		if (nested !== undefined) {
+			throw new Error(
+				`Resource "${name}": the Field "${key}" holds a Reference at "${nested}". ` +
+					'Only a top-level Field can be a Reference in this version.'
+			);
+		}
+		if (kindOf(fieldSchema as z.ZodType) !== 'reference') continue;
+		if (referenceIdType(fieldSchema as z.ZodType) === undefined) {
+			throw new Error(
+				`Resource "${name}": the Field "${key}" is a Reference, so its type must be a string or ` +
+					"a number: its target's id type."
+			);
+		}
+	}
+}
+
+/**
+ * Fails at startup when a Field's `filterable` can't work: on a Field that isn't of a scalar Kind
+ * or a Reference, as an empty list, with an operator its Kind doesn't have, or on a key the list
+ * URL can't hold as a filter (one of its own params, or one with a `.`, which starts an operator
+ * suffix).
  */
 export function assertFilterable(name: string, schema: z.ZodObject): void {
 	for (const [key, fieldSchema] of Object.entries(schema.shape)) {
@@ -381,10 +498,11 @@ export function assertFilterable(name: string, schema: z.ZodObject): void {
 		const fail = (problem: string): never => {
 			throw new Error(`Resource "${name}": the Field "${key}" is \`filterable\`, but ${problem}`);
 		};
-		const { kind } = detectKind(fieldSchema as z.ZodType);
-		if (!isScalarKind(kind)) {
+		const kind = kindOf(fieldSchema as z.ZodType);
+		if (!isFilterableKind(kind)) {
 			fail(
-				`its Kind is ${kind}. Only a text, number, date, enum or boolean Field can be filterable.`
+				`its Kind is ${kind}. Only a text, number, date, enum, boolean or Reference Field can be ` +
+					'filterable.'
 			);
 		} else if (filterable !== true) {
 			if (filterable.length === 0) fail('its list of operators is empty. Name at least one.');

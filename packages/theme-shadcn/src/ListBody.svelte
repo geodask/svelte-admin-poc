@@ -44,6 +44,8 @@
 				renderComponent(FieldCell, {
 					field,
 					value: getValue(),
+					record: row.original,
+					admin: view.admin,
 					// One cell per row links to the record's detail View.
 					href: field === view.linkField ? view.recordHref(row.original) : undefined
 				})

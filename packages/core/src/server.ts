@@ -32,6 +32,7 @@ import {
 } from './ids.ts';
 import { toCsv } from './csv.ts';
 import { collectPages } from './export-pages.ts';
+import { resolveIds } from './resolve-ids.ts';
 import { exportParamsSchema, listParamsSchema, withDefaultSort } from './list-params.ts';
 import type { ListParams, ListResult, ProviderContext, ResourceProvider } from './provider.ts';
 import type { DeleteManyReport, ExportReport, ServedFailure } from './remote.ts';
@@ -76,6 +77,12 @@ export type ServeResourceOptions = {
  *   reports how many ids were deleted and, when it stopped, why (a Provider error's status and
  *   message, or a logged unexpected error as a generic 500), instead of throwing, so the list
  *   queries the client asks for are refreshed either way (`deleteMany(ids).updates(getList)`).
+ * - `lookup` is a batched remote query (Kit's `query.batch`), for the References that point to
+ *   this Resource. It takes one typed id and gives its record, parsed with the schema as on
+ *   `getOne`, or `null` when there is none. Every `lookup` a page makes in the same tick reaches
+ *   the server as one request, whose distinct ids it resolves with `resolveIds`: one `getOne` per
+ *   id, a `NotFoundError` as `null`, and a record for another id ignored. Any other Provider error
+ *   fails the whole batch with its status.
  * - `exportList` is a remote command too, so export needs JavaScript. It takes the list params
  *   without the page and the page size (a search, a sort and filters), checked by the same rules
  *   as `getList`'s, and gets the default sort when it names no sort. It pages through the
@@ -107,7 +114,7 @@ export type ServeResourceOptions = {
  * from any other page it is refused before the Provider is called.
  *
  * @example
- * export const { getList, getOne, create, update, deleteOne, deleteMany, exportList } =
+ * export const { getList, getOne, lookup, create, update, deleteOne, deleteMany, exportList } =
  * 	serveResource(recipes, backend.for(recipes));
  */
 export function serveResource<R extends Resource>(
@@ -151,6 +158,16 @@ export function serveResource<R extends Resource>(
 			throw new Error(`The Provider for ${resource.name} returned another record for an id`);
 		}
 		return record as RecordOf<R>;
+	});
+
+	// The same id schema as `getOne`: `lookup('1')` is invalid input for a number id.
+	const lookup = query.batch(idSchema, async (ids) => {
+		const context = providerContext();
+		const parse = (record: unknown) => resource.schema.parse(record) as RecordOf<R>;
+		const records = await served(() =>
+			resolveIds(ids, { getOne: (id) => provider.getOne(context, id) }, parse)
+		);
+		return (id: IdOf<R>): RecordOf<R> | null => records.get(id) ?? null;
 	});
 
 	const create = form(kitFormSchema(resource, 'create'), async (data) => {
@@ -251,6 +268,7 @@ export function serveResource<R extends Resource>(
 	return {
 		getList,
 		getOne,
+		lookup,
 		// Typed from the Resource, so an app's replaced create or edit View gets typed `fields`.
 		create: create as unknown as WithInput<typeof create, FormInput<R, 'create'>>,
 		update: update as unknown as WithInput<typeof update, FormInput<R, 'edit'>>,

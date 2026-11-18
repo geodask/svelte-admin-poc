@@ -19,12 +19,14 @@ test.describe("a post's Record title, from its `recordTitle` key", () => {
 	test("is the list View's link to each post: the title cell, and no other", async ({ page }) => {
 		await page.goto('/admin/posts?sort=id');
 
+		// The author cell links to the author, a user; only the title cell links to the post.
 		const row = dataRows(page).first();
-		await expect(row.getByRole('link')).toHaveCount(1);
-		await expect(row.getByRole('link')).toHaveText(firstPost);
-		await expect(row.getByRole('link')).toHaveAttribute('href', '/admin/posts/1');
+		const postLinks = row.locator('a[href^="/admin/posts/"]');
+		await expect(postLinks).toHaveCount(1);
+		await expect(postLinks).toHaveText(firstPost);
+		await expect(postLinks).toHaveAttribute('href', '/admin/posts/1');
 
-		await row.getByRole('link').click();
+		await postLinks.click();
 
 		await expect(page).toHaveURL('/admin/posts/1');
 		await expect(page.getByRole('heading', { level: 1 })).toHaveText(firstPost);

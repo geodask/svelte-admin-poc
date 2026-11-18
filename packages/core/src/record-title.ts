@@ -47,7 +47,8 @@ export function recordTitle<R extends Resource>(resource: R, record: RecordOf<R>
 
 /**
  * Fails at startup when a `recordTitle` key names no Field, which TypeScript already rejects
- * (this catches JavaScript and casts), or names a hidden Field, which no View may show.
+ * (this catches JavaScript and casts), names a hidden Field, which no View may show, or names a
+ * Reference, whose value is only another record's id.
  */
 export function assertRecordTitle(
 	name: string,
@@ -65,6 +66,12 @@ export function assertRecordTitle(
 		throw new Error(
 			`Resource "${name}": \`recordTitle\` names the hidden Field "${setting}". A Record title ` +
 				'is shown wherever the admin names a record, so it must come from a Field that is shown.'
+		);
+	}
+	if (field.kind === 'reference') {
+		throw new Error(
+			`Resource "${name}": \`recordTitle\` names "${setting}", which is a Reference. A Record ` +
+				'title names the record itself, not another one: name a Field of its own, or use a function.'
 		);
 	}
 }
