@@ -19,7 +19,10 @@
 //                                     a value last either way. q searches recipes by their text
 //                                     Fields and users by name and email; posts can't be
 //                                     searched, and q for them is a 400. The filters and the sort
-//                                     apply before the search and the paging
+//                                     apply before the search and the paging. A filter on id works
+//                                     the same way, so `id=1&id=2&perPage=2` (the REST Provider's
+//                                     getMany) answers the records with those ids, leaving out the
+//                                     ids that name none
 //   GET  /{resource}/{id}             one record, or a 404. The id is one path segment, decoded,
 //                                     and matched against each record's id written as text
 //   POST /{resource}                  create a record from the JSON body, with the next id (the

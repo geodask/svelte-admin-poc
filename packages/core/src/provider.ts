@@ -199,6 +199,15 @@ export type Provider<
 	 */
 	getOne(ctx: ProviderContext, id: Id): Promise<T>;
 	/**
+	 * Optional: many records by their ids in one request, for a backend that can fetch them
+	 * together. The admin calls it to show the References on a page: `ids` holds 1 to 100
+	 * distinct ids, with the schema's id type. Return the records found, in any order, and leave
+	 * out the missing ones: a missing record is not an error. Without it, the admin calls
+	 * `getOne` for each id, and a `NotFoundError` means the record is missing.
+	 */
+	// Function-typed, so its ids are checked strictly, as `create`'s data is.
+	getMany?: (ctx: ProviderContext, ids: Id[]) => Promise<T[]>;
+	/**
 	 * Create a record. `data` is the record without its id and its read-only and hidden Fields
 	 * (`CreateData`), already validated with the Resource schema, so a Provider only forwards it
 	 * to the backend and fills in what the backend owns. Return the record the backend saved, with

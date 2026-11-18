@@ -141,6 +141,7 @@ export type Post = {
 	id: number;
 	title: string;
 	userId: number;
+	replyToId?: number;
 	status: 'draft' | 'published';
 	tags: string[];
 	body: string;
@@ -166,6 +167,9 @@ const angles = [
 	'A week of'
 ];
 
+/** The posts that reply to another, by the id of the post each replies to. */
+export const REPLIES: Record<number, number> = { 58: 1, 59: 2, 60: 1, 45: 44 };
+
 /** The post whose author names no user, and the id it names. */
 export const DANGLING_POST = 57;
 export const MISSING_USER_ID = 99;
@@ -178,6 +182,8 @@ export const posts: Post[] = Array.from({ length: 60 }, (_, index) => {
 		title: `${angle} ${topic.toLowerCase()} (part ${Math.floor(index / topics.length) + 1})`,
 		// Post 57's author was deleted, so it names no user: the Views show its id, muted.
 		userId: index === DANGLING_POST - 1 ? MISSING_USER_ID : (index % 5) + 1,
+		// A few posts reply to another, so the Views show the replied-to post's title.
+		...(REPLIES[index + 1] === undefined ? {} : { replyToId: REPLIES[index + 1] }),
 		status: index % 4 === 3 ? 'draft' : 'published',
 		tags: [topic, index % 2 === 0 ? 'Guide' : 'Story'],
 		body: `Notes on ${topic.toLowerCase()}.`,

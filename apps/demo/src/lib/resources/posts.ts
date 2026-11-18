@@ -1,4 +1,4 @@
-import { defineResource, field } from '@svelte-admin/core';
+import { defineResource, field, type Resource } from '@svelte-admin/core';
 import { z } from 'zod';
 import { users } from './users.ts';
 
@@ -15,6 +15,9 @@ export const posts = defineResource({
 		// A Reference to users: the Views show the author's name, linked to the user. Filtered by
 		// equality, the only operator a Reference has.
 		userId: field(z.number(), { label: 'Author', ref: () => users, filterable: true }),
+		// A self-Reference: the post this one replies to, shown by its title. Its arrow names its
+		// return type, so TypeScript needn't infer `posts` from its own initializer.
+		replyToId: field(z.number(), { label: 'Reply to', ref: (): Resource => posts }).optional(),
 		status: field(z.enum(['draft', 'published']), { filterable: true }),
 		tags: z.array(z.string()),
 		body: field(z.string(), { list: false }),

@@ -139,6 +139,12 @@ export const postSortByAuthor: ListParams<typeof posts>['sort'] = { field: 'user
 export const postAuthorInput: FormInput<typeof posts, 'create'>['userId'] = 3;
 // @ts-expect-error users have number ids
 export const postAuthorTextInput: FormInput<typeof posts, 'create'>['userId'] = '3';
+// A post may reply to another: an optional self-Reference, sent as the replied-to post's id or
+// left out.
+export const postReplyInput: FormInput<typeof posts, 'create'>['replyToId'] = 1;
+export const postNoReplyInput: FormInput<typeof posts, 'create'>['replyToId'] = undefined;
+// @ts-expect-error a post's id is a number
+export const postReplyTextInput: FormInput<typeof posts, 'create'>['replyToId'] = '1';
 // A Reference whose type isn't its target's id type is rejected.
 // @ts-expect-error users have number ids
 export const textAuthor = field(z.string(), { ref: () => users });

@@ -1,5 +1,5 @@
-import { DANGLING_POST, MISSING_USER_ID } from '../backend/seed.ts';
-import { expect, test } from './fixtures.ts';
+import { DANGLING_POST, MISSING_USER_ID, posts } from '../backend/seed.ts';
+import { expect, hydrated, test } from './fixtures.ts';
 import {
 	backendRequestsDuring,
 	backendRequestsFor,
@@ -9,6 +9,7 @@ import {
 	dataRows,
 	openInSidebar,
 	pager,
+	uniqueId,
 	uniquePage,
 	valueOf
 } from './list-helpers.ts';
@@ -112,8 +113,8 @@ test.describe("crafted calls with a post's author", () => {
 		// The users lookup: the posts list asks it for each author's name.
 		const lookup = await captureLookup(page, request, () => openInSidebar(page, 'Posts'));
 		// An id no other test asks for, so the request log shows only this test's requests.
-		const id = 700_000 + Math.floor(Math.random() * 100_000);
-		const asked = (log: string[]) => log.filter((line) => line === `GET /users/${id}`);
+		const id = uniqueId();
+		const asked = (log: string[]) => log.filter((line) => new RegExp(`id=${id}(&|$)`).test(line));
 
 		const rejected = await backendRequestsDuring(request, async () => {
 			const response = await lookup([String(id)]);
@@ -125,6 +126,67 @@ test.describe("crafted calls with a post's author", () => {
 			const response = await lookup([id]);
 			expect(await response.json()).toMatchObject({ type: 'result' });
 		});
-		expect(asked(good)).toEqual([`GET /users/${id}`]);
+		expect(asked(good)).toEqual([`GET /users?page=1&perPage=1&id=${id}`]);
+	});
+
+	test('lookups for users in one batch reach the backend as one getMany request @js', async ({
+		page,
+		request
+	}) => {
+		await page.goto('/admin/users');
+		const lookup = await captureLookup(page, request, () => openInSidebar(page, 'Posts'));
+		// Ids no other test asks for, so the request log shows only this test's requests.
+		const [first, second, third] = [uniqueId(), uniqueId(), uniqueId()];
+		const asked = (log: string[]) =>
+			log.filter((line) => new RegExp(`id=${first}(&|$)`).test(line));
+
+		const log = await backendRequestsDuring(request, async () => {
+			const response = await lookup([first, second, first, third, 1]);
+			expect(await response.json()).toMatchObject({ type: 'result' });
+		});
+
+		// Each distinct id once, in one request as large as the ids, and no getOne.
+		expect(asked(log)).toEqual([
+			`GET /users?page=1&perPage=4&id=${first}&id=${second}&id=${third}&id=1`
+		]);
+		expect(log).not.toContain(`GET /users/${first}`);
+	});
+});
+
+// A post may reply to another: `replyToId` is a Reference to posts themselves. The posts Provider
+// has no `getMany`, so each replied-to post is looked up with `getOne`. Post 60 replies to post 1,
+// and post 59 to post 2.
+
+test.describe('the post a post replies to, a self-Reference', () => {
+	test('shows in the list View as that post’s title, linked to it', async ({ page }) => {
+		await page.goto('/admin/posts');
+
+		const replyTo = await columnCells(page, 'Reply to');
+		await expect(replyTo.nth(0)).toHaveText(posts[0].title);
+		await expect(replyTo.nth(1)).toHaveText(posts[1].title);
+		await expect(replyTo.nth(0).getByRole('link')).toHaveAttribute('href', '/admin/posts/1');
+		// Post 57 replies to none.
+		await expect(replyTo.nth(3).getByRole('link')).toHaveCount(0);
+	});
+
+	test('is in the server-rendered list View', async ({ page }) => {
+		const response = await page.goto('/admin/posts');
+
+		const html = (await response?.text()) ?? '';
+		expect(html).toContain('href="/admin/posts/1"');
+		expect(html).toContain(posts[0].title);
+	});
+
+	test('shows on the detail View as that post’s title, linked to it', async ({ page }) => {
+		// Not post 59: detail.test.ts checks that the backend is never asked for it.
+		await page.goto('/admin/posts/58');
+		// With JavaScript, the click is a client-side navigation within the same route.
+		if (test.info().project.use.javaScriptEnabled !== false) await hydrated(page);
+
+		await expect(valueOf(page, 'Reply to')).toHaveText(posts[0].title);
+		await valueOf(page, 'Reply to').getByRole('link').click();
+
+		await expect(page).toHaveURL('/admin/posts/1');
+		await expect(page.getByRole('heading', { level: 1 })).toHaveText(posts[0].title);
 	});
 });

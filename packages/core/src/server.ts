@@ -80,9 +80,10 @@ export type ServeResourceOptions = {
  * - `lookup` is a batched remote query (Kit's `query.batch`), for the References that point to
  *   this Resource. It takes one typed id and gives its record, parsed with the schema as on
  *   `getOne`, or `null` when there is none. Every `lookup` a page makes in the same tick reaches
- *   the server as one request, whose distinct ids it resolves with `resolveIds`: one `getOne` per
- *   id, a `NotFoundError` as `null`, and a record for another id ignored. Any other Provider error
- *   fails the whole batch with its status.
+ *   the server as one request, whose distinct ids it resolves with `resolveIds`: one Provider
+ *   `getMany` per 100 distinct ids, an id it doesn't return as `null`; or without `getMany`, one
+ *   `getOne` per id, a `NotFoundError` as `null`. A record for another id is ignored. Any other
+ *   Provider error fails the whole batch with its status.
  * - `exportList` is a remote command too, so export needs JavaScript. It takes the list params
  *   without the page and the page size (a search, a sort and filters), checked by the same rules
  *   as `getList`'s, and gets the default sort when it names no sort. It pages through the
@@ -164,9 +165,13 @@ export function serveResource<R extends Resource>(
 	const lookup = query.batch(idSchema, async (ids) => {
 		const context = providerContext();
 		const parse = (record: unknown) => resource.schema.parse(record) as RecordOf<R>;
-		const records = await served(() =>
-			resolveIds(ids, { getOne: (id) => provider.getOne(context, id) }, parse)
-		);
+		const { getMany } = provider;
+		const source = {
+			getOne: (id: IdOf<R>) => provider.getOne(context, id),
+			// Called on the Provider, as `getOne` is, so a Provider written as a class keeps its `this`.
+			...(getMany && { getMany: (chunk: IdOf<R>[]) => getMany.call(provider, context, chunk) })
+		};
+		const records = await served(() => resolveIds(ids, source, parse));
 		return (id: IdOf<R>): RecordOf<R> | null => records.get(id) ?? null;
 	});
 

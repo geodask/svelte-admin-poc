@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { ConflictError, FieldError, InvalidInputError, NotFoundError } from './errors.ts';
 import { idPathSegment } from './ids.ts';
 import { encodeListParams } from './list-url.ts';
-import type { ListResult, ResourceProvider } from './provider.ts';
+import type { ListParams, ListResult, ResourceProvider } from './provider.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /** A 422's body that names the Fields the backend rejected. */
@@ -32,6 +32,11 @@ const listResponse = z.union([
  *   (`name.contains=piz`, `prepTimeMinutes.gte=10`; also `.lt`, `.lte` and `.gt`). Booleans are
  *   `true` and `false`, and a `Date` an ISO string. A backend that can't do a declared sort or
  *   filter should answer 400.
+ * - `getMany` asks the same list for the records with some ids, as one page as large as the
+ *   ids: `GET {base}/{resource}?page=1&perPage=N&id=1&id=2`, the ids as an `in` filter on `id`
+ *   (a repeated param, even for one id). The backend leaves out the ids it has no record for. A
+ *   backend that can't filter its list by `id` should use a Provider without `getMany` (this
+ *   one's other methods), so the admin calls `getOne` per id instead.
  * - `GET {base}/{resource}/{id}` returns the record. The id is always one path segment
  *   (`idPathSegment`), so `../users/1` is asked for as `..%2Fusers%2F1`.
  * - `POST {base}/{resource}` with the record (without its id) as JSON creates it, and returns
@@ -66,22 +71,38 @@ export function restProvider(baseUrl: string) {
 			/** A record's URL: the id is always one path segment. */
 			const recordUrl = (id: IdOf<R>) => `${resourceUrl}/${idPathSegment(id)}`;
 
+			/** One page of the list, asked for with `params`. */
+			async function listPage(
+				fetch: typeof globalThis.fetch,
+				params: ListParams
+			): Promise<ListResult<RecordOf<R>>> {
+				// The list URL's encoding, with every param written, so the backend never has to
+				// know the defaults.
+				const url = `${resourceUrl}?${encodeListParams(params)}`;
+				const parsed = listResponse.safeParse(await requestJson(fetch, 'GET', url));
+				if (!parsed.success) {
+					throw new Error(
+						`REST Provider: GET ${url} returned neither { data, total } nor { data, hasNextPage }`
+					);
+				}
+				return parsed.data as ListResult<RecordOf<R>>;
+			}
+
 			return {
 				async getList({ fetch }, params) {
-					// The list URL's encoding, with every param written, so the backend never has to
-					// know the defaults.
-					const url = `${resourceUrl}?${encodeListParams(params)}`;
-					const parsed = listResponse.safeParse(await requestJson(fetch, 'GET', url));
-					if (!parsed.success) {
-						throw new Error(
-							`REST Provider: GET ${url} returned neither { data, total } nor { data, hasNextPage }`
-						);
-					}
-					return parsed.data as ListResult<RecordOf<R>>;
+					return listPage(fetch, params);
 				},
 
 				async getOne({ fetch }, id) {
 					return (await requestJson(fetch, 'GET', recordUrl(id))) as RecordOf<R>;
+				},
+
+				async getMany({ fetch }, ids) {
+					// One page of the list, filtered to the ids and as large as their count, so it
+					// holds them all. Written as an `in` filter, which the encoding writes as a
+					// repeated param even for one id.
+					const filters = [{ field: 'id', operator: 'in', value: ids } as const];
+					return (await listPage(fetch, { page: 1, perPage: ids.length, filters })).data;
 				},
 
 				async create({ fetch }, data) {
