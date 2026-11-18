@@ -95,20 +95,22 @@
 		field.set(withoutRow(field.value(), row));
 	}
 
-	/** The type of the one `<input>` a scalar spec renders. */
-	const inputType = $derived.by((): RemoteFormInputType => {
+	/** The type and `step` of the one `<input>` a scalar spec renders. */
+	const scalarInput = $derived.by((): { type: RemoteFormInputType; step?: number | 'any' } => {
 		switch (spec.kind) {
 			case 'text':
-				return spec.format;
+				return { type: spec.format };
 			case 'datetime':
-				return 'datetime-local';
-			case 'reference':
-				return spec.id === 'number' ? 'number' : 'text';
+				return { type: 'datetime-local' };
 			case 'number':
+				return { type: 'number', step: spec.integer ? 1 : 'any' };
+			case 'reference':
+				// Without the admin, a Reference is an input for the id itself, of the id's type.
+				return spec.id === 'number' ? { type: 'number', step: 1 } : { type: 'text' };
 			case 'date':
-				return spec.kind;
+				return { type: 'date' };
 			default:
-				return 'text';
+				return { type: 'text' };
 		}
 	});
 
@@ -255,18 +257,11 @@
 					aria-describedby={describedBy}
 					class={[control, 'py-2']}></textarea>
 			{:else}
-				<!-- A Reference without the admin is an input for the id itself. -->
 				<input
-					{...field.as(inputType)}
+					{...field.as(scalarInput.type)}
 					id={inputId}
 					placeholder={spec.placeholder}
-					step={spec.kind === 'number'
-						? spec.integer
-							? 1
-							: 'any'
-						: spec.kind === 'reference' && spec.id === 'number'
-							? 1
-							: undefined}
+					step={scalarInput.step}
 					aria-required={spec.required}
 					aria-describedby={describedBy}
 					class={[control, 'h-9']}

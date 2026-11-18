@@ -163,6 +163,7 @@
 		clearTimeout(debounce);
 		searches++;
 		open = false;
+		results = [];
 		active = -1;
 		status = 'idle';
 	}
@@ -186,6 +187,9 @@
 			if (chosen !== undefined) void choose(undefined);
 			return;
 		}
+		// Until the search answers, the list offers nothing, so Enter can't choose a stale match.
+		results = [];
+		active = -1;
 		open = true;
 		status = 'searching';
 		const query = text;

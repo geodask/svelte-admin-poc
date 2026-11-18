@@ -358,8 +358,8 @@ type ListInput<E, Choice> =
  * a boolean for a checkbox, text for any other scalar (a string, an enum's select, a date, a
  * datetime), the target's id type for a Reference (its picker sends the id as text, which the
  * form turns into that type), an array for a list in rows, text for a list in lines, an array of
- * objects for rows, and an object for a group. The id and the read-only and hidden Fields are left out, and
- * `'afterCreate'` Fields appear on create only. A Field in a wrapper may be left out, and so
+ * objects for rows, and an object for a group. The id and the read-only and hidden Fields are
+ * left out, and `'afterCreate'` Fields appear on create only. A Field in a wrapper may be left out, and so
  * may every boolean, since an unchecked checkbox sends nothing. The edit form also carries the
  * record's typed id, its hidden input, which also types `update.for(id)`.
  *

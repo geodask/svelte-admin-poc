@@ -1,10 +1,11 @@
 // The headless Reference picker: what a Theme needs to let a person choose a Reference's record by
 // its Record title, in a form and, later, in a list filter. Shared and browser-safe: it reaches the
 // target through the admin, so it imports no remote module itself.
+import type { z } from 'zod';
 import type { Admin } from './admin.ts';
 import type { Field } from './fields.ts';
 import type { FormInputSpec } from './form-spec.ts';
-import { idFromParam } from './ids.ts';
+import { idFromText } from './ids.ts';
 import type { ListParams } from './provider.ts';
 import { recordTitle } from './record-title.ts';
 import type { ResourceRemote } from './remote.ts';
@@ -131,8 +132,12 @@ export function createReferencePicker(
 	};
 }
 
-/** A Reference's value as the target's typed id, or `undefined` when it names none. */
+/**
+ * A Reference's value as the target's typed id, or `undefined` when it names none: read by the
+ * rule `formSchema` reads the picker's value by (`idFromText`), with the target's id schema.
+ */
 function typedId(target: Resource, value: unknown): string | number | undefined {
 	if (typeof value !== 'string' && typeof value !== 'number') return undefined;
-	return idFromParam(target, String(value));
+	const text = String(value);
+	return text === '' ? undefined : idFromText(target.schema.shape.id as z.ZodType, text);
 }
