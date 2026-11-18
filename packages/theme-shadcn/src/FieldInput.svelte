@@ -1,7 +1,8 @@
 <!--
 	One Field's input on a create or edit form, chosen by its spec kind: a text, email or url
 	input, a textarea, a number, a checkbox, a select, a date, a datetime read and written in UTC,
-	a list, rows or a group. It shows the Field's label (with a marker when it is required), its
+	a list, rows or a group, or for a Reference the ReferencePicker when given the admin (without
+	it, an input for the id itself, of the id's type). It shows the Field's label (with a marker when it is required), its
 	placeholder in the input, its description as help text, and its issues under it. The form
 	sets `novalidate`, so the browser never blocks a submit: every rule comes from the Resource's
 	schema, with and without JavaScript.
@@ -18,7 +19,7 @@
 	core's `createFormView` and that Field's input from the view's form.
 -->
 <script module lang="ts">
-	import type { FormInputSpec, RemoteFormFieldLike } from '@svelte-admin/core';
+	import type { Admin, FormInputSpec, RemoteFormFieldLike } from '@svelte-admin/core';
 
 	export type FieldInputProps = {
 		/** The Field's input spec, one of the core's `createFormView(...).spec`. */
@@ -33,16 +34,27 @@
 		 * Field that is one input, not a checkbox.
 		 */
 		labelHidden?: boolean;
+		/**
+		 * The admin from admin.ts (`view.admin`), so a Reference gets its picker. Without it, a
+		 * Reference is an input for the id itself.
+		 */
+		admin?: Admin;
 	};
 </script>
 
 <script lang="ts">
 	import { onMount, type Snippet } from 'svelte';
-	import { rowCount, withoutRow, type RemoteFormField } from '@svelte-admin/core';
+	import {
+		rowCount,
+		withoutRow,
+		type RemoteFormField,
+		type RemoteFormInputType
+	} from '@svelte-admin/core';
 	import FieldInput from './FieldInput.svelte';
 	import FieldIssues from './FieldIssues.svelte';
+	import ReferencePicker from './ReferencePicker.svelte';
 
-	let { spec, field: given, labelHidden = false }: FieldInputProps = $props();
+	let { spec, field: given, labelHidden = false, admin }: FieldInputProps = $props();
 
 	// Every input of a remote form is one at runtime, typed or not: read its items, its Fields
 	// and its attributes untyped, as for any Field.
@@ -82,6 +94,25 @@
 	function remove(row: number) {
 		field.set(withoutRow(field.value(), row));
 	}
+
+	/** The type and `step` of the one `<input>` a scalar spec renders. */
+	const scalarInput = $derived.by((): { type: RemoteFormInputType; step?: number | 'any' } => {
+		switch (spec.kind) {
+			case 'text':
+				return { type: spec.format };
+			case 'datetime':
+				return { type: 'datetime-local' };
+			case 'number':
+				return { type: 'number', step: spec.integer ? 1 : 'any' };
+			case 'reference':
+				// Without the admin, a Reference is an input for the id itself, of the id's type.
+				return spec.id === 'number' ? { type: 'number', step: 1 } : { type: 'text' };
+			case 'date':
+				return { type: 'date' };
+			default:
+				return { type: 'text' };
+		}
+	});
 
 	const control =
 		'w-full min-w-0 rounded-md border bg-background px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive';
@@ -175,7 +206,9 @@
 	{/each}
 {/snippet}
 
-{#if spec.kind === 'list' && spec.mode === 'rows'}
+{#if spec.kind === 'reference' && admin}
+	<ReferencePicker {admin} {spec} {field} {labelHidden} />
+{:else if spec.kind === 'list' && spec.mode === 'rows'}
 	{@render container(listRows)}
 {:else if spec.kind === 'rows'}
 	{@render container(objectRows)}
@@ -225,16 +258,10 @@
 					class={[control, 'py-2']}></textarea>
 			{:else}
 				<input
-					{...field.as(
-						spec.kind === 'text'
-							? spec.format
-							: spec.kind === 'datetime'
-								? 'datetime-local'
-								: spec.kind
-					)}
+					{...field.as(scalarInput.type)}
 					id={inputId}
 					placeholder={spec.placeholder}
-					step={spec.kind === 'number' ? (spec.integer ? 1 : 'any') : undefined}
+					step={scalarInput.step}
 					aria-required={spec.required}
 					aria-describedby={describedBy}
 					class={[control, 'h-9']}

@@ -2,7 +2,8 @@
 	The form of a create or edit View: one labelled input per Field the form maps, in schema
 	order, and Save and Cancel. On edit it also carries the record's id as a hidden input, and
 	shows the Fields the backend owns as text, in their place among the inputs, as the detail
-	View shows them; they are never submitted. It is driven by the core's headless
+	View shows them (a Reference by its record's Record title); they are never submitted. A
+	Reference's input is the ReferencePicker. It is driven by the core's headless
 	`createFormView`, so the create and edit Views share it.
 
 	It works without JavaScript: the form posts to the page, and the server renders it again with
@@ -62,10 +63,12 @@
 						<p class="text-xs font-normal text-muted-foreground">{spec.description}</p>
 					{/if}
 				</dt>
-				<dd><FieldValue field={spec.field} value={record?.[spec.key]} /></dd>
+				<dd>
+					<FieldValue field={spec.field} value={record?.[spec.key]} {record} admin={view.admin} />
+				</dd>
 			</dl>
 		{:else}
-			<FieldInput {spec} field={inputs[spec.key]} />
+			<FieldInput {spec} field={inputs[spec.key]} admin={view.admin} />
 		{/if}
 	{/each}
 

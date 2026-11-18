@@ -18,6 +18,11 @@ export {
 } from './list-view.svelte.ts';
 // Also on the shared entry; here too, so a Theme imports what its parts take from one place.
 export type { ActiveFilter } from './active-filters.ts';
+export {
+	createReferencePicker,
+	type ReferenceOption,
+	type ReferencePicker
+} from './reference-picker.ts';
 export type { DeleteFailure, RemoteFailure } from './remote.ts';
 export {
 	createShell,

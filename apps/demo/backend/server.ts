@@ -30,11 +30,13 @@
 //                                     (recipes' sourceId, reviewCount and internalNotes, posts'
 //                                     viewCount), whatever the body says; answers 201 with the
 //                                     created record. A user
-//                                     whose email is already taken is a 422 with an issue on email
+//                                     whose email is already taken is a 422 with an issue on email,
+//                                     and so is a post whose userId names no user, on userId
 //   PUT  /{resource}/{id}             replace a record's editable Fields with the JSON body, keeping
 //                                     its id and the Fields no edit can set (the backend's own, and
 //                                     users' email, set once on create); a Field missing from the
-//                                     body is removed. Answers with the saved record, or a 404
+//                                     body is removed. Answers with the saved record, or a 404. A
+//                                     post whose userId names no user is a 422 with an issue on it
 //   DELETE /{resource}/{id}           delete a record: a 204, or a 404
 //   DELETE /posts?id=1&id=2           delete many posts at once, all or nothing: a 204, or a 404
 //                                     (deleting none) when any id names no post, or a 400 with no
@@ -107,7 +109,26 @@ const createRules: Record<
 		return email !== undefined && taken
 			? [{ path: ['email'], message: 'A user with this email already exists' }]
 			: [];
-	}
+	},
+	posts: postRules
+};
+
+/** A post's author must be a user: a post whose `userId` names none gets an issue on it. */
+function postRules(body: Record<string, unknown>): { path: string[]; message: string }[] {
+	return db.users.some((user) => user.id === body.userId)
+		? []
+		: [{ path: ['userId'], message: 'No user has this id' }];
+}
+
+/**
+ * The rules only the backend can check for a record a PUT replaces, by Resource: each returns the
+ * issues the PUT is answered with (a 422), or none.
+ */
+const updateRules: Record<
+	string,
+	(body: Record<string, unknown>) => { path: string[]; message: string }[]
+> = {
+	posts: postRules
 };
 
 /** The text Fields `q` is matched against, for each Resource that can be searched. */
@@ -331,6 +352,8 @@ const server = Bun.serve({
 			if (typeof body !== 'object' || body === null || Array.isArray(body)) {
 				return json({ message: 'The body must be a JSON object' }, 400);
 			}
+			const issues = updateRules[name]?.(body as Record<string, unknown>) ?? [];
+			if (issues.length > 0) return json({ issues }, 422);
 			const current = db[name][index] as Record<string, unknown> & Records[number];
 			const kept = Object.fromEntries(
 				(keptOnUpdate[name] ?? []).filter((key) => key in current).map((key) => [key, current[key]])

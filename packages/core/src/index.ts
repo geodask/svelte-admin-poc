@@ -12,6 +12,12 @@ export {
 export { idFromParam, idPathSegment, recordPath } from './ids.ts';
 export { recordTitle } from './record-title.ts';
 export { resolveReference, type ReferenceLink } from './reference-link.ts';
+export {
+	createReferencePicker,
+	PICKER_SIZE,
+	type ReferenceOption,
+	type ReferencePicker
+} from './reference-picker.ts';
 export type {
 	ExportParams,
 	FilterableKey,

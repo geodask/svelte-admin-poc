@@ -310,7 +310,7 @@ export function createListView<R extends Resource>(
 				return { field, operators: ['eq'], type: 'input', input, values };
 			}
 			case 'reference': {
-				// Until the Reference picker: one input for the id, of the id's type.
+				// Until the Reference filter: one input for the id, of the id's type.
 				if (!allows('eq')) return undefined;
 				const input = field.id === 'number' ? 'number' : 'text';
 				const values = [filterInput(field, 'eq')];

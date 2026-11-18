@@ -82,8 +82,16 @@ export const authorText: ListParams<typeof posts>['filters'] = [
 // A Reference isn't sortable, so posts have no sort at all.
 expectTypeOf<keyof ListParams<typeof posts>>().toEqualTypeOf<'page' | 'perPage' | 'filters'>();
 
-// Until the Reference picker, the forms send the id itself.
+// On the forms, a Reference's input is typed by the target's id type, inside or outside a wrapper,
+// on create and on edit.
 expectTypeOf<FormInput<typeof posts, 'create'>>().toEqualTypeOf<{
+	userId: number;
+	editorId?: number;
+	reviewerId?: number;
+	tagId?: string;
+}>();
+expectTypeOf<FormInput<typeof posts, 'edit'>>().toEqualTypeOf<{
+	id: number;
 	userId: number;
 	editorId?: number;
 	reviewerId?: number;
@@ -121,3 +129,5 @@ export const comments = defineResource({
 export const replyFilter: ListParams<typeof comments>['filters'] = [
 	{ field: 'replyToId', operator: 'eq', value: 2 }
 ];
+// Its form input is the Field's own id type too, though its arrow names only `Resource`.
+expectTypeOf<FormInput<typeof comments, 'create'>>().toEqualTypeOf<{ replyToId?: number }>();
