@@ -1,7 +1,7 @@
 <!--
 	The create View: a form with one labelled input per Field the form maps, in schema order, and
-	Save and Cancel. It takes the Resource and its remote functions as props, so a route passes
-	them from admin.ts. It is built on the core's headless `createFormView`.
+	Save and Cancel. It takes the admin, the Resource and its remote functions as props, so a
+	route passes them from admin.ts. It is built on the core's headless `createFormView`.
 
 	It works without JavaScript: the form posts to the page, and the server renders it again with
 	the issues and what was typed, or redirects to the new record. With JavaScript the input is
@@ -12,14 +12,23 @@
 	renders it.
 -->
 <script lang="ts">
-	import type { Resource, ResourceRemote } from '@svelte-admin/core';
+	import type { Admin, Resource, ResourceRemote } from '@svelte-admin/core';
 	import { createFormView } from '@svelte-admin/core/views';
 	import FormBody from './FormBody.svelte';
 
-	let { resource, remote }: { resource: Resource; remote: ResourceRemote } = $props();
+	let {
+		admin,
+		resource,
+		remote
+	}: {
+		/** The admin from admin.ts. */
+		admin: Admin;
+		resource: Resource;
+		remote: ResourceRemote;
+	} = $props();
 
 	// Derived, so the View follows the route to another Resource.
-	const view = $derived(createFormView(resource, remote, 'create'));
+	const view = $derived(createFormView(admin, resource, remote, 'create'));
 </script>
 
 <svelte:head>

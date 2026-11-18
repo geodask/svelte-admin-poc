@@ -1,4 +1,5 @@
 import { page } from '$app/state';
+import type { Admin } from './admin.ts';
 import {
 	formSchema,
 	toFormSpec,
@@ -21,8 +22,8 @@ import type { IdOf, RecordOf, Resource } from './resource.ts';
  * The headless create or edit View: the Resource's remote form, the inputs to render (the form
  * spec), and where Cancel leads. On edit it also gives the record's query, its Record title,
  * the prefill, and the record's id for the form's hidden input. The Theme's create and edit
- * Views are built on it, and so can a replaced View. It takes the Resource as an argument, not
- * from context.
+ * Views are built on it, and so can a replaced View. It takes the admin from `admin.ts` and the
+ * Resource as arguments, not from context.
  *
  * The form checks its input in the browser before sending it, with the same schema the server
  * validates with, so issues show at once. Issues show only after the first submit attempt;
@@ -44,12 +45,12 @@ import type { IdOf, RecordOf, Resource } from './resource.ts';
  * parts that render any Field, such as the Theme's `FieldInput`.
  *
  * @example
- * const view = createFormView(users, remote, 'create');
+ * const view = createFormView(admin, users, remote, 'create');
  * // <form {...view.form} novalidate oninput={view.revalidate}>
  * //   <input {...view.form.fields.name.as('text')} />
  *
  * @example
- * const view = createFormView(users, remote, 'edit', id);
+ * const view = createFormView(admin, users, remote, 'edit', id);
  * const record = $derived(await view.query);
  * view.prefill(record);
  * // <form {...view.form} novalidate oninput={view.revalidate}>
@@ -58,17 +59,25 @@ import type { IdOf, RecordOf, Resource } from './resource.ts';
 export function createFormView<
 	R extends Resource,
 	Remote extends ResourceRemote<RecordOf<R>, IdOf<R>>
->(resource: R, remote: Remote, mode: 'create'): FormView<R, 'create', Remote['create']>;
+>(
+	admin: Admin,
+	resource: R,
+	remote: Remote,
+	mode: 'create'
+): FormView<R, 'create', Remote['create']>;
 export function createFormView<
 	R extends Resource,
 	Remote extends ResourceRemote<RecordOf<R>, IdOf<R>>
 >(
+	admin: Admin,
 	resource: R,
 	remote: Remote,
 	mode: 'edit',
 	id: IdOf<R>
 ): FormView<R, 'edit', ReturnType<Remote['update']['for']>>;
 export function createFormView<R extends Resource>(
+	// Not read yet: it is how the form View will reach the admin's other Resources.
+	admin: Admin,
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>, IdOf<R>>,
 	mode: FormMode,

@@ -1,5 +1,6 @@
 import { goto } from '$app/navigation';
 import { page } from '$app/state';
+import type { Admin } from './admin.ts';
 import { EDIT_SEGMENT, recordPath } from './ids.ts';
 import { recordTitle } from './record-title.ts';
 import type { DeleteFailure, ResourceRemote } from './remote.ts';
@@ -19,7 +20,8 @@ const DELETE_FAILED = "Couldn't delete this record.";
 /**
  * The headless detail View: the Fields to show, the query for the record, its Record title, the
  * href of the list it belongs to, and a delete. The Theme's detail View is built on it, and so
- * can a replaced View. It takes the Resource as an argument, not from context.
+ * can a replaced View. It takes the admin from `admin.ts` and the Resource as arguments, not
+ * from context.
  *
  * The id must already be the Resource's typed id: a route turns its param into one with
  * `idFromParam` and answers a param that names none with a 404, so the Provider never sees it.
@@ -27,10 +29,12 @@ const DELETE_FAILED = "Couldn't delete this record.";
  * In a component whose Resource or id can change, wrap the call in `$derived`.
  *
  * @example
- * const view = createDetailView(recipes, remote, id);
+ * const view = createDetailView(admin, recipes, remote, id);
  * const record = $derived(await view.query);
  */
 export function createDetailView<R extends Resource>(
+	// Not read yet: it is how the detail View will reach the admin's other Resources.
+	admin: Admin,
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>, IdOf<R>>,
 	id: IdOf<R>

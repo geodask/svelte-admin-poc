@@ -6,15 +6,20 @@
 	"Error", and shows the title once a Retry loads the record.
 -->
 <script lang="ts">
-	import type { ResourceRemote } from '@svelte-admin/core';
+	import type { Admin, ResourceRemote } from '@svelte-admin/core';
 	import { createDetailView, type ShellLocation } from '@svelte-admin/core/views';
 	import * as Breadcrumb from './components/ui/breadcrumb/index.ts';
 
-	let { here, id, href }: { here: ShellLocation; id: string | number; href?: string | undefined } =
+	let {
+		admin,
+		here,
+		id,
+		href
+	}: { admin: Admin; here: ShellLocation; id: string | number; href?: string | undefined } =
 		$props();
 
 	const remote: ResourceRemote = $derived(await here.remote());
-	const view = $derived(createDetailView(here.resource, remote, id));
+	const view = $derived(createDetailView(admin, here.resource, remote, id));
 	const title = $derived(
 		await view.query.then(
 			(record) => view.title(record),

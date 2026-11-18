@@ -14,4 +14,4 @@
 	);
 </script>
 
-<ListView {resource} {remote} />
+<ListView {admin} {resource} {remote} />

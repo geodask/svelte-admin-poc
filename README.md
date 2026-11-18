@@ -31,7 +31,7 @@ The demo backend (`apps/demo/backend`) is a small Bun server that serves seed da
 | Script                        | What it runs                                                                     |
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | `bun run check`               | Type checks every workspace member (svelte-check, or `tsc` in the core)          |
-| `bun run lint`                | ESLint and Prettier                                                              |
+| `bun run lint`                | ESLint (which rejects `{@html}` anywhere) and Prettier                           |
 | `bun run format`              | Prettier, writing fixes                                                          |
 | `bun run test:unit`           | Vitest in the core                                                               |
 | `bun run test:e2e`            | Playwright against a production build of the demo, with JavaScript on and off    |
@@ -50,6 +50,8 @@ Each Resource costs about 4 lines of wiring in the demo:
 `defineResource` also takes an optional sidebar `group` and `icon`. The icon is a lazy import of a Lucide icon, such as `icon: () => import('@lucide/svelte/icons/chef-hat')`: SvelteKit loads `src/params.ts`, and so every Resource module, in plain Node at build time, where a `.svelte` file can't load.
 
 The admin layout renders the Theme's `AdminShell` with the admin from `admin.ts` and the app's own `brand` and `userMenu` snippets (the shell wraps the brand in a link to the first Resource). The `/admin` index redirects to the first Resource's list.
+
+Each route that renders a View passes it the same admin, beside the Resource and its remote functions: `<ListView {admin} {resource} {remote} />`, and likewise `DetailView`, `CreateView` and `EditView`. The core's headless helpers take it as their first argument: `createListView(admin, resource, remote)`, `createDetailView(admin, resource, remote, id)` and `createFormView(admin, resource, remote, 'create')` (or `'edit', id`). It is always an argument, never context, and it is typed as the core's `Admin`, so anything that isn't an admin is a type error. It is how a View reaches the admin's other Resources.
 
 `@svelte-admin/core` is the browser-safe entry. `serveResource` lives in `@svelte-admin/core/server`, the bundled REST Provider in `@svelte-admin/core/rest`, and the export's CSV writer and pager in `@svelte-admin/core/export`; import those only from `.remote.ts` files and server-only modules.
 
@@ -71,7 +73,7 @@ The list View's toolbar shows "Delete selected (N)" once rows are selected (afte
 
 `ListParams<R>` types the params a Resource's `getList` receives the same way: a page and a page size, plus an optional `search` only when the Resource is `searchable: true` (one that isn't searchable has no `search` in its type). `serveResource`, `restProvider(...).for(resource)`, the remote `getList` and `createListView(...).params` all infer it from the Resource, and a Provider whose `getList` is written against the loose `ListParams` still fits any Resource. `encodeListParams(params, defaults?)` is the one encoding of list params as URL search params (`page`, `perPage`, the sort as `sort` and `order`, then the search as `q`): the list URL and its hrefs use it with their defaults left out, and the bundled REST Provider uses it with every param written, so the two can't drift.
 
-So the `create` and `update` forms a `.remote.ts` exports have typed `fields`. An app replaces one create or edit View with a route at its path, built on the core's `createFormView` (from `@svelte-admin/core/views`), whose `form` keeps that type, and on the Theme's `FieldInput`, `FieldIssues` and `FormActions`. The demo does this for posts in `src/routes/admin/posts/new/+page.svelte`: it renders the title from `form.fields.title` itself, lays the other Fields out in two columns, and has an `@ts-expect-error` line where it reads the read-only `viewCount`.
+So the `create` and `update` forms a `.remote.ts` exports have typed `fields`. An app replaces one create or edit View with a route at its path, built on the core's `createFormView(admin, resource, remote, mode)` (from `@svelte-admin/core/views`), whose `form` keeps that type, and on the Theme's `FieldInput`, `FieldIssues` and `FormActions`. The demo does this for posts in `src/routes/admin/posts/new/+page.svelte`: it renders the title from `form.fields.title` itself, lays the other Fields out in two columns, and has an `@ts-expect-error` line where it reads the read-only `viewCount`.
 
 adapter-node checks a form post's origin, so set `ORIGIN` when you run the built app (the e2e suite sets `http://localhost:4173`).
 

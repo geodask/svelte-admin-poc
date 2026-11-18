@@ -5,12 +5,12 @@
 	label links back to the list.
 -->
 <script lang="ts">
-	import { recordPath } from '@svelte-admin/core';
+	import { recordPath, type Admin } from '@svelte-admin/core';
 	import type { ShellState } from '@svelte-admin/core/views';
 	import * as Breadcrumb from './components/ui/breadcrumb/index.ts';
 	import RecordCrumb from './RecordCrumb.svelte';
 
-	let { shell }: { shell: ShellState } = $props();
+	let { admin, shell }: { admin: Admin; shell: ShellState } = $props();
 </script>
 
 <header class="flex h-12 shrink-0 items-center gap-2 border-b px-4 lg:px-6">
@@ -34,6 +34,7 @@
 					<Breadcrumb.Separator />
 					<Breadcrumb.Item>
 						<RecordCrumb
+							{admin}
 							here={shell.here}
 							{id}
 							href={view === 'edit' ? recordPath(listHref, id) : undefined}
