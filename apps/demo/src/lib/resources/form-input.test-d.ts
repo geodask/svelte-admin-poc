@@ -135,13 +135,23 @@ export const postAuthorText: ListParams<typeof posts>['filters'] = [
 // ...it isn't sortable...
 // @ts-expect-error a Reference can't be sortable
 export const postSortByAuthor: ListParams<typeof posts>['sort'] = { field: 'userId', order: 'asc' };
-// ...and until the Reference picker, the forms send the user's id itself.
-export const postAuthorInput: FormInput<typeof posts, 'create'>['userId'] = 3;
+// ...and on the forms, its picker's input is typed by the target's id type, a user's id, on create
+// and on edit.
+export const postAuthorInput: Exactly<
+	FormInput<typeof posts, 'create'>['userId'],
+	IdOf<typeof users>
+> = true;
+export const postAuthorEditInput: Exactly<
+	FormInput<typeof posts, 'edit'>['userId'],
+	IdOf<typeof users>
+> = true;
 // @ts-expect-error users have number ids
 export const postAuthorTextInput: FormInput<typeof posts, 'create'>['userId'] = '3';
-// A post may reply to another: an optional self-Reference, sent as the replied-to post's id or
-// left out.
-export const postReplyInput: FormInput<typeof posts, 'create'>['replyToId'] = 1;
+// A post may reply to another: an optional self-Reference, typed by a post's id, or left out.
+export const postReplyInput: Exactly<
+	FormInput<typeof posts, 'edit'>['replyToId'],
+	IdOf<typeof posts> | undefined
+> = true;
 export const postNoReplyInput: FormInput<typeof posts, 'create'>['replyToId'] = undefined;
 // @ts-expect-error a post's id is a number
 export const postReplyTextInput: FormInput<typeof posts, 'create'>['replyToId'] = '1';

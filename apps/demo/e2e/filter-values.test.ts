@@ -175,7 +175,7 @@ test.describe('a number range', () => {
 		expect((await numbersIn(page, 'Prep time (min)')).every((n) => n <= 10)).toBe(true);
 	});
 
-	test('posts filter by author with a single id input, until the Reference picker', async ({
+	test('posts filter by author with a single id input, until the Reference filter', async ({
 		page
 	}) => {
 		await page.goto('/admin/posts');

@@ -32,6 +32,7 @@ export { default as DeleteDialog, type DeleteDialogProps } from './DeleteDialog.
 export { default as FieldInput, type FieldInputProps } from './FieldInput.svelte';
 export { default as FieldIssues, type FieldIssuesProps } from './FieldIssues.svelte';
 export { default as FormActions, type FormActionsProps } from './FormActions.svelte';
+export { default as ReferencePicker, type ReferencePickerProps } from './ReferencePicker.svelte';
 
 // The Field display: a Field's value by its Kind, in a list View cell or on the detail View.
 export { default as FieldCell, type FieldCellProps } from './FieldCell.svelte';

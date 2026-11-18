@@ -12,7 +12,7 @@ import {
 	type UnwrappedSchema
 } from './fields.ts';
 import { dateInputValue, datetimeInputValue, LOCAL_DATETIME } from './date-input.ts';
-import { idFromParam } from './ids.ts';
+import { idFromParam, idFromText } from './ids.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /** Which form a spec or a schema is for: the create View's or the edit View's. */
@@ -47,6 +47,12 @@ export type FormInputSpec = FormFieldBase & {
 		| { kind: 'number'; integer: boolean }
 		| { kind: 'checkbox' }
 		| { kind: 'select'; options: readonly (string | number)[] }
+		/**
+		 * A Reference: a picker of the target's records, by their Record title. It sends the chosen
+		 * record's id as text, which the form turns into the id's type. `target` is the target
+		 * Resource's name, under which `admin.ts` lists it.
+		 */
+		| { kind: 'reference'; target: string; id: 'string' | 'number' }
 		| { kind: 'date' }
 		/** An ISO datetime, edited in a `datetime-local` input and read and written in UTC. */
 		| { kind: 'datetime' }
@@ -124,10 +130,8 @@ function inputFor(field: Field, schema: z.ZodType): InputOf | undefined {
 		case 'number':
 			return { kind: 'number', integer: (type as z.ZodNumber).isInt };
 		case 'reference':
-			// Until the Reference picker: an input for the id itself, of the id's type.
-			return field.id === 'number'
-				? { kind: 'number', integer: (type as z.ZodNumber).isInt }
-				: { kind: 'text', format: 'text' };
+			// Only once every Resource module has loaded: `assertFormInputs` never gets here.
+			return { kind: 'reference', target: field.ref().name, id: field.id };
 		case 'boolean':
 			return { kind: 'checkbox' };
 		case 'enum':
@@ -203,6 +207,9 @@ function roleIn(field: Field, mode: FormMode): 'input' | 'readOnly' | 'none' {
 export function assertFormInputs(name: string, fields: readonly Field[], schema: z.ZodObject) {
 	for (const field of fields) {
 		if (roleIn(field, 'create') !== 'input' && roleIn(field, 'edit') !== 'input') continue;
+		// A Reference always has its picker. Its target may not have loaded yet (it may be this
+		// very Resource), so its spec, which names the target, can't be built here.
+		if (field.kind === 'reference') continue;
 		if (specFor(field, schema.shape[field.key] as z.ZodType) === undefined) {
 			throw noInputError(name, field);
 		}
@@ -349,8 +356,9 @@ type ListInput<E, Choice> =
  *
  * Each Field the form has an input for maps to what that input sends: a number for a number,
  * a boolean for a checkbox, text for any other scalar (a string, an enum's select, a date, a
- * datetime), an array for a list in rows, text for a list in lines, an array of objects for
- * rows, and an object for a group. The id and the read-only and hidden Fields are left out, and
+ * datetime), the target's id type for a Reference (its picker sends the id as text, which the
+ * form turns into that type), an array for a list in rows, text for a list in lines, an array of
+ * objects for rows, and an object for a group. The id and the read-only and hidden Fields are left out, and
  * `'afterCreate'` Fields appear on create only. A Field in a wrapper may be left out, and so
  * may every boolean, since an unchecked checkbox sends nothing. The edit form also carries the
  * record's typed id, its hidden input, which also types `update.for(id)`.
@@ -416,6 +424,8 @@ function valuesOf(specs: readonly FormFieldSpec[], object: object): Record<strin
 function inputValue(spec: FormInputSpec, value: unknown): unknown {
 	switch (spec.kind) {
 		case 'select':
+		case 'reference':
+			// As the select or the picker sends it: an id as text.
 			return String(value);
 		case 'date':
 			return value instanceof Date ? dateInputValue(value) : String(value);
@@ -580,6 +590,8 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 		case 'select':
 			// A select sends text, so a number option is matched by how it is written.
 			return spec.options.find((option) => String(option) === String(raw)) ?? raw;
+		case 'reference':
+			return referenceId(spec, raw);
 		case 'date': {
 			if (!(unwrap(schema) instanceof z.ZodDate) || typeof raw !== 'string') return raw;
 			const date = new Date(`${raw}T00:00:00Z`);
@@ -595,6 +607,19 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 		default:
 			return raw;
 	}
+}
+
+/** The plain schema of each id type, which reads an id as a route param is read. */
+const ID_SCHEMAS = { string: z.string(), number: z.number() } as const;
+
+/**
+ * The id a Reference's picker sent, in the target's id type, by the rule a route param is read
+ * by (`idFromParam`): for a number id, only a number written as `String(id)` (`3`, not `03` or
+ * `3a`). Anything else is left as it is, for the Field's schema to reject.
+ */
+function referenceId(spec: Extract<FormInputSpec, { kind: 'reference' }>, raw: unknown): unknown {
+	if (typeof raw !== 'string' && typeof raw !== 'number') return raw;
+	return idFromText(ID_SCHEMAS[spec.id], String(raw)) ?? raw;
 }
 
 /**
@@ -628,6 +653,8 @@ function inputPath(path: readonly PropertyKey[], origins: Origins): (string | nu
  *   sets its own message) and an optional one is left out: on edit, that clears it. A Field
  *   that is only `nullable` gets `null`.
  * - An unchecked checkbox means `false`, so the Resource can say `z.boolean()`.
+ * - A Reference's picker sends the chosen id as text, which becomes the target's id type by the
+ *   rule a route param is read by (`idFromParam`), so `3` is the number 3 and `3a` is invalid.
  * - A textarea's line breaks become `\n`, as typed, though a form posted without JavaScript
  *   sends them as CRLF.
  * - A date becomes the schema's type (a `Date` for `z.date()`, the text for `z.iso.date()`),

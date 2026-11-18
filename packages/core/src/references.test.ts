@@ -10,6 +10,7 @@ import {
 	readListParams,
 	resolveReference,
 	toFormSpec,
+	toFormValues,
 	type FieldMeta,
 	type Resource,
 	type ResourceRemote
@@ -232,28 +233,86 @@ describe('a Reference filter in getList', () => {
 	});
 });
 
-describe('a Reference on the create and edit forms, until the Reference picker', () => {
-	it('is an input for the id itself: a number input for a number id, a text input for a string', () => {
+describe('a Reference on the create and edit forms', () => {
+	const validate = (mode: 'create' | 'edit', value: object) =>
+		formSchema(posts, mode)['~standard'].validate(value);
+
+	it('is a reference input, naming its target and its id type', () => {
 		const specs = toFormSpec(posts, 'create');
-		expect(specs.find((spec) => spec.key === 'userId')).toMatchObject({
-			kind: 'number',
+		expect(specs.find((spec) => spec.key === 'userId')).toEqual({
+			key: 'userId',
 			label: 'Author',
-			required: true
+			required: true,
+			kind: 'reference',
+			target: 'users',
+			id: 'number'
 		});
-		expect(specs.find((spec) => spec.key === 'tagId')).toMatchObject({
-			kind: 'text',
-			required: false
+		expect(specs.find((spec) => spec.key === 'tagId')).toEqual({
+			key: 'tagId',
+			label: 'Tag ID',
+			required: false,
+			kind: 'reference',
+			target: 'tags',
+			id: 'string'
 		});
 	});
 
-	it('saves the id with its type, and reports an empty required Reference as Required', () => {
-		const schema = formSchema(posts, 'create');
-		expect(schema['~standard'].validate({ title: 'Hi', userId: 3, tagId: 'bread' })).toEqual({
+	it('is a reference input on edit too', () => {
+		expect(toFormSpec(posts, 'edit').find((spec) => spec.key === 'userId')).toMatchObject({
+			kind: 'reference',
+			target: 'users'
+		});
+	});
+
+	it('turns the id the picker sends as text into the target’s id type', () => {
+		expect(validate('create', { title: 'Hi', userId: '3', tagId: 'bread' })).toEqual({
 			value: { title: 'Hi', userId: 3, tagId: 'bread' }
 		});
-		expect(schema['~standard'].validate({ title: 'Hi' })).toEqual({
+	});
+
+	it('takes an id that already has its type', () => {
+		expect(validate('create', { title: 'Hi', userId: 3 })).toEqual({
+			value: { title: 'Hi', userId: 3 }
+		});
+	});
+
+	it('keeps a string id as it is, digits too', () => {
+		expect(validate('create', { title: 'Hi', userId: '3', tagId: '42' })).toEqual({
+			value: { title: 'Hi', userId: 3, tagId: '42' }
+		});
+	});
+
+	it.each([['3a'], ['03'], ['3.0'], ['1e0'], [' 3']])(
+		'rejects %j for a number id, as a route param would be',
+		(text) => {
+			expect(validate('create', { title: 'Hi', userId: text })).toEqual({
+				issues: [expect.objectContaining({ path: ['userId'] })]
+			});
+		}
+	);
+
+	it('reports an empty required Reference as Required', () => {
+		expect(validate('create', { title: 'Hi', userId: '' })).toEqual({
 			issues: [{ message: 'Required', path: ['userId'] }]
 		});
+		expect(validate('create', { title: 'Hi' })).toEqual({
+			issues: [{ message: 'Required', path: ['userId'] }]
+		});
+	});
+
+	it('leaves out an empty optional Reference, so a save clears it', () => {
+		expect(validate('edit', { id: '1', title: 'Hi', userId: '3', tagId: '' })).toEqual({
+			value: { id: 1, title: 'Hi', userId: 3 }
+		});
+	});
+
+	it('prefills the id as text, which the form turns back into the record’s id', () => {
+		const spec = toFormSpec(posts, 'edit');
+		const record = { id: 1, title: 'Hi', userId: 3, tagId: 'bread' };
+		const values = toFormValues(spec, record);
+
+		expect(values).toEqual({ title: 'Hi', userId: '3', tagId: 'bread' });
+		expect(validate('edit', { ...values, id: '1' })).toEqual({ value: record });
 	});
 });
 

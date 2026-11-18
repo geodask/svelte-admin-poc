@@ -7,6 +7,7 @@ import type { APIRequestContext, Page } from '@playwright/test';
 import { BACKEND_URL } from '../../backend/config.ts';
 import { expect, hydrated, test } from '../fixtures.ts';
 import { valueOf } from '../list-helpers.ts';
+import { choose, picker, usesJavaScript } from '../reference-picker.ts';
 
 /** The `POST /posts` requests the demo backend has received so far. */
 async function postCreates(request: APIRequestContext) {
@@ -25,7 +26,7 @@ async function stored(request: APIRequestContext, id: number) {
 /** Open the posts create View, ready to type into: with JavaScript, once it is hydrated. */
 async function openCreateView(page: Page) {
 	await page.goto('/admin/posts/new');
-	if (test.info().project.use.javaScriptEnabled !== false) await hydrated(page);
+	if (usesJavaScript()) await hydrated(page);
 }
 
 const save = (page: Page) => page.getByRole('button', { name: 'Save' }).click();
@@ -35,7 +36,8 @@ const titleInput = (page: Page) => page.getByRole('textbox', { name: 'Title', ex
 const bodyInput = (page: Page) => page.getByRole('textbox', { name: 'Body', exact: true });
 const firstTag = (page: Page) => page.getByRole('textbox', { name: 'Tags 1', exact: true });
 const statusSelect = (page: Page) => page.getByRole('combobox', { name: 'Status', exact: true });
-const authorInput = (page: Page) => page.getByRole('spinbutton', { name: 'Author', exact: true });
+/** The author's Reference picker: a select without JavaScript, a combobox with it. */
+const authorPicker = (page: Page) => picker(page, 'Author');
 /** The box beside the body that holds the status and the author. */
 const publishing = (page: Page) => page.getByRole('complementary', { name: 'Publishing' });
 
@@ -45,7 +47,8 @@ async function fillPost(page: Page) {
 	await bodyInput(page).fill('Less yeast, more water.');
 	await firstTag(page).fill('Baking bread');
 	await statusSelect(page).selectOption('draft');
-	await authorInput(page).fill('3');
+	// The author is chosen by name, through the Theme's Reference picker.
+	await choose(page, 'Author', 'Alan Turing', 'alan');
 }
 
 test.describe('the replaced posts create View', () => {
@@ -59,7 +62,7 @@ test.describe('the replaced posts create View', () => {
 		await expect(page).toHaveTitle('New · Posts');
 		// The status and the author sit in their own box, beside the body.
 		await expect(publishing(page).getByRole('combobox', { name: 'Status' })).toBeVisible();
-		await expect(publishing(page).getByRole('spinbutton', { name: 'Author' })).toBeVisible();
+		await expect(picker(publishing(page), 'Author')).toBeVisible();
 		await expect(publishing(page).getByRole('textbox')).toHaveCount(0);
 		// No input for the Field the backend owns.
 		await expect(page.getByLabel('Views')).toHaveCount(0);
@@ -112,7 +115,8 @@ test.describe('the replaced posts create View', () => {
 		await expect(titleInput(page)).toHaveAttribute('aria-invalid', 'true');
 		await expect(bodyInput(page)).toHaveAccessibleDescription('Required');
 		await expect(statusSelect(page)).toHaveAccessibleDescription('Required');
-		await expect(authorInput(page)).toHaveAccessibleDescription('Required');
+		// The author's picker reports it under itself, as any input does.
+		await expect(authorPicker(page)).toHaveAccessibleDescription('Required');
 		// Tags may be left empty.
 		await expect(firstTag(page)).not.toHaveAttribute('aria-invalid', 'true');
 		await expect(firstTag(page)).toHaveValue('Baking bread');

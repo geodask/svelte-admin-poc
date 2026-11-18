@@ -73,7 +73,7 @@ The list View's toolbar shows "Delete selected (N)" once rows are selected (afte
 
 `ListParams<R>` types the params a Resource's `getList` receives the same way: a page and a page size, plus an optional `search` only when the Resource is `searchable: true` (one that isn't searchable has no `search` in its type). `serveResource`, `restProvider(...).for(resource)`, the remote `getList` and `createListView(...).params` all infer it from the Resource, and a Provider whose `getList` is written against the loose `ListParams` still fits any Resource. `encodeListParams(params, defaults?)` is the one encoding of list params as URL search params (`page`, `perPage`, the sort as `sort` and `order`, then the search as `q`): the list URL and its hrefs use it with their defaults left out, and the bundled REST Provider uses it with every param written, so the two can't drift.
 
-So the `create` and `update` forms a `.remote.ts` exports have typed `fields`. An app replaces one create or edit View with a route at its path, built on the core's `createFormView(admin, resource, remote, mode)` (from `@svelte-admin/core/views`), whose `form` keeps that type, and on the Theme's `FieldInput`, `FieldIssues` and `FormActions`. The demo does this for posts in `src/routes/admin/posts/new/+page.svelte`: it renders the title from `form.fields.title` itself, lays the other Fields out in two columns, and has an `@ts-expect-error` line where it reads the read-only `viewCount`.
+So the `create` and `update` forms a `.remote.ts` exports have typed `fields`. An app replaces one create or edit View with a route at its path, built on the core's `createFormView(admin, resource, remote, mode)` (from `@svelte-admin/core/views`), whose `form` keeps that type, and on the Theme's `FieldInput`, `FieldIssues`, `ReferencePicker` and `FormActions`. The demo does this for posts in `src/routes/admin/posts/new/+page.svelte`: it renders the title from `form.fields.title` itself, lays the other Fields out in two columns, chooses the author with `ReferencePicker` (see [The Reference picker](#the-reference-picker)), and has an `@ts-expect-error` line where it reads the read-only `viewCount`.
 
 adapter-node checks a form post's origin, so set `ORIGIN` when you run the built app (the e2e suite sets `http://localhost:4173`).
 
@@ -198,7 +198,30 @@ Either way, each record is parsed with the target's schema, as `getOne` does, an
 
 The bundled REST Provider has `getMany`: it asks the list for one page as large as the ids, filtered by `id` with the list encoding's `in` filter, `GET {base}/{resource}?page=1&perPage=3&id=7&id=3&id=12` (a repeated param, even for one id). The backend answers as for any list, leaving out the ids it has no record for. A backend that can't filter its list by `id` should use a Provider without `getMany`, so the admin falls back to `getOne`: pick the REST Provider's other methods, as the demo's posts Provider does in `src/lib/server/posts-provider.ts`.
 
-A Reference can be `filterable`, with `eq` only: `getList` receives `{ field: 'userId', operator: 'eq', value: 3 }`, with the value typed as the target's id, and the list URL writes it as a bare param, `?userId=3`. A number id is read by the same rule as a route param, so `userId=3a` or `userId=03` is dropped. A Reference can't be `sortable`, since its order would be its ids'. Until the Reference picker, the filter panel and the create and edit forms show a plain input for the id itself: a number input for a number id, a text input for a string.
+A Reference can be `filterable`, with `eq` only: `getList` receives `{ field: 'userId', operator: 'eq', value: 3 }`, with the value typed as the target's id, and the list URL writes it as a bare param, `?userId=3`. A number id is read by the same rule as a route param, so `userId=3a` or `userId=03` is dropped. A Reference can't be `sortable`, since its order would be its ids'. Until the Reference filter, the filter panel shows a plain input for the id itself: a number input for a number id, a text input for a string.
+
+#### The Reference picker
+
+On the create and edit Views, a person chooses a Reference's record by its Record title, with the Theme's `ReferencePicker`. The server renders a plain `<select>`, so it works without JavaScript: the target's first 50 records in its default order (its `defaultSort`), plus the current record when it isn't among them, after "—" (or "Choose…" when the Reference is required). A current id that names no record is listed as itself, "(not found)". Once hydrated, the picker becomes a combobox, following the ARIA combobox pattern: a text input that shows the current record's title, over a listbox of records. Typing searches the target after a 300 ms pause, as the list search does: a `searchable` target is asked for the first 50 records matching the text, and any other target's first 50 records are filtered by title in the browser. The arrow keys move through the records, Enter chooses one, and Escape closes the list. Emptying the text clears the choice. Both forms send the chosen id under the Field's name, and show the Field's label, help text and issues like any input, a backend's issue too (in the demo, a post whose author is no user is refused with a 422 on `userId`).
+
+The form spec of a Reference is `{ kind: 'reference', target: 'users', id: 'number' }`, beside the label and the rest. The picker sends the id as text, and `formSchema` turns it into the target's id type by the rule a route param is read by: `'3'` is `3`, while `'3a'` or `'03'` is invalid input. An empty picker means no value, so a required Reference reports "Required", and an optional one is cleared on save. The edit form's prefill writes the id as text, and `FormInput` types a Reference by the target's id type. A read-only Reference shows on the edit View as its record's title, as on the detail View.
+
+The headless part is the core's `createReferencePicker(admin, field, current)`, for a Reference Field or a Reference input's spec and its current value (the typed id, or the id as text). It gives:
+
+- `target`, the target Resource;
+- `title`, the current record's Record title through the target's `lookup` (`undefined` for no choice, a missing record or a failed lookup);
+- `options`, the `<select>`'s options without JavaScript: `{ id, title }` for the first 50 records, plus the current one (marked `missing: true` when it names no record);
+- `search(text)`, the `{ id, title }` of at most 50 records whose title matches.
+
+It reads the target through the admin, with the target's `getList` and `lookup`, so it works during SSR. A form View gives one per Reference input: `createFormView(...).picker('userId')`, with what the input holds now as the current value. The form View also has `admin`, which the Theme's `FieldInput` takes to render a Reference with `ReferencePicker` (without it, it falls back to an input for the id itself).
+
+A replaced create or edit View renders a Reference with the Theme's `ReferencePicker`, given the admin, the Reference's spec and its typed input:
+
+```svelte
+<ReferencePicker {admin} spec={specOf('userId')} field={view.form.fields.userId} />
+```
+
+The demo's replaced posts create View chooses its author this way.
 
 The startup checks name the Resource and the Field:
 

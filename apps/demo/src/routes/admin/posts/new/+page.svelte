@@ -4,7 +4,8 @@
 	stock View's behaviour through the core's `createFormView` (the check before sending, issues
 	after the first submit, plain form posts without JavaScript, and the landing on the new post's
 	detail View), and matches the admin through the Theme's exported form parts. It lays the Fields
-	out its own way: the title on top, the body and tags beside a box for the status and the author.
+	out its own way: the title on top, the body and tags beside a box for the status and the author,
+	whom the Theme's ReferencePicker chooses by name.
 
 	Its form's `fields` are typed from the posts Resource, so TypeScript checks the inputs it
 	renders itself, such as the title, and has none for a Field no form sets.
@@ -12,7 +13,12 @@
 <script lang="ts">
 	import { isInputSpec, type FormInput, type FormInputSpec } from '@svelte-admin/core';
 	import { createFormView } from '@svelte-admin/core/views';
-	import { FieldInput, FieldIssues, FormActions } from '@svelte-admin/theme-shadcn';
+	import {
+		FieldInput,
+		FieldIssues,
+		FormActions,
+		ReferencePicker
+	} from '@svelte-admin/theme-shadcn';
 	import { admin } from '#lib/admin.ts';
 	import { posts } from '#lib/resources/posts.ts';
 	import * as remote from '#lib/resources/posts.remote.ts';
@@ -83,7 +89,8 @@
 			</div>
 			<aside aria-label="Publishing" class="flex flex-col gap-4 rounded-md border bg-muted/40 p-4">
 				<FieldInput spec={specOf('status')} field={form.fields.status} />
-				<FieldInput spec={specOf('userId')} field={form.fields.userId} />
+				<!-- The author, a Reference to users, chosen by name with the Theme's picker. -->
+				<ReferencePicker {admin} spec={specOf('userId')} field={form.fields.userId} />
 			</aside>
 		</div>
 

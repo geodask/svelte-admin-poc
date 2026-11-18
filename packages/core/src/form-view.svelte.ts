@@ -2,11 +2,13 @@ import { page } from '$app/state';
 import type { Admin } from './admin.ts';
 import {
 	formSchema,
+	isInputSpec,
 	toFormSpec,
 	toFormValues,
 	type FormFieldSpec,
 	type FormMode
 } from './form-spec.ts';
+import { createReferencePicker, type ReferencePicker } from './reference-picker.ts';
 import { listPathOfCreateView, listPathOfEditView, recordPath } from './ids.ts';
 import { recordTitle } from './record-title.ts';
 import type {
@@ -76,7 +78,7 @@ export function createFormView<
 	id: IdOf<R>
 ): FormView<R, 'edit', ReturnType<Remote['update']['for']>>;
 export function createFormView<R extends Resource>(
-	// Not read yet: it is how the form View will reach the admin's other Resources.
+	// How the form View reaches the admin's other Resources: a Reference's target.
 	admin: Admin,
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>, IdOf<R>>,
@@ -98,6 +100,11 @@ export function createFormView<R extends Resource>(
 	return {
 		resource,
 		mode,
+		/**
+		 * The admin from `admin.ts`, which the Theme's parts take to pick a Reference and to show a
+		 * read-only one by its Record title.
+		 */
+		admin,
 		/** The record's id, for the edit form's hidden `id` input. `undefined` on create. */
 		id: editing ? id : undefined,
 		/**
@@ -124,6 +131,19 @@ export function createFormView<R extends Resource>(
 		 */
 		refresh(): Promise<void> {
 			return editing ? remote.getOne(id).refresh() : Promise.resolve();
+		},
+		/**
+		 * The headless picker of a Reference input, by its key: its target, its current choice's
+		 * Record title, the options of a `<select>` without JavaScript and `search` for a combobox
+		 * (see `createReferencePicker`). Its current choice is what the input holds now. It throws
+		 * for a key the form has no Reference input for.
+		 */
+		picker(key: string): ReferencePicker {
+			const input = spec.filter(isInputSpec).find((candidate) => candidate.key === key);
+			if (input?.kind !== 'reference') {
+				throw new Error(`The ${resource.name} form has no Reference input for "${key}"`);
+			}
+			return createReferencePicker(admin, input, (form.fields as RemoteFormFields)[key].value());
 		},
 		/** The text that names the record, e.g. for the edit View's heading. */
 		title(record: RecordOf<R>): string {
@@ -174,12 +194,14 @@ export function createFormView<R extends Resource>(
 export type FormView<R extends Resource, M extends FormMode, F = RemoteFormLike> = {
 	readonly resource: R;
 	readonly mode: M;
+	readonly admin: Admin;
 	readonly id: IdOf<R> | undefined;
 	readonly form: F;
 	readonly inputs: RemoteFormFields;
 	readonly spec: readonly FormFieldSpec[];
 	readonly query: RemoteRead<RecordOf<R>>;
 	refresh(): Promise<void>;
+	picker(key: string): ReferencePicker;
 	title(record: RecordOf<R>): string;
 	prefill(record: RecordOf<R>): void;
 	readonly listViewHref: string;
