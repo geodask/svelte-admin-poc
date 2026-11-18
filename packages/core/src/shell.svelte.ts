@@ -1,8 +1,8 @@
 import { page } from '$app/state';
-import type { Admin, AdminEntry, AdminLocation, SidebarItem } from './admin.ts';
+import type { Admin, SidebarItem } from './admin.ts';
 
 /** Where the current page is in the admin, for any admin: what `admin.locate` finds. */
-export type ShellLocation = AdminLocation<Record<string, AdminEntry>>;
+export type ShellLocation = NonNullable<ReturnType<Admin['locate']>>;
 
 /** What the shell needs from `admin.ts`: the part of the admin `defineAdmin` returns it reads. */
 export type ShellAdmin = Pick<Admin, 'basePath' | 'homeHref' | 'sidebar' | 'locate'>;

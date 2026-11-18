@@ -1,8 +1,8 @@
 <!--
 	The edit View: the create View's form, prefilled with the record's current values, under a
 	heading that names the record by its Record title. It takes the admin, the Resource, its
-	remote functions and the record's typed id as props, so a route passes them from admin.ts. It is
-	built on the core's headless `createFormView`.
+	remote functions and the record's typed id as props, so a route passes them from admin.ts.
+	It is built on the core's headless `createFormView`.
 
 	It works without JavaScript, like the create View, and the prefill is rendered by the server
 	too. A failed save keeps what the user typed. Save replaces every editable Field: an optional
