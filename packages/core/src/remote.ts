@@ -123,7 +123,20 @@ export type ResourceRemote<T = any, Id = any, List = any> = {
 	 * server can't be reached.
 	 */
 	deleteMany: (ids: Id[]) => RemoteCommandCall<DeleteManyReport>;
+	/**
+	 * Export every record that matches a search, a sort and filters (the list params without the
+	 * page and the page size) as CSV, up to the Resource's cap. A remote command, so it runs only
+	 * with JavaScript. It rejects with `{ status, body: { message } }` when the export fails, with
+	 * no partial file.
+	 */
+	exportList: (params: Omit<List, 'page' | 'perPage'>) => RemoteCommandCall<ExportReport>;
 };
+
+/**
+ * What an export returns: the CSV file's text, how many records it holds, whether it stopped at
+ * the cap with more records left, and the total the Provider counted, when it can count.
+ */
+export type ExportReport = { csv: string; rows: number; capped: boolean; total?: number };
 
 /** Why a delete failed: a message safe to show, and the HTTP status when the server answered. */
 export type DeleteFailure = { status?: number; message: string };

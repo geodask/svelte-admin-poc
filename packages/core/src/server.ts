@@ -30,9 +30,11 @@ import {
 	listPathOfCreateView,
 	recordPath
 } from './ids.ts';
-import { listParamsSchema, withDefaultSort } from './list-params.ts';
-import type { ListResult, ProviderContext, ResourceProvider } from './provider.ts';
-import type { DeleteManyReport, ServedFailure } from './remote.ts';
+import { toCsv } from './csv.ts';
+import { collectPages } from './export-pages.ts';
+import { exportParamsSchema, listParamsSchema, withDefaultSort } from './list-params.ts';
+import type { ListParams, ListResult, ProviderContext, ResourceProvider } from './provider.ts';
+import type { DeleteManyReport, ExportReport, ServedFailure } from './remote.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 import type { StandardSchemaV1 } from './standard-schema.ts';
 import { describeUnexpected, UNEXPECTED_MESSAGE } from './unexpected.ts';
@@ -42,6 +44,18 @@ const MAX_REFRESHED_LISTS = 25;
 
 /** How many ids one bulk delete takes at most. */
 const MAX_BULK_DELETE = 1000;
+
+/** How many records an export holds at most, unless `serveResource` is given another cap. */
+const DEFAULT_MAX_EXPORT_ROWS = 10_000;
+
+/** What `serveResource` takes besides the Resource and its Provider. */
+export type ServeResourceOptions = {
+	/**
+	 * How many records an export holds at most: a whole number from 1. Defaults to 10,000. An
+	 * export that stops at it says so.
+	 */
+	maxExportRows?: number;
+};
 
 /**
  * Build a Resource's remote functions from its Provider. The app's `.remote.ts` re-exports
@@ -62,6 +76,16 @@ const MAX_BULK_DELETE = 1000;
  *   reports how many ids were deleted and, when it stopped, why (a Provider error's status and
  *   message, or a logged unexpected error as a generic 500), instead of throwing, so the list
  *   queries the client asks for are refreshed either way (`deleteMany(ids).updates(getList)`).
+ * - `exportList` is a remote command too, so export needs JavaScript. It takes the list params
+ *   without the page and the page size (a search, a sort and filters), checked by the same rules
+ *   as `getList`'s, and gets the default sort when it names no sort. It pages through the
+ *   Provider's `getList` with `collectPages` (in pages of `MAX_PER_PAGE`, or of the cap when
+ *   that is smaller), parsing each page with the Resource schema, until the last page (the
+ *   `total` is reached, `hasNextPage` is false, or a page comes back short) or the cap: 10,000
+ *   records, or `options.maxExportRows`. It returns the records as CSV (see `toCsv`), how many it holds,
+ *   whether it stopped at the cap with more left, and the Provider's `total` when it gave one. A
+ *   Provider error on any page fails the whole export with its status and message, as on reads;
+ *   there is never a partial file.
  *
  * From a read or a delete, a Provider error becomes an HTTP error with its message:
  * `NotFoundError` a 404, `InvalidInputError` a 400 and `ConflictError` a 409. From a save, it
@@ -83,12 +107,19 @@ const MAX_BULK_DELETE = 1000;
  * from any other page it is refused before the Provider is called.
  *
  * @example
- * export const { getList, getOne, create, update, deleteOne, deleteMany } = serveResource(
- * 	recipes,
- * 	backend.for(recipes)
- * );
+ * export const { getList, getOne, create, update, deleteOne, deleteMany, exportList } =
+ * 	serveResource(recipes, backend.for(recipes));
  */
-export function serveResource<R extends Resource>(resource: R, provider: ResourceProvider<R>) {
+export function serveResource<R extends Resource>(
+	resource: R,
+	provider: ResourceProvider<R>,
+	{ maxExportRows = DEFAULT_MAX_EXPORT_ROWS }: ServeResourceOptions = {}
+) {
+	if (!Number.isInteger(maxExportRows) || maxExportRows < 1) {
+		throw new Error(
+			`serveResource(${resource.name}): \`maxExportRows\` must be a whole number from 1, not ${maxExportRows}.`
+		);
+	}
 	const records = z.array(resource.schema);
 	const save = {
 		create: formSaver(resource, 'create'),
@@ -201,6 +232,22 @@ export function serveResource<R extends Resource>(resource: R, provider: Resourc
 		return failure ? { deleted, failure } : { deleted };
 	});
 
+	const exportList = command(
+		exportParamsSchema(resource),
+		async (params): Promise<ExportReport> => {
+			// Asked for no sort, the export gets the default, in the same order as the list View.
+			const query = withDefaultSort(params, resource);
+			const { records: rows, ...report } = await collectPages(async (page, perPage) => {
+				const listParams = { ...query, page, perPage } as ListParams<R>;
+				// A Provider error fails the whole export, as on a read: there is no partial file.
+				const result = await served(() => provider.getList(providerContext(), listParams));
+				// Like `getList`, a record that doesn't match the schema is an unexpected error.
+				return { ...result, data: records.parse(result.data) as RecordOf<R>[] };
+			}, maxExportRows);
+			return { csv: toCsv(resource, rows), rows: rows.length, ...report };
+		}
+	);
+
 	return {
 		getList,
 		getOne,
@@ -208,7 +255,8 @@ export function serveResource<R extends Resource>(resource: R, provider: Resourc
 		create: create as unknown as WithInput<typeof create, FormInput<R, 'create'>>,
 		update: update as unknown as WithInput<typeof update, FormInput<R, 'edit'>>,
 		deleteOne,
-		deleteMany
+		deleteMany,
+		exportList
 	};
 }
 

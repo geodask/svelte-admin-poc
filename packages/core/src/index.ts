@@ -12,6 +12,7 @@ export {
 export { idFromParam, idPathSegment, recordPath } from './ids.ts';
 export { recordTitle } from './record-title.ts';
 export type {
+	ExportParams,
 	FilterableKey,
 	FilterValue,
 	ListFilter,
@@ -56,6 +57,7 @@ export {
 export type {
 	DeleteFailure,
 	DeleteManyReport,
+	ExportReport,
 	RemoteCommandCall,
 	RemoteFormField,
 	RemoteFormFieldLike,

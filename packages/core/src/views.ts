@@ -7,6 +7,7 @@ export { createFormView, type FormView, type FormViewState } from './form-view.s
 export {
 	createListView,
 	type BulkDeleteResult,
+	type ExportResult,
 	type FilterControl,
 	type FilterInput,
 	type FilterInputType,

@@ -19,6 +19,7 @@ export { default as Pager, type PagerProps } from './Pager.svelte';
 export { default as SortHeader, type SortHeaderProps } from './SortHeader.svelte';
 export { default as FilterPanel, type FilterPanelProps } from './FilterPanel.svelte';
 export { default as ActiveFilters, type ActiveFiltersProps } from './ActiveFilters.svelte';
+export { default as ExportButton, type ExportButtonProps } from './ExportButton.svelte';
 export {
 	default as SelectionCheckbox,
 	type SelectionCheckboxProps

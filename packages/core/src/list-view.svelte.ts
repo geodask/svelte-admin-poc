@@ -17,6 +17,7 @@ import {
 import { titleKeys } from './record-title.ts';
 import type { DeleteFailure, ResourceRemote } from './remote.ts';
 import { readDeleteFailure } from './delete-failure.ts';
+import { downloadCsv, today } from './download.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /**
@@ -31,6 +32,9 @@ const SEARCH_DEBOUNCE_MS = 300;
 /** What a bulk delete reports when the failure carries no message of its own (e.g. no network). */
 const BULK_DELETE_FAILED = "Couldn't delete the selected records.";
 
+/** What an export reports when the failure carries no message of its own (e.g. no network). */
+const EXPORT_FAILED = "Couldn't export the records.";
+
 /**
  * How a bulk delete of the selected rows ended: every one is gone, or it failed (perhaps
  * partway) with a message that is safe to show and, when the server answered, its HTTP status.
@@ -39,6 +43,15 @@ const BULK_DELETE_FAILED = "Couldn't delete the selected records.";
  */
 export type BulkDeleteResult =
 	{ ok: true; deleted: number } | ({ ok: false; deleted: number } & DeleteFailure);
+
+/**
+ * How an export of the list ended: the file was downloaded, with how many records it holds,
+ * whether it stopped at the cap with more left, and the total the Provider counted when it can
+ * count; or it failed, with a message that is safe to show and, when the server answered, its
+ * HTTP status. A failed export downloads nothing.
+ */
+export type ExportResult =
+	{ ok: true; rows: number; capped: boolean; total?: number } | ({ ok: false } & DeleteFailure);
 
 /** One choice of a list View's filter control: a checkbox or a radio button. */
 export type FilterOption = {
@@ -447,6 +460,27 @@ export function createListView<R extends Resource>(
 			return 'failure' in report
 				? { ok: false, deleted: report.deleted, ...report.failure }
 				: { ok: true, deleted: report.deleted };
+		},
+		/**
+		 * Export every record that matches the list's search, sort and filters, on every page, as
+		 * CSV through the remote `exportList`, and download it as `{resource}-{YYYY-MM-DD}.csv`
+		 * (today, where the browser is). The export stops at the Resource's cap, and says so. It
+		 * needs JavaScript, so render its control only after hydration. It never rejects: a failure
+		 * is reported with its message, and downloads nothing.
+		 */
+		async exportCsv(): Promise<ExportResult> {
+			// The page and the page size don't narrow an export: it holds every page.
+			// eslint-disable-next-line @typescript-eslint/no-unused-vars -- left out on purpose
+			const { page: _page, perPage: _perPage, ...query } = params;
+			let report;
+			try {
+				report = await remote.exportList(query);
+			} catch (failure) {
+				return { ok: false, ...readDeleteFailure(failure, EXPORT_FAILED) };
+			}
+			downloadCsv(report.csv, `${resource.name}-${today()}.csv`);
+			const { rows, capped, total } = report;
+			return total === undefined ? { ok: true, rows, capped } : { ok: true, rows, capped, total };
 		},
 		/**
 		 * The GET form the search box sits in, so search works without JavaScript too: where it
