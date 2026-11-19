@@ -44,6 +44,7 @@
 		"dev": "bun run --filter @svelte-admin/demo dev",
 		"build": "bun run --filter @svelte-admin/demo build",
 		"check:client-bundle": "bun run --filter @svelte-admin/demo check:client-bundle",
+		"check:docs": "bun run --filter @svelte-admin/demo check:docs",
 		"check": "bun run --filter '*' check",
 		"lint": "eslint . && prettier --check .",
 		"format": "prettier --write .",
