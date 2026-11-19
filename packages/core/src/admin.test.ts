@@ -1,7 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Component } from 'svelte';
 import { z } from 'zod';
-import { defineAdmin, defineResource, type ResourceRemote } from '@svelte-admin/core';
+import {
+	createPath,
+	defineAdmin,
+	defineResource,
+	editPath,
+	field,
+	recordPath,
+	resolveReference,
+	type ResourceRemote
+} from '@svelte-admin/core';
 
 const recipes = defineResource({
 	name: 'recipes',
@@ -60,8 +69,15 @@ describe('defineAdmin', () => {
 		).toThrow(/"recipes".*"cookbook"/);
 	});
 
-	it.each(['admin', '/admin/', ''])('rejects the base path %j', (basePath) => {
-		expect(() => defineAdmin({ basePath, resources: {} })).toThrow(/base path/i);
+	it.each(['admin', '/admin/', '', '//', '//admin', '/shop//admin', 'shop/admin/'])(
+		'rejects the base path %j',
+		(basePath) => {
+			expect(() => defineAdmin({ basePath, resources: {} })).toThrow(/base path/i);
+		}
+	);
+
+	it.each(['/', '/admin', '/shop/admin'])('accepts the base path %j', (basePath) => {
+		expect(defineAdmin({ basePath, resources: {} }).basePath).toBe(basePath);
 	});
 });
 
@@ -239,5 +255,95 @@ describe('entry, a Resource and its remote module together', () => {
 	it('rejects when the remote module fails to load', async () => {
 		importRecipes.mockRejectedValueOnce(new Error('chunk failed'));
 		await expect(lazyAdmin.entry('recipes')).rejects.toThrow('chunk failed');
+	});
+});
+
+describe('an admin mounted at /, the whole app', () => {
+	const posts = defineResource({
+		name: 'posts',
+		label: 'Posts',
+		schema: z.object({
+			id: z.number(),
+			title: z.string(),
+			userId: field(z.string(), { ref: () => users })
+		})
+	});
+	const usersRemote = async () =>
+		({
+			lookup: async (id: string) => (id === 'ada' ? { id, email: 'ada@example.com' } : null)
+		}) as unknown as ResourceRemote;
+	const root = defineAdmin({
+		basePath: '/',
+		resources: {
+			recipes: { resource: recipes, remote },
+			users: { resource: users, remote: usersRemote },
+			posts: { resource: posts, remote }
+		}
+	});
+
+	it('keeps "/" as its base path', () => {
+		expect(root.basePath).toBe('/');
+	});
+
+	it('leads the admin index to the first Resource list', () => {
+		expect(root.homeHref).toBe('/recipes');
+	});
+
+	it('links each sidebar item to its list at the root', () => {
+		const items = root.sidebar.flatMap((group) => group.items);
+		expect(items.map((item) => item.href)).toEqual(['/recipes', '/users', '/posts']);
+	});
+
+	it('matches each Resource name as the root segment', () => {
+		expect(root.matchResource('users')).toBe('users');
+		expect(root.matchResource('admin')).toBeUndefined();
+	});
+
+	it.each([
+		['/recipes', 'recipes', 'list', undefined],
+		['/recipes/12', 'recipes', 'detail', 12],
+		['/recipes/new', 'recipes', 'create', undefined],
+		['/recipes/12/edit', 'recipes', 'edit', 12],
+		['/users/a%2Fb', 'users', 'detail', 'a/b'],
+		['/users/a%2Fb/edit', 'users', 'edit', 'a/b']
+	])('locates %j at the root', (path, name, view, id) => {
+		expect(root.locate(path)).toMatchObject({ name, view, id, listHref: `/${name}` });
+	});
+
+	it.each(['/', '//', '//recipes', '/admin/recipes', '/nope', '/toString', ''])(
+		'locates nothing on %j',
+		(path) => {
+			expect(root.locate(path)).toBeUndefined();
+		}
+	);
+
+	it("builds a record's detail, create and edit hrefs under its list at the root", () => {
+		const list = root.locate('/recipes')!.listHref;
+		expect(recordPath(list, 12)).toBe('/recipes/12');
+		expect(createPath(list)).toBe('/recipes/new');
+		expect(editPath(list, 12)).toBe('/recipes/12/edit');
+		expect(editPath('/users', 'a/b')).toBe('/users/a%2Fb/edit');
+	});
+
+	it("links a Reference to its target record's detail View at the root", async () => {
+		const author = posts.fields.find((candidate) => candidate.key === 'userId')!;
+		expect(await resolveReference(root, author, 'ada')).toEqual({
+			title: 'ada',
+			href: '/users/ada'
+		});
+	});
+
+	it('never builds an href that starts with //', async () => {
+		const author = posts.fields.find((candidate) => candidate.key === 'userId')!;
+		const lists = Object.keys(root.resources).map((name) => root.locate(`/${name}`)!.listHref);
+		const hrefs = [
+			root.homeHref,
+			...root.sidebar.flatMap((group) => group.items.map((item) => item.href)),
+			...lists,
+			...lists.flatMap((list) => [recordPath(list, 1), createPath(list), editPath(list, 1)]),
+			(await resolveReference(root, author, 'ada'))?.href
+		];
+		expect(hrefs).not.toContain(undefined);
+		expect(hrefs.filter((href) => href!.startsWith('//'))).toEqual([]);
 	});
 });

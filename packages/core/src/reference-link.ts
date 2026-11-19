@@ -3,7 +3,7 @@
 // imports no remote module itself.
 import type { Admin } from './admin.ts';
 import type { Field } from './fields.ts';
-import { hasPathSegment, recordPath } from './ids.ts';
+import { hasPathSegment, joinPath, recordPath } from './ids.ts';
 import { recordTitle } from './record-title.ts';
 
 /**
@@ -34,7 +34,7 @@ export async function resolveReference(
 		const remote = await entry.remote();
 		const record: unknown = await remote.lookup(value);
 		if (typeof record !== 'object' || record === null) return undefined;
-		const listPath = `${admin.basePath}/${target.name}`;
+		const listPath = joinPath(admin.basePath, target.name);
 		return {
 			title: recordTitle(target, record as Record<string, unknown>),
 			href: hasPathSegment(value) ? recordPath(listPath, value) : undefined

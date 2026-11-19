@@ -3,7 +3,7 @@ import { page } from '$app/state';
 import type { Admin } from './admin.ts';
 import type { Field } from './fields.ts';
 import { resolveReference, type ReferenceLink } from './reference-link.ts';
-import { EDIT_SEGMENT, recordPath } from './ids.ts';
+import { editPath } from './ids.ts';
 import { recordTitle } from './record-title.ts';
 import type { DeleteFailure, ResourceRemote } from './remote.ts';
 import { readRemoteFailure } from './remote-failure.ts';
@@ -80,7 +80,7 @@ export function createDetailView<R extends Resource>(
 		},
 		/** The href of the record's edit View, `{list}/{id}/edit`. */
 		get editHref(): string {
-			return `${recordPath(listViewHref, id)}/${EDIT_SEGMENT}`;
+			return editPath(listViewHref, id);
 		},
 		/**
 		 * Delete the record, then go to the list View, which the server has refreshed. It needs
