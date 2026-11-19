@@ -12,7 +12,8 @@ const repoDir = new URL('../../..', import.meta.url).pathname;
 const marker = /^<!-- demo: (\S+) -->$/;
 // Anything that looks like a marker but isn't one exactly, so a typo never skips a quote.
 const markerLike = /<!--\s*demo\s*:/;
-const fenceOpen = /^(`{3,}|~{3,})/;
+// A fence may be indented, as in a list item; a quote under a marker may not.
+const fenceOpen = /^\s*(`{3,}|~{3,})/;
 
 const docs = [
 	join(repoDir, 'README.md'),
@@ -55,6 +56,13 @@ for (const doc of docs) {
 		const open = start < lines.length ? fenceOpen.exec(lines[start]!) : null;
 		if (!open) {
 			failures.push(`${label}: the marker has no fenced code block after it`);
+			continue;
+		}
+		if (/^\s/.test(lines[start]!)) {
+			failures.push(
+				`${label}: the fenced code block after the marker is indented; quote it at the start of the line`
+			);
+			i = closingFence(lines, start, open[1]!) ?? lines.length;
 			continue;
 		}
 		const end = closingFence(lines, start, open[1]!);
@@ -100,14 +108,15 @@ if (failures.length > 0) {
 
 console.log(`The docs match the demo: ${checked} quoted files, all equal.`);
 
-/** The index of the line that closes the fence opened at `open`, if there is one. */
-function closingFence(lines: string[], open: number, opener: string): number | undefined {
-	const close = new RegExp(`^${opener[0] === '`' ? '`' : '~'}{${opener.length},}\\s*$`);
-	for (let i = open + 1; i < lines.length; i++) if (close.test(lines[i]!)) return i;
+/** The index of the line that closes the fence opened at `openAt`, if there is one. */
+function closingFence(lines: string[], openAt: number, opener: string): number | undefined {
+	const close = new RegExp(`^\\s*${opener[0] === '`' ? '`' : '~'}{${opener.length},}\\s*$`);
+	for (let i = openAt + 1; i < lines.length; i++) if (close.test(lines[i]!)) return i;
 	return undefined;
 }
 
-type Op = { kind: ' ' | '-' | '+'; text: string };
+/** A diff line: unchanged, only in the docs, or only in the demo's file. */
+type Op = { change: ' ' | '-' | '+'; text: string };
 
 /** A line diff from `a` to `b`, by their longest common subsequence. Quotes are short. */
 function diffLines(a: string[], b: string[]): Op[] {
@@ -123,24 +132,24 @@ function diffLines(a: string[], b: string[]): Op[] {
 	let j = 0;
 	while (i < a.length && j < b.length) {
 		if (a[i] === b[j]) {
-			ops.push({ kind: ' ', text: a[i++]! });
+			ops.push({ change: ' ', text: a[i++]! });
 			j++;
-		} else if (lcs[i + 1]![j]! >= lcs[i]![j + 1]!) ops.push({ kind: '-', text: a[i++]! });
-		else ops.push({ kind: '+', text: b[j++]! });
+		} else if (lcs[i + 1]![j]! >= lcs[i]![j + 1]!) ops.push({ change: '-', text: a[i++]! });
+		else ops.push({ change: '+', text: b[j++]! });
 	}
-	while (i < a.length) ops.push({ kind: '-', text: a[i++]! });
-	while (j < b.length) ops.push({ kind: '+', text: b[j++]! });
+	while (i < a.length) ops.push({ change: '-', text: a[i++]! });
+	while (j < b.length) ops.push({ change: '+', text: b[j++]! });
 	return ops;
 }
 
 /** The changed lines with two lines of context, and `…` where unchanged lines are left out. */
 function formatDiff(ops: Op[]): string {
 	const shown = ops.map((_, k) =>
-		ops.slice(Math.max(0, k - 2), k + 3).some((op) => op.kind !== ' ')
+		ops.slice(Math.max(0, k - 2), k + 3).some((op) => op.change !== ' ')
 	);
 	const out: string[] = [];
 	ops.forEach((op, k) => {
-		if (shown[k]) out.push(`      ${op.kind} ${op.text}`);
+		if (shown[k]) out.push(`      ${op.change} ${op.text}`);
 		else if (out.at(-1) !== '      …') out.push('      …');
 	});
 	return out.join('\n');

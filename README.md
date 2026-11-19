@@ -18,9 +18,9 @@ Package names are provisional. Every dependency is pinned to an exact version in
 
 ## Getting started
 
-To add the admin to your own SvelteKit app, follow [Add the admin to a SvelteKit app](docs/add-the-admin-to-a-sveltekit-app.md): it walks through every file the app writes, quoted whole from the demo. To run the demo itself:
+To add the admin to your own SvelteKit app, follow [Add the admin to a SvelteKit app](docs/add-the-admin-to-a-sveltekit-app.md): it walks through every file your app needs, quoted whole from the demo.
 
-You need Node 22 (see `.node-version`) and Bun (see `packageManager` in `package.json`).
+To run the demo itself, you need Node 22 (see `.node-version`) and Bun (see `packageManager` in `package.json`).
 
 ```sh
 bun install

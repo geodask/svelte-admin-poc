@@ -2,7 +2,7 @@
 
 This guide takes an existing SvelteKit app to a working admin, one file at a time, in the order you write them. It mounts the admin under `/admin`, as the demo app does.
 
-Every file below is quoted whole from the demo (`apps/demo`), under its path there, never as an excerpt. The demo's files are the source of truth: CI runs `bun run check:docs`, which fails when a quote here differs from the file the demo runs, so what you copy is what works. The terms (Resource, View, Kind, Theme, Provider) are the ones in [`CONTEXT.md`](../CONTEXT.md).
+Every file below is quoted whole from the demo (`apps/demo`), under its path there, never as an excerpt. The demo's files are the source of truth. CI runs `bun run check:docs`, which fails when a quote here differs from the file the demo runs. So what you copy is what works. The terms (Resource, View, Field, Kind, Theme, Provider) are the ones in [`CONTEXT.md`](../CONTEXT.md).
 
 ## Before you start
 
@@ -12,7 +12,7 @@ The packages aren't published. `@svelte-admin/core` and `@svelte-admin/theme-sha
 
 Beside them, the demo depends on `zod` and `@lucide/svelte` (for its icons), and on `@sveltejs/adapter-node`, `@tailwindcss/vite` and `tailwindcss` for its build. See `apps/demo/package.json` for the full list.
 
-The demo's modules import each other as `#lib/admin.ts`, not `$lib/admin`. Its `package.json` maps `"imports": { "#lib/*": "./src/lib/*" }`, a Node subpath import. That matters for `params.ts` below: SvelteKit loads it in plain Node, where Kit's `$lib` alias doesn't exist.
+The demo's modules import each other as `#lib/admin.ts`, not `$lib/admin`. Its `package.json` maps `"imports": { "#lib/*": "./src/lib/*" }`, a Node subpath import. [`params.ts`](#4-paramsts) says why.
 
 ## 1. The Vite config
 
@@ -179,7 +179,7 @@ Import it once from your root layout, `src/routes/+layout.svelte`, with `import 
 
 `admin.ts` is the one place every Resource is mounted. `defineAdmin` takes the base path the admin lives under and the Resources, by the name each one has in its URLs. Each Resource is its shared module (its schema and settings, safe for the browser) and a lazy import of its remote module (its remote functions, which run on the server). The order here is the sidebar's order, and the first Resource is where the admin's index leads.
 
-The base path starts with `/` and doesn't end with one, or `defineAdmin` throws at startup. Keep it in step with the folder the admin's routes live in: `/admin` here, so the routes below sit in `src/routes/admin`.
+The base path is `/`, or starts with `/` and doesn't end with one, or `defineAdmin` throws at startup. Keep it in step with the folder the admin's routes live in: `/admin` here, so the routes below sit in `src/routes/admin`.
 
 `kinds` registers the demo's own Kinds. An app that has none leaves it out. See [Kinds](../README.md#kinds) in the README for what a Kind is and how to register one.
 
@@ -225,8 +225,6 @@ export type ResourceName = ResourceNameOf<typeof admin>;
 
 `ResourceName` is the union of the mounted names, for app code that names a Resource.
 
-Every import in `admin.ts` stays loadable in plain Node: the remote modules, the Kinds' components and the Resources' icons are lazy imports (`() => import(...)`), and the modules it imports eagerly use `#lib`, never `$lib` or `$app`. `params.ts` is why.
-
 The Resource modules themselves (`recipes.ts` and `recipes.remote.ts`, for one) are covered in [Wiring a Resource](../README.md#wiring-a-resource) in the README.
 
 ## 4. `params.ts`
@@ -242,7 +240,7 @@ import { admin } from '#lib/admin.ts';
 export const params = defineParams({ resource: admin.matchResource });
 ```
 
-SvelteKit loads `params.ts` in plain Node at build time, with a plain `import()`, outside Vite. So `admin.ts`, and every module it imports eagerly, must load there too: no `$lib` or `$app` imports, which only Vite resolves, and no `.svelte` file, which Node can't load. That is why `admin.ts` imports with `#lib` and lazily imports anything that is a component or server-only.
+SvelteKit loads `params.ts` in plain Node at build time, with a plain `import()`, outside Vite. So `admin.ts`, and every module it imports eagerly, must load there too: no `$lib` or `$app` imports, which only Vite resolves, and no `.svelte` file, which Node can't load. That is why `admin.ts` imports with `#lib`, and why the remote modules, the Kinds' components and the Resources' icons are lazy imports (`() => import(...)`).
 
 ## 5. `hooks.server.ts`
 
@@ -264,7 +262,7 @@ If your Fields name no Kind, the plain hook is enough: `export { handleError } f
 
 ## 6. The admin layout
 
-The admin layout renders the Theme's `AdminShell` with the admin from `admin.ts`: the sidebar of Resources, the breadcrumb and the page around each View. Two snippets are yours, so the admin looks like part of your app:
+The admin layout renders the Theme's `AdminShell` with the admin from `admin.ts`: the sidebar of Resources and the breadcrumb, around each View. Two snippets are yours, so the admin looks like part of your app:
 
 - `brand`, at the top of the sidebar. The shell wraps it in a link to the first Resource.
 - `userMenu`, at the bottom. The demo has no sign-in, so it shows a fixed demo user in a `<details>` menu, which opens without JavaScript too. Put your own user and sign-out here.
