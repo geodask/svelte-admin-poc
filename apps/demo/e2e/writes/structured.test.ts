@@ -192,7 +192,11 @@ test.describe("a recipe's tags, one per line", () => {
 		await save(page);
 
 		await expect(page).toHaveURL('/admin/recipes/1');
-		await expect(valueOf(page, 'Tags')).toHaveText('Pizza, Quick, Vegetarian');
+		await expect(valueOf(page, 'Tags').getByRole('listitem')).toHaveText([
+			'Pizza',
+			'Quick',
+			'Vegetarian'
+		]);
 		expect(await stored(request, 'recipes', 1)).toMatchObject({
 			tags: ['Pizza', 'Quick', 'Vegetarian']
 		});
@@ -227,7 +231,7 @@ test.describe("a recipe's instructions, a textarea", () => {
 		await openEditView(page, 'recipes', 1);
 		const instructions = page.getByRole('textbox', { name: 'Instructions', exact: true });
 		await expect(instructions).toHaveValue(
-			'Prepare the ingredients for Classic Margherita Pizza, then cook and serve.'
+			'Prepare the ingredients for Classic Margherita Pizza.\nCook, then serve.'
 		);
 
 		await instructions.fill('Stretch the dough.\nBake it hot.');

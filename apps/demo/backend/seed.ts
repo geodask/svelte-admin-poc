@@ -21,6 +21,7 @@ export type Recipe = {
 	rating?: number;
 	nutrition: { proteinGrams: number; carbsGrams: number };
 	instructions: string;
+	imageUrl?: string;
 	internalNotes: string;
 };
 
@@ -110,6 +111,13 @@ const ingredients: Recipe['ingredients'][] = [
 	]
 ];
 
+/** The images of the first recipes, served from the demo's static folder; the others have none. */
+const images: (string | undefined)[] = [
+	'/images/recipes/pizza.svg',
+	'/images/recipes/stir-fry.svg',
+	'/images/recipes/cookies.svg'
+];
+
 export const recipes: Recipe[] = rows.map(
 	([name, cuisine, difficulty, prepTimeMinutes, servings, tags], index) => ({
 		id: index + 1,
@@ -134,7 +142,9 @@ export const recipes: Recipe[] = rows.map(
 		// Every fourth recipe has no rating; the others cycle through 1 to 5 stars.
 		...(index % 4 === 3 ? {} : { rating: ((index * 3) % 5) + 1 }),
 		nutrition: { proteinGrams: 10 + index, carbsGrams: 40 + index * 2 },
-		instructions: `Prepare the ingredients for ${name}, then cook and serve.`,
+		// Two lines, so the detail View shows a line break and the list View one line.
+		instructions: `Prepare the ingredients for ${name}.\nCook, then serve.`,
+		...(images[index] === undefined ? {} : { imageUrl: images[index] }),
 		internalNotes: `Imported batch ${Math.floor(index / 10) + 1}`
 	})
 );
@@ -188,7 +198,12 @@ export const posts: Post[] = Array.from({ length: 60 }, (_, index) => {
 		// A few posts reply to another, so the Views show the replied-to post's title.
 		...(REPLIES[index + 1] === undefined ? {} : { replyToId: REPLIES[index + 1] }),
 		status: index % 4 === 3 ? 'draft' : 'published',
-		tags: [topic, index % 2 === 0 ? 'Guide' : 'Story'],
+		// Post 2 has four tags, so the list View cuts its built-in list cell to three and "+1".
+		tags: [
+			topic,
+			index % 2 === 0 ? 'Guide' : 'Story',
+			...(index === 1 ? ['Quick', 'Beginner'] : [])
+		],
 		body: `Notes on ${topic.toLowerCase()}.`,
 		viewCount: ((index * 37) % 500) + 10
 	};

@@ -20,7 +20,9 @@ export const posts = defineResource({
 		replyToId: field(z.number(), { label: 'Reply to', ref: (): Resource => posts }).optional(),
 		status: field(z.enum(['draft', 'published']), { filterable: true }),
 		tags: z.array(z.string()),
-		body: field(z.string(), { list: false }),
+		// Edited in a textarea through the core's input metadata, where recipes' instructions name
+		// the Theme's `textarea` Kind.
+		body: field(z.string(), { list: false, input: 'textarea' }),
 		// Counted by the backend: it starts at 0, and no form can set it. Sortable, though the list
 		// doesn't show it: a sort by views still works from the URL.
 		viewCount: field(z.number(), { label: 'Views', readOnly: true, list: false, sortable: true })

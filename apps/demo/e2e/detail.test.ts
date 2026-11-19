@@ -73,8 +73,9 @@ test.describe('the recipes detail View', () => {
 			'Nutrition',
 			'Protein grams',
 			'Carbs grams',
-			// `list: false`, so only here, with its description.
-			'Instructions How to cook it'
+			// With its description.
+			'Instructions How to cook it',
+			'Image'
 		]);
 		await expect(page.locator('main')).not.toContainText('Internal notes');
 		await expect(page.locator('main')).not.toContainText('Imported batch');
@@ -88,8 +89,14 @@ test.describe('the recipes detail View', () => {
 		await expect(valueOf(page, 'Difficulty')).toHaveText('Medium');
 		await expect(valueOf(page, 'Calories')).toHaveText('265');
 		await expect(valueOf(page, 'Vegetarian')).toHaveText('Yes');
-		// The whole list, not cut to three items as in the list View.
-		await expect(valueOf(page, 'Tags')).toHaveText('Vegetarian, Quick, Vegan, Healthy, Weeknight');
+		// The Theme's `badges` Kind: every tag, not cut to three as in the list View.
+		await expect(valueOf(page, 'Tags').getByRole('listitem')).toHaveText([
+			'Vegetarian',
+			'Quick',
+			'Vegan',
+			'Healthy',
+			'Weeknight'
+		]);
 		await expect(valueOf(page, 'Review count')).toHaveText('1,287');
 		// 23:30 UTC on January 8th: the date is in UTC, whatever the time zone.
 		await expect(valueOf(page, 'Published at')).toHaveText('Jan 8, 2024');
@@ -97,7 +104,7 @@ test.describe('the recipes detail View', () => {
 		await expect(valueOf(page, 'Protein grams')).toHaveText('11');
 		await expect(valueOf(page, 'Carbs grams')).toHaveText('42');
 		await expect(valueOf(page, 'Instructions')).toHaveText(
-			'Prepare the ingredients for Vegetarian Stir-Fry, then cook and serve.'
+			'Prepare the ingredients for Vegetarian Stir-Fry.\nCook, then serve.'
 		);
 		await expect(page.locator('main')).not.toContainText('{');
 	});

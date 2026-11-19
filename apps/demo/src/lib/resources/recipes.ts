@@ -35,8 +35,9 @@ export const recipes = defineResource({
 		caloriesPerServing: field(z.number(), { label: 'Calories', sortable: true }).optional(),
 		// Filtered with Any / Yes / No.
 		vegetarian: field(z.boolean(), { filterable: true }),
-		// Edited as one textarea, one tag per line. Posts' tags keep one input per tag.
-		tags: field(z.array(z.string()), { input: 'lines' }),
+		// Shown as badges, the Theme's `badges` Kind, and edited as one textarea, one tag per line.
+		// Posts' tags keep the built-in list, with one input per tag.
+		tags: field(z.array(z.string()), { kind: 'badges', input: 'lines' }),
 		// An array of objects: edited as one fieldset per ingredient, and never left empty.
 		ingredients: z
 			.array(z.object({ name: z.string(), quantity: z.string().optional() }))
@@ -54,11 +55,13 @@ export const recipes = defineResource({
 		rating: field(z.int().min(1).max(5), { kind: 'stars', sortable: true }).optional(),
 		// An object: left off the list by default, and edited as a group of inputs.
 		nutrition: z.object({ proteinGrams: z.number(), carbsGrams: z.number() }),
-		instructions: field(z.string(), {
-			list: false,
-			description: 'How to cook it',
-			input: 'textarea'
-		}),
+		// Long text, the Theme's `textarea` Kind: edited in a textarea, shown with its line breaks
+		// on the detail View and on one line in the list View.
+		instructions: field(z.string(), { kind: 'textarea', description: 'How to cook it' }),
+		// An image's URL, the Theme's `image` Kind: a thumbnail in the list View and an image on
+		// the detail View. Any text is saved, but only an http(s) URL or a path on this site is
+		// loaded; anything else shows as text. A few seeded recipes point to the demo's images.
+		imageUrl: field(z.string(), { kind: 'image', label: 'Image' }).optional(),
 		// In no View, so the forms leave it alone and the backend keeps it.
 		internalNotes: field(z.string(), { hidden: true })
 	})

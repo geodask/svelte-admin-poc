@@ -236,6 +236,28 @@ The Theme's `AdminShell` checks once, on first render, that every Kind a Field n
 
 In the demo, recipes have an optional `rating`, a whole number from 1 to 5 with `kind: 'stars'`, sortable, and seeded for most recipes. Its cell and display show stars with the rating as text for screen readers, and its input is a radio group of 1 to 5 plus "None", which works without JavaScript and clears the rating on save.
 
+#### The Theme's Kinds
+
+The shadcn Theme ships three Kinds and declares them in `Kinds` itself, so once the app imports the Theme anywhere, a Field names them with no registration and no declaration of its own:
+
+| Kind       | For                           | Input                | Cell (list View)                                         | Display (detail View)         |
+| ---------- | ----------------------------- | -------------------- | -------------------------------------------------------- | ----------------------------- |
+| `textarea` | text                          | a textarea           | one line, cut with an ellipsis, the full text in `title` | the text with its line breaks |
+| `badges`   | a list of text or enum values | the list's own input | the first three as badges, then "+N"                     | every item as a badge         |
+| `image`    | an image's URL, as a string   | a URL input          | a 40 px thumbnail                                        | a larger image                |
+
+```ts
+instructions: field(z.string(), { kind: 'textarea', description: 'How to cook it' }),
+tags: field(z.array(z.string()), { kind: 'badges', input: 'lines' }),
+imageUrl: field(z.string(), { kind: 'image', label: 'Image' }).optional(),
+```
+
+Each input sends what the Field's built-in input would, so `FormInput` types them as their built-in inputs. A text Field that names a Kind has its line breaks read as LF, as `input: 'textarea'` does, so text from a Kind's textarea is saved the same with and without JavaScript. A value that doesn't fit its Kind (badges on a number, say) shows as the Field's built-in Kind would show it. An app Kind of the same name replaces any of them slot by slot, as above.
+
+**The image URL rule.** Both images load lazily, with the Field's label as `alt`. A stored URL is only used as the image's `src` when it is an absolute `http:` or `https:` URL, or a path on the same site that starts with a single `/`. Anything else, such as `javascript:alert(1)`, a `data:` URL, a protocol-relative `//host/a.png` (or `/\host/a.png`, which a browser reads the same way) or a relative path, is never loaded: it shows as muted text. The rule is the core's `imageSrc(value)`, which returns the `src` to load, written as the browser would load it, or `undefined`, so another Theme can apply the same rule. The schema still accepts any text, so the rule doesn't decide what can be saved, only what is loaded.
+
+The demo's recipes use all three: their instructions are a `textarea` (where posts' body still uses the core's `input: 'textarea'`), their tags are `badges`, edited one per line, and an optional `imageUrl` is an `image`, with the first three seeded recipes pointing to pictures in the demo's `static/images/recipes`.
+
 ### References
 
 A Reference is a Field that holds the id of a record of another Resource, its target. Declare one with `ref` in `field()`, a function that returns the target:
