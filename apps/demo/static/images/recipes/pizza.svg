@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120" role="img" aria-label="A pizza">
+	<rect width="120" height="120" fill="#fef3c7"/>
+	<circle cx="60" cy="60" r="46" fill="#f59e0b"/>
+	<circle cx="60" cy="60" r="38" fill="#dc2626"/>
+	<circle cx="44" cy="46" r="8" fill="#fffbeb"/>
+	<circle cx="74" cy="52" r="9" fill="#fffbeb"/>
+	<circle cx="56" cy="76" r="8" fill="#fffbeb"/>
+	<path d="M70 72c4-6 10-6 12-2-4 2-8 4-12 2z" fill="#16a34a"/>
+	<path d="M38 64c4-6 10-6 12-2-4 2-8 4-12 2z" fill="#16a34a"/>
+</svg>

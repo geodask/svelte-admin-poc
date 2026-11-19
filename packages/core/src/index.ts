@@ -11,6 +11,7 @@ export {
 } from './resource.ts';
 export { idFromParam, idPathSegment, recordPath } from './ids.ts';
 export { recordTitle } from './record-title.ts';
+export { imageSrc } from './image-src.ts';
 export { resolveReference, type ReferenceLink } from './reference-link.ts';
 export {
 	createReferencePicker,

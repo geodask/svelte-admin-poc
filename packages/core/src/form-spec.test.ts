@@ -705,6 +705,18 @@ describe('formSchema for lists, rows and groups', () => {
 			await outcome(formSchema(notes, 'create'), { value: 'Stretch the dough.\r\nBake it hot.' })
 		).toEqual({ value: { value: 'Stretch the dough.\nBake it hot.' } });
 	});
+
+	it("writes the line breaks of a text Field that names a Kind as LF, as a Kind's textarea shows them", async () => {
+		const notes = withField(field(z.string(), { kind: 'mood' }));
+		expect(
+			await outcome(formSchema(notes, 'create'), { value: 'Stretch the dough.\r\nBake it hot.\r' })
+		).toEqual({ value: { value: 'Stretch the dough.\nBake it hot.\n' } });
+		// A text Field that names no Kind has a one-line input, and is checked as sent.
+		const title = withField(z.string());
+		expect(await outcome(formSchema(title, 'create'), { value: 'Pizza\r\n' })).toEqual({
+			value: { value: 'Pizza\r\n' }
+		});
+	});
 });
 
 describe('formSchema for read-only and hidden Fields', () => {

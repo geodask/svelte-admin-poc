@@ -609,6 +609,11 @@ function normalizeObject(
 	return normalized;
 }
 
+/** Text with its line breaks written as LF, as a textarea shows them, whatever the browser sent. */
+function lineBreaksAsLf(raw: unknown): unknown {
+	return typeof raw === 'string' ? raw.replace(/\r\n?/g, '\n') : raw;
+}
+
 /** One scalar input's value as the browser sent it, turned into the value the schema checks. */
 function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): unknown {
 	if (raw === undefined || raw === null || raw === '') return noValue(schema);
@@ -619,7 +624,10 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 			return spec.namedKind === undefined ? raw : numberFromText(raw);
 		case 'textarea':
 			// A form posted without JavaScript sends line breaks as CRLF; with it, as typed.
-			return typeof raw === 'string' ? raw.replace(/\r\n?/g, '\n') : raw;
+			return lineBreaksAsLf(raw);
+		case 'text':
+			// The built-in text input is one line. A Kind's input (a textarea) may send line breaks.
+			return spec.namedKind === undefined ? raw : lineBreaksAsLf(raw);
 		case 'select':
 			// A select sends text, so a number option is matched by how it is written.
 			return spec.options.find((option) => String(option) === String(raw)) ?? raw;

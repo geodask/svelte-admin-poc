@@ -4,7 +4,9 @@
 	group per object for an array of objects), and an empty value shows as a dash. A Kind's `display`
 	renders a value when one is found, slot by slot: the app's Kind of the Field's named Kind (given
 	the admin), the Theme's, then the app's Kind of its built-in Kind (see the core's
-	`kindComponent`). Otherwise the Theme renders the built-in Kind itself. Given the admin,
+	`kindComponent`). A Theme Kind's display renders only a value that fits it (badges a list),
+	and any other renders as its built-in Kind. Otherwise the Theme renders the built-in Kind
+	itself. Given the admin,
 	a Reference shows the Record title of the record it points to, linked to that record's detail
 	View (see ReferenceValue); without it, the raw id. A Theme part, exported so a replaced detail
 	View shows values as the stock one does.
@@ -31,17 +33,16 @@
 </script>
 
 <script lang="ts">
-	import { kindComponent } from '@svelte-admin/core';
 	import FieldValue from './FieldValue.svelte';
 	import LazyKind from './LazyKind.svelte';
 	import ReferenceValue from './ReferenceValue.svelte';
 	import ScalarValue from './ScalarValue.svelte';
 	import { formatScalar } from './format.ts';
-	import { themeKinds } from './kinds.ts';
+	import { themeKindComponent } from './kinds.ts';
 
 	let { field, value, record, admin }: FieldValueProps = $props();
 
-	const kind = $derived(kindComponent('display', field, admin?.kinds, themeKinds));
+	const kind = $derived(themeKindComponent('display', field, value, admin?.kinds));
 
 	const nested = $derived(field.fields?.filter((f) => f.detail));
 	const isObject = (v: unknown): v is Record<string, unknown> =>

@@ -55,6 +55,17 @@ export const recipeRatingData: Exactly<CreateData<typeof recipes>['rating'], num
 // A Field may only name a Kind someone declared.
 // @ts-expect-error no one declared the Kind "stras"
 export const misspeltKind = field(z.number(), { kind: 'stras' });
+// The Theme declares its own Kinds, so the app names them without registering anything...
+export const themeTextarea = field(z.string(), { kind: 'textarea' });
+export const themeBadges = field(z.array(z.string()), { kind: 'badges' });
+export const themeImage = field(z.string(), { kind: 'image' }).optional();
+// @ts-expect-error the Theme's Kind is `image`, not `img`
+export const themeImageTypo = field(z.string(), { kind: 'img' });
+// ...and their inputs send what the Field's built-in input would: text for the textarea and the
+// image's URL, and the lines of a list in lines.
+export const recipeInstructionsInput: Exactly<RecipeCreate['instructions'], string> = true;
+export const recipeImageInput: Exactly<RecipeCreate['imageUrl'], string | undefined> = true;
+export const recipeTagsInput: Exactly<RecipeCreate['tags'], string> = true;
 
 // Users' email is set once, on create.
 export const userEmail: FormInput<typeof users, 'create'>['email'] = 'lin@example.com';
