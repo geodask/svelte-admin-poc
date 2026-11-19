@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { defineResource, idFromParam, idPathSegment } from '@svelte-admin/core';
+import {
+	createPath,
+	defineResource,
+	editPath,
+	idFromParam,
+	idPathSegment,
+	recordPath
+} from '@svelte-admin/core';
 
 const recipes = defineResource({
 	name: 'recipes',
@@ -88,5 +95,21 @@ describe('an id as one URL path segment', () => {
 
 	it.each(['', '.', '..'])('refuses %j, which a URL would not keep as one segment', (id) => {
 		expect(() => idPathSegment(id)).toThrow(/path segment/);
+	});
+});
+
+describe("a record's hrefs under a prefix", () => {
+	it.each([
+		['/admin/recipes', '/admin/recipes/12', '/admin/recipes/new', '/admin/recipes/12/edit'],
+		[
+			'/shop/admin/recipes',
+			'/shop/admin/recipes/12',
+			'/shop/admin/recipes/new',
+			'/shop/admin/recipes/12/edit'
+		]
+	])('under %j are the detail, create and edit Views', (list, detail, create, edit) => {
+		expect(recordPath(list, 12)).toBe(detail);
+		expect(createPath(list)).toBe(create);
+		expect(editPath(list, 12)).toBe(edit);
 	});
 });

@@ -115,7 +115,7 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 
 	const listHref = (name: Name) => joinPath(basePath, name);
 	// What every path in the admin starts with: `/admin/` under `/admin`, `/` at the root.
-	const prefix = joinPath(basePath, '');
+	const pathPrefix = joinPath(basePath, '');
 	const isName = (segment: string): segment is Name => Object.hasOwn(resources, segment);
 	const first = Object.keys(resources)[0] as Name | undefined;
 
@@ -171,8 +171,8 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 		 * outside the admin's Resources finds nothing.
 		 */
 		locate(pathname: string): AdminLocation<M> | undefined {
-			if (!pathname.startsWith(prefix)) return undefined;
-			const [name, param, action] = pathname.slice(prefix.length).split('/');
+			if (!pathname.startsWith(pathPrefix)) return undefined;
+			const [name, param, action] = pathname.slice(pathPrefix.length).split('/');
 			if (!isName(name)) return undefined;
 			const entry = resources[name] as AdminEntry;
 			const decoded = param === undefined ? undefined : decodeSegment(param);

@@ -62,10 +62,10 @@ export function listPathOfEditView(pathname: string): string | undefined {
 }
 
 /**
- * A path with one more segment: the one join every href the admin builds goes through. A path
- * that already ends in `/` (the root, `/`, for an admin mounted there) takes the segment without
- * another slash, so `/` and `users` give `/users`, never `//users`, which a browser would follow
- * to another host.
+ * A path with one more segment: the one join every path the admin builds from its base path or a
+ * list View's path goes through. A path that already ends in `/` (the root, `/`, for an admin
+ * mounted there) takes the segment without another slash, so `/` and `users` give `/users`,
+ * never `//users`, which a browser would follow to another host.
  */
 export function joinPath(path: string, segment: string): string {
 	return `${path.endsWith('/') ? path.slice(0, -1) : path}/${segment}`;

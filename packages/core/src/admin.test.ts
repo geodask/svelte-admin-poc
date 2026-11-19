@@ -281,24 +281,17 @@ describe('an admin mounted at /, the whole app', () => {
 		}
 	});
 
-	/** Every href the admin builds for a path a test visits, so none can start with `//`. */
-	const hrefs: string[] = [];
-	const built = (href: string | undefined) => {
-		if (href !== undefined) hrefs.push(href);
-		return href;
-	};
-
 	it('keeps "/" as its base path', () => {
 		expect(root.basePath).toBe('/');
 	});
 
 	it('leads the admin index to the first Resource list', () => {
-		expect(built(root.homeHref)).toBe('/recipes');
+		expect(root.homeHref).toBe('/recipes');
 	});
 
 	it('links each sidebar item to its list at the root', () => {
 		const items = root.sidebar.flatMap((group) => group.items);
-		expect(items.map((item) => built(item.href))).toEqual(['/recipes', '/users', '/posts']);
+		expect(items.map((item) => item.href)).toEqual(['/recipes', '/users', '/posts']);
 	});
 
 	it('matches each Resource name as the root segment', () => {
@@ -314,9 +307,7 @@ describe('an admin mounted at /, the whole app', () => {
 		['/users/a%2Fb', 'users', 'detail', 'a/b'],
 		['/users/a%2Fb/edit', 'users', 'edit', 'a/b']
 	])('locates %j at the root', (path, name, view, id) => {
-		const here = root.locate(path);
-		expect(here).toMatchObject({ name, view, id, listHref: `/${name}` });
-		built(here?.listHref);
+		expect(root.locate(path)).toMatchObject({ name, view, id, listHref: `/${name}` });
 	});
 
 	it.each(['/', '//', '//recipes', '/admin/recipes', '/nope', '/toString', ''])(
@@ -328,37 +319,31 @@ describe('an admin mounted at /, the whole app', () => {
 
 	it("builds a record's detail, create and edit hrefs under its list at the root", () => {
 		const list = root.locate('/recipes')!.listHref;
-		expect(built(recordPath(list, 12))).toBe('/recipes/12');
-		expect(built(createPath(list))).toBe('/recipes/new');
-		expect(built(editPath(list, 12))).toBe('/recipes/12/edit');
-		expect(built(editPath('/users', 'a/b'))).toBe('/users/a%2Fb/edit');
+		expect(recordPath(list, 12)).toBe('/recipes/12');
+		expect(createPath(list)).toBe('/recipes/new');
+		expect(editPath(list, 12)).toBe('/recipes/12/edit');
+		expect(editPath('/users', 'a/b')).toBe('/users/a%2Fb/edit');
 	});
 
 	it("links a Reference to its target record's detail View at the root", async () => {
 		const author = posts.fields.find((candidate) => candidate.key === 'userId')!;
-		const link = await resolveReference(root, author, 'ada');
-		expect(link).toEqual({ title: 'ada', href: '/users/ada' });
-		built(link?.href);
+		expect(await resolveReference(root, author, 'ada')).toEqual({
+			title: 'ada',
+			href: '/users/ada'
+		});
 	});
 
-	it('never builds an href that starts with //', () => {
-		expect(hrefs.length).toBeGreaterThan(0);
-		expect(hrefs.filter((href) => href.startsWith('//'))).toEqual([]);
-	});
-});
-
-describe("a record's hrefs under a prefix", () => {
-	it.each([
-		['/admin/recipes', '/admin/recipes/12', '/admin/recipes/new', '/admin/recipes/12/edit'],
-		[
-			'/shop/admin/recipes',
-			'/shop/admin/recipes/12',
-			'/shop/admin/recipes/new',
-			'/shop/admin/recipes/12/edit'
-		]
-	])('under %j are the detail, create and edit Views', (list, detail, create, edit) => {
-		expect(recordPath(list, 12)).toBe(detail);
-		expect(createPath(list)).toBe(create);
-		expect(editPath(list, 12)).toBe(edit);
+	it('never builds an href that starts with //', async () => {
+		const author = posts.fields.find((candidate) => candidate.key === 'userId')!;
+		const lists = Object.keys(root.resources).map((name) => root.locate(`/${name}`)!.listHref);
+		const hrefs = [
+			root.homeHref,
+			...root.sidebar.flatMap((group) => group.items.map((item) => item.href)),
+			...lists,
+			...lists.flatMap((list) => [recordPath(list, 1), createPath(list), editPath(list, 1)]),
+			(await resolveReference(root, author, 'ada'))?.href
+		];
+		expect(hrefs).not.toContain(undefined);
+		expect(hrefs.filter((href) => href!.startsWith('//'))).toEqual([]);
 	});
 });
