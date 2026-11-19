@@ -5,6 +5,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { activeFilters, type ActiveFilter } from './active-filters.ts';
 import type { Admin } from './admin.ts';
 import { resolveReference, type ReferenceLink } from './reference-link.ts';
+import { createReferencePicker, type ReferencePicker } from './reference-picker.ts';
 import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
 import type { Field, FilterOperator } from './fields.ts';
 import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
@@ -95,10 +96,13 @@ export type FilterInputType = 'text' | 'number' | 'date' | 'datetime';
  * - `input`: one input. For a text Field a text box, filtering with `contains` when the Field
  *   allows it, else with `eq` (and, when the list is filtered by an `in` from the URL, one box
  *   per value, so the control owns the `in` too); for a number or date Field that doesn't allow a
- *   range, its one value, filtering with `eq`; for a Reference, the id, filtering with `eq`.
- *   Empty, it filters nothing.
+ *   range, its one value, filtering with `eq`. Empty, it filters nothing.
  * - `range`: a from and a to input, for a number or date Field that allows `gte` and `lte`.
  *   Either may be left empty, to filter one side only.
+ * - `reference`: a choice of the target's records by their Record title, for a Reference, with
+ *   the headless picker (`createReferencePicker`) whose current choice is the record the list is
+ *   filtered by. It sends the chosen id under the Field's key, filtering with `eq`; its "Any"
+ *   choice sends an empty value, which filters nothing.
  */
 export type FilterControl = { field: Field; operators: readonly FilterOperator[] } & (
 	| {
@@ -118,6 +122,15 @@ export type FilterControl = { field: Field; operators: readonly FilterOperator[]
 			values: FilterInput[];
 	  }
 	| { type: 'range'; input: Exclude<FilterInputType, 'text'>; from: FilterInput; to: FilterInput }
+	| {
+			type: 'reference';
+			/** Its input: the Field's key, and the id the list is filtered by now, or empty. */
+			current: FilterInput;
+			/** The label of the choice that sends an empty value and so filters nothing: "Any". */
+			emptyLabel: string;
+			/** The headless picker, whose current choice is the id the list is filtered by now. */
+			picker: ReferencePicker;
+	  }
 );
 
 /**
@@ -230,7 +243,7 @@ export function createListView<R extends Resource>(
 	const looseParams = $derived(params satisfies ListParams as ListParams);
 	const urlSearch = $derived(looseParams.search);
 	const filterCount = $derived(looseParams.filters?.length ?? 0);
-	const activeFilterList = $derived(activeFilters(url, resource));
+	const activeFilterList = $derived(activeFilters(url, resource, admin));
 	const searchText = () => draft ?? urlSearch ?? '';
 
 	const selection = createSelection<IdOf<R>>();
@@ -258,6 +271,20 @@ export function createListView<R extends Resource>(
 					? ''
 					: filterInputValue(resource, field.key, filter.value)
 		};
+	}
+
+	// Each Reference filter's picker, kept while the id it is filtered by stays the same, so a
+	// change of page, sort or another filter doesn't load the target's records again.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- a cache, never read reactively
+	const pickers = new Map<string, { value: string; picker: ReferencePicker }>();
+
+	/** The picker of a Reference filter whose input holds `value`. */
+	function picker(field: Field, { value }: FilterInput): ReferencePicker {
+		const kept = pickers.get(field.key);
+		if (kept?.value === value) return kept.picker;
+		const made = createReferencePicker(admin, field, value);
+		pickers.set(field.key, { value, picker: made });
+		return made;
 	}
 
 	/** The filter control of a filterable Field, or `undefined` when no stock control fits it. */
@@ -310,11 +337,16 @@ export function createListView<R extends Resource>(
 				return { field, operators: ['eq'], type: 'input', input, values };
 			}
 			case 'reference': {
-				// Until the Reference filter: one input for the id, of the id's type.
 				if (!allows('eq')) return undefined;
-				const input = field.id === 'number' ? 'number' : 'text';
-				const values = [filterInput(field, 'eq')];
-				return { field, operators: ['eq'], type: 'input', input, values };
+				const current = filterInput(field, 'eq');
+				return {
+					field,
+					operators: ['eq'],
+					type: 'reference',
+					current,
+					emptyLabel: 'Any',
+					picker: picker(field, current)
+				};
 			}
 			default:
 				return undefined;
@@ -568,11 +600,13 @@ export function createListView<R extends Resource>(
 		/**
 		 * Each filter the list is filtered by now, for the chips under the toolbar: whatever its
 		 * operator (including ones no filter control offers) and whether or not its Field is hidden,
-		 * with a readable label ("Prep time (min) ≥ 10", "Difficulty: Easy, Medium") and the href of
-		 * the list without it, which starts again at page 1 and keeps the search, the sort, the page
-		 * size and every other filter. Empty while no filter is on.
+		 * with a readable label ("Prep time (min) ≥ 10", "Difficulty: Easy, Medium", a Reference by
+		 * its record's Record title, as in "Author: Ada Lovelace") and the href of the list without
+		 * it, which starts again at page 1 and keeps the search, the sort, the page size and every
+		 * other filter. Empty while no filter is on. It resolves during SSR: await it, e.g.
+		 * `$derived(await view.activeFilters)`.
 		 */
-		get activeFilters(): ActiveFilter[] {
+		get activeFilters(): Promise<ActiveFilter[]> {
 			return activeFilterList;
 		},
 		/** The href of the list with no filters, at page 1, keeping the search, sort and page size. */

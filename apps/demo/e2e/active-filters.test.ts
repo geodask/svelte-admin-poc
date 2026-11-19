@@ -2,17 +2,10 @@
 // removes only that filter.
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures.ts';
-import { columnCells, dataRows, filtersToggle, names } from './list-helpers.ts';
-
-/** The row of active filter chips, shown only while a filter is on. */
-const chipList = (page: Page) => page.getByRole('list', { name: 'Active filters' });
+import { chip, chipList, columnCells, dataRows, filtersToggle, names } from './list-helpers.ts';
 
 /** The active filter chips, in order. */
 const chips = (page: Page) => chipList(page).getByRole('link');
-
-/** The chip of one filter, by its label. Its link is named "Remove filter …". */
-const chip = (page: Page, label: string) =>
-	chipList(page).getByRole('link', { name: `Remove filter ${label}`, exact: true });
 
 /** The prep times of the recipes listed, as numbers. */
 const prepTimes = async (page: Page) =>

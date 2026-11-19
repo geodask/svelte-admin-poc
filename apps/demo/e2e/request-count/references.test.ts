@@ -35,8 +35,11 @@ test.describe('a page of posts', () => {
 	}) => {
 		const log = await openPostsList(page, request);
 
-		// Posts 60 to 41 are by users 1 to 5, and post 57 by the missing user 99.
-		const userRequests = log.filter((line) => line.startsWith('GET /users'));
+		// Posts 60 to 41 are by users 1 to 5, and post 57 by the missing user 99. (The filter panel's
+		// author picker asks for the first page of users too, for its select; it names no id.)
+		const userRequests = log.filter(
+			(line) => line.startsWith('GET /users') && idsAskedFor(line).ids.length > 0
+		);
 		expect(userRequests).toHaveLength(1);
 		expect(idsAskedFor(userRequests[0])).toEqual({ ids: [1, 2, 3, 4, 5, 99], perPage: '6' });
 		const shown = posts.toReversed().slice(0, 20);
