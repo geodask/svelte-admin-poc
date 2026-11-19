@@ -13,7 +13,7 @@ import {
 } from './fields.ts';
 import { dateInputValue, datetimeInputValue, LOCAL_DATETIME } from './date-input.ts';
 import { idFromParam, idFromText } from './ids.ts';
-import type { KindInputOf } from './kinds.ts';
+import { ownKind, type KindInputOf, type KindRegistry } from './kinds.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /** Which form a spec or a schema is for: the create View's or the edit View's. */
@@ -72,6 +72,12 @@ export type FormInputSpec = FormFieldBase & {
 		| { kind: 'rows'; fields: FormInputSpec[] }
 		/** A nested object: a fieldset, whose inputs are named with dots (`nutrition.carbsGrams`). */
 		| { kind: 'group'; fields: FormInputSpec[] }
+		/**
+		 * A top-level Field whose type has no built-in input (a union, a record), which its named
+		 * Kind's input renders: `defineAdmin` checks the app's Kind has one. What it sends goes
+		 * through the Kind's `fromInput`, if any, as it is.
+		 */
+		| { kind: 'custom' }
 	);
 
 /**
@@ -194,6 +200,22 @@ function specFor(field: Field, schema: z.ZodType): FormInputSpec | undefined {
 }
 
 /**
+ * The spec of a top-level Field's input: its built-in input, or for a Field whose type has none
+ * but that names a Kind, a custom input, which that Kind's input renders. `undefined` when the
+ * form has no input for it.
+ */
+function topSpecFor(field: Field, schema: z.ZodType): FormInputSpec | undefined {
+	const spec = specFor(field, schema);
+	if (spec !== undefined || field.namedKind === undefined) return spec;
+	return {
+		...baseOf(field),
+		...(field.placeholder === undefined ? {} : { placeholder: field.placeholder }),
+		namedKind: field.namedKind,
+		kind: 'custom'
+	};
+}
+
+/**
  * How a form treats a top-level Field: as an input, as read-only text, or not at all. A
  * hidden Field is in no form, so a save never clears a value no View shows.
  */
@@ -205,15 +227,20 @@ function roleIn(field: Field, mode: FormMode): 'input' | 'readOnly' | 'none' {
 	return 'input';
 }
 
+/** Whether a form of either mode gives a top-level Field an input. */
+const isEdited = (field: Field) =>
+	roleIn(field, 'create') === 'input' || roleIn(field, 'edit') === 'input';
+
 /**
  * Check that the forms can edit every Field they would give an input: one whose type has no
  * input (a union, a record), or a list, rows or group holding one, must be `readOnly: true` or
  * `hidden`. `defineResource` runs it, so a Resource whose form could never be saved fails at
- * startup, naming the Field.
+ * startup, naming the Field. A Field that names a Kind is skipped: its Kind's input may edit it,
+ * which only `defineAdmin` can see, so `assertKindInputs` checks it there.
  */
 export function assertFormInputs(name: string, fields: readonly Field[], schema: z.ZodObject) {
 	for (const field of fields) {
-		if (roleIn(field, 'create') !== 'input' && roleIn(field, 'edit') !== 'input') continue;
+		if (!isEdited(field) || field.namedKind !== undefined) continue;
 		// A Reference always has its picker. Its target may not have loaded yet (it may be this
 		// very Resource), so its spec, which names the target, can't be built here.
 		if (field.kind === 'reference') continue;
@@ -223,14 +250,34 @@ export function assertFormInputs(name: string, fields: readonly Field[], schema:
 	}
 }
 
-/** The startup error for a Field the forms would edit but have no input for. */
-function noInputError(name: string, field: Field): Error {
+/**
+ * Check that every Field the forms would edit, that names a Kind and whose type has no built-in
+ * input (a union, a record), names one of the app's Kinds with an `input`, which then edits it.
+ * Otherwise it must be `readOnly: true` or `hidden`, as without a Kind. `defineAdmin` runs it,
+ * since only the admin knows the app's Kinds.
+ */
+export function assertKindInputs(resource: Resource, kinds: KindRegistry): void {
+	for (const field of resource.fields) {
+		if (!isEdited(field) || field.namedKind === undefined || field.kind === 'reference') continue;
+		if (specFor(field, resource.schema.shape[field.key] as z.ZodType) !== undefined) continue;
+		if (ownKind(kinds, field.namedKind)?.input !== undefined) continue;
+		throw noInputError(resource.name, field, field.namedKind);
+	}
+}
+
+/**
+ * The startup error for a Field the forms would edit but have no input for, and when it names a
+ * Kind (`kind`), that Kind has no input in admin.ts either.
+ */
+function noInputError(name: string, field: Field, kind?: string): Error {
 	const afterCreate =
 		field.readOnly === 'afterCreate' ? " `readOnly: 'afterCreate'` still needs one on create." : '';
+	const where = `Resource "${name}": the Field "${field.key}" has no form input for its type`;
+	const leaveOut = '`readOnly: true` or `hidden: true` with `field()`, so the forms leave it out.';
+	if (kind === undefined) return new Error(`${where}.${afterCreate} Mark it ${leaveOut}`);
 	return new Error(
-		`Resource "${name}": the Field "${field.key}" has no form input for its type.` +
-			afterCreate +
-			' Mark it `readOnly: true` or `hidden: true` with `field()`, so the forms leave it out.'
+		`${where}, and its Kind "${kind}" has no \`input\` in admin.ts.${afterCreate} Give the Kind ` +
+			`one in the admin's \`kinds\`, or mark the Field ${leaveOut}`
 	);
 }
 
@@ -247,7 +294,7 @@ export function toFormSpec(resource: Resource, mode: FormMode): FormFieldSpec[] 
 		const role = roleIn(field, mode);
 		if (role === 'readOnly') specs.push({ ...baseOf(field), kind: 'readOnly', field });
 		if (role !== 'input') continue;
-		const spec = specFor(field, resource.schema.shape[field.key] as z.ZodType);
+		const spec = topSpecFor(field, resource.schema.shape[field.key] as z.ZodType);
 		// `defineResource` has checked every Field has one; a Resource built by hand may not.
 		if (spec === undefined) throw noInputError(resource.name, field);
 		specs.push(spec);
@@ -432,19 +479,34 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
  * sends it. A list in rows and rows are written as their items then one blank row, which is
  * where an item is added, and a list in lines as one item per line. A Field with no value is
  * left out, and so is the id, which the edit form carries as a hidden input.
+ *
+ * Given the app's Kinds (`admin.kinds`), a top-level Field that names a Kind with `toInput` is
+ * written by it instead. It is never called for a missing value.
  */
-export function toFormValues(spec: readonly FormFieldSpec[], record: object): FormValues {
-	return valuesOf(spec, record) as FormValues;
+export function toFormValues(
+	spec: readonly FormFieldSpec[],
+	record: object,
+	kinds?: KindRegistry
+): FormValues {
+	return valuesOf(spec, record, kinds) as FormValues;
 }
 
-/** The input values of an object's Fields: a record's, a row's or a group's. */
-function valuesOf(specs: readonly FormFieldSpec[], object: object): Record<string, unknown> {
+/**
+ * The input values of an object's Fields: a record's, a row's or a group's. Only a record's
+ * (top-level) Fields are given the Kinds, since Kinds render only top-level Fields.
+ */
+function valuesOf(
+	specs: readonly FormFieldSpec[],
+	object: object,
+	kinds?: KindRegistry
+): Record<string, unknown> {
 	const values: Record<string, unknown> = {};
 	const fields = object as Record<string, unknown>;
 	for (const spec of specs.filter(isInputSpec)) {
 		const value = fields[spec.key];
 		if (value === undefined || value === null) continue;
-		const shown = inputValue(spec, value);
+		const toInput = ownKind(kinds, spec.namedKind)?.toInput;
+		const shown = toInput === undefined ? inputValue(spec, value) : toInput(value);
 		if (shown !== undefined) values[spec.key] = shown;
 	}
 	return values;
@@ -609,6 +671,60 @@ function normalizeObject(
 	return normalized;
 }
 
+/**
+ * Whether an input sent nothing a Kind's `fromInput` should see: no value, empty text, or a
+ * list of only those.
+ */
+function isEmptyInput(raw: unknown): boolean {
+	if (raw === undefined || raw === null || raw === '') return true;
+	return Array.isArray(raw) && raw.every(isEmptyInput);
+}
+
+/** The message of what a Kind's `fromInput` threw, as the Field's issue. */
+function conversionMessage(thrown: unknown): string {
+	return thrown instanceof Error && thrown.message !== '' ? thrown.message : 'Invalid input';
+}
+
+/**
+ * The values of a record's (top-level) Fields, as `normalizeObject` gives them, except that a
+ * Field whose named Kind has `fromInput` gets what that returns for what its input sent, and an
+ * empty input no value without calling it. A throw becomes an issue on the Field, in `issues`,
+ * and its key goes in `failed`, so the schema doesn't report the same Field again.
+ */
+function normalizeRecord(
+	specs: readonly FormInputSpec[],
+	object: z.ZodObject,
+	raw: unknown,
+	origins: Origins,
+	kinds: KindRegistry | undefined,
+	issues: StandardSchemaV1.Issue[],
+	failed: Set<string>
+): Record<string, unknown> {
+	const values = isObject(raw) ? raw : {};
+	const shape = object.shape as Record<string, z.ZodType>;
+	const normalized: Record<string, unknown> = {};
+	for (const spec of specs) {
+		const sent = values[spec.key];
+		const fromInput = ownKind(kinds, spec.namedKind)?.fromInput;
+		let value: unknown;
+		if (fromInput === undefined) {
+			value = normalize(spec, shape[spec.key], sent, [spec.key], origins);
+		} else if (isEmptyInput(sent)) {
+			value = noValue(shape[spec.key]);
+		} else {
+			try {
+				value = fromInput(sent as never);
+			} catch (thrown) {
+				issues.push({ message: conversionMessage(thrown), path: [spec.key] });
+				failed.add(spec.key);
+				continue;
+			}
+		}
+		if (value !== undefined) normalized[spec.key] = value;
+	}
+	return normalized;
+}
+
 /** Text with its line breaks written as LF, as a textarea shows them, whatever the browser sent. */
 function lineBreaksAsLf(raw: unknown): unknown {
 	return typeof raw === 'string' ? raw.replace(/\r\n?/g, '\n') : raw;
@@ -722,10 +838,17 @@ function inputPath(path: readonly PropertyKey[], origins: Origins): (string | nu
  * - On edit, the hidden `id` input becomes the typed id by the same rule as a route param
  *   (`idFromParam`), so it is the id the detail View reads the record by. An id that names
  *   none is invalid input.
+ *
+ * Given the app's Kinds (`admin.kinds`), a top-level Field that names a Kind with `fromInput` is
+ * converted by it before the schema validates, in place of the rules above: an empty input
+ * still means no value, without calling it, and a throw becomes an issue on the Field with the
+ * thrown error's message (or "Invalid input"). Without the Kinds, what such a Field's input sent
+ * is validated as it is.
  */
 export function formSchema<R extends Resource, M extends FormMode>(
 	resource: R,
-	mode: M
+	mode: M,
+	kinds?: KindRegistry
 ): StandardSchemaV1<FormInput<R, M>, FormOutput<R, M>> {
 	// Only the inputs: a read-only Field is left out of the schema, not ignored after parsing.
 	const specs = toFormSpec(resource, mode).filter(isInputSpec);
@@ -739,9 +862,11 @@ export function formSchema<R extends Resource, M extends FormMode>(
 			validate(value) {
 				const raw = (typeof value === 'object' && value !== null ? value : {}) as FormValues;
 				const origins: Origins = new Map();
-				const input = normalizeObject(specs, resource.schema, raw, [], origins);
-
 				const issues: StandardSchemaV1.Issue[] = [];
+				// The Fields whose conversion failed, which already have their issue.
+				const failed = new Set<string>();
+				const input = normalizeRecord(specs, resource.schema, raw, origins, kinds, issues, failed);
+
 				let id: IdOf<R> | undefined;
 				if (mode === 'edit') {
 					id = idOfInput(resource, raw.id);
@@ -754,6 +879,7 @@ export function formSchema<R extends Resource, M extends FormMode>(
 				});
 				if (!result.success) {
 					for (const issue of result.error.issues) {
+						if (failed.has(issue.path[0] as string)) continue;
 						issues.push({ message: issue.message, path: inputPath(issue.path, origins) });
 					}
 				}

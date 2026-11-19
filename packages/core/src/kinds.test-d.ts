@@ -5,6 +5,7 @@ import { expectTypeOf } from 'vitest';
 import { z } from 'zod';
 import {
 	defineAdmin,
+	type CreateData,
 	defineResource,
 	field,
 	type Field,
@@ -13,6 +14,7 @@ import {
 	type KindCellProps,
 	type KindDisplayProps,
 	type KindInputProps,
+	type KindInputValue,
 	type RemoteFormFieldLike,
 	type ResourceRemote,
 	type SortableKey
@@ -26,6 +28,8 @@ declare module '@svelte-admin/core' {
 		stars: { input: string };
 		/** A Kind whose entry doesn't say what its input sends. */
 		mood: object;
+		/** A text input whose `fromInput` reads digits as a number and anything else as text. */
+		numberOrSlug: { input: string };
 	}
 }
 
@@ -154,3 +158,63 @@ const admin = defineAdmin({
 expectTypeOf(admin.kinds.stars?.cell).toEqualTypeOf<
 	(() => Promise<{ default: Component<KindCellProps> }>) | undefined
 >();
+
+// A named Kind may convert its Field's value: `fromInput` gets what its input sends, as `Kinds`
+// declares it, and `toInput` gives that back.
+defineAdmin({
+	basePath: '/admin',
+	resources: {},
+	kinds: {
+		numberOrSlug: {
+			input: async () => ({ default: StarsInput }),
+			fromInput: (raw) => {
+				expectTypeOf(raw).toEqualTypeOf<string>();
+				return /^\d+$/.test(raw) ? Number(raw) : raw;
+			},
+			toInput: (value) => String(value)
+		},
+		// Without an `input` type in `Kinds`, any value a form input sends.
+		mood: { fromInput: (raw) => expectTypeOf(raw).toEqualTypeOf<KindInputValue>() }
+	}
+});
+
+defineAdmin({
+	basePath: '/admin',
+	resources: {},
+	kinds: {
+		// @ts-expect-error `numberOrSlug`'s input sends text, so `toInput` must give text
+		numberOrSlug: { toInput: (value: unknown) => Number(value) }
+	}
+});
+
+// Conversions are refused on a built-in Kind, whose values the core reads itself.
+defineAdmin({
+	basePath: '/admin',
+	resources: {},
+	// @ts-expect-error a built-in Kind can't convert
+	kinds: { date: { fromInput: (raw: string) => new Date(raw) } }
+});
+defineAdmin({
+	basePath: '/admin',
+	resources: {},
+	// @ts-expect-error nor write its value for the input
+	kinds: { number: { cell: async () => ({ default: StarsCell }), toInput: String } }
+});
+
+// A union has no built-in input, so naming a converting Kind is what makes it editable, typed by
+// what the Kind's input sends, on create and on edit.
+export const sources = defineResource({
+	name: 'sources',
+	label: 'Sources',
+	schema: z.object({
+		id: z.number(),
+		sourceId: field(z.union([z.string(), z.number()]), { kind: 'numberOrSlug' }),
+		altId: field(z.union([z.string(), z.number()]), { kind: 'numberOrSlug' }).optional()
+	})
+});
+expectTypeOf<FormInput<typeof sources, 'create'>['sourceId']>().toEqualTypeOf<string>();
+expectTypeOf<FormInput<typeof sources, 'edit'>['altId']>().toEqualTypeOf<string | undefined>();
+// The Provider still gets the schema's value.
+expectTypeOf<CreateData<typeof sources>['sourceId']>().toEqualTypeOf<string | number>();
+// The form spec of such a Field is a custom input.
+expectTypeOf<Extract<FormInputSpec, { kind: 'custom' }>>().toExtend<{ namedKind?: string }>();

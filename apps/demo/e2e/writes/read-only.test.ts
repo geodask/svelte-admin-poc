@@ -1,5 +1,5 @@
-// Read-only and hidden Fields in the forms: recipes' review count and source id (owned by the
-// backend), their internal notes (hidden), and users' email (set once on create). Also the
+// Read-only and hidden Fields in the forms: recipes' review count (owned by the backend), their
+// internal notes (hidden), and users' email (set once on create). Also the
 // placeholder and the help text an input shows. These tests write to the demo backend, so they
 // run one at a time, after the tests that only read (see playwright.config.ts), and with
 // JavaScript on and off.
@@ -34,7 +34,7 @@ test.describe("a recipe's read-only and hidden Fields", () => {
 	}) => {
 		await open(page, '/admin/recipes/new');
 
-		for (const label of ['Review count', 'Source ID', 'Internal notes']) {
+		for (const label of ['Review count', 'Internal notes']) {
 			await expect(form(page).getByLabel(label, { exact: true })).toHaveCount(0);
 			await expect(form(page).getByText(label, { exact: true })).toHaveCount(0);
 		}
@@ -46,11 +46,9 @@ test.describe("a recipe's read-only and hidden Fields", () => {
 		await expect(page).toHaveURL('/admin/recipes/56');
 		await expect(page.getByRole('heading', { level: 1, name: 'Lemon Risotto' })).toBeVisible();
 		await expect(valueOf(page, 'Review count')).toHaveText('0');
-		await expect(valueOf(page, 'Source ID')).toHaveText('local-56');
 		expect(await stored(request, 'recipes', 56)).toMatchObject({
 			name: 'Lemon Risotto',
 			reviewCount: 0,
-			sourceId: 'local-56',
 			internalNotes: 'Created in the admin'
 		});
 	});
@@ -62,7 +60,6 @@ test.describe("a recipe's read-only and hidden Fields", () => {
 		await open(page, '/admin/recipes/1/edit');
 
 		await expect(valueOf(page, 'Review count')).toHaveText('1,250');
-		await expect(valueOf(page, 'Source ID')).toHaveText('dj-1');
 		await expect(form(page).getByRole('spinbutton', { name: 'Review count' })).toHaveCount(0);
 		await expect(form(page).getByText('Internal notes', { exact: true })).toHaveCount(0);
 
@@ -74,7 +71,6 @@ test.describe("a recipe's read-only and hidden Fields", () => {
 		expect(await stored(request, 'recipes', 1)).toMatchObject({
 			cuisine: 'Neapolitan',
 			reviewCount: 1250,
-			sourceId: 'dj-1',
 			internalNotes: 'Imported batch 1'
 		});
 	});

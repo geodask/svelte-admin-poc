@@ -1,4 +1,5 @@
 import { CREATE_SEGMENT, EDIT_SEGMENT, decodeSegment, idFromParam } from './ids.ts';
+import { assertKindInputs } from './form-spec.ts';
 import { assertAdminKinds, type AdminKinds } from './kinds.ts';
 import type { IdOf, RecordOf, Resource, ResourceIcon } from './resource.ts';
 import type { ResourceRemote } from './remote.ts';
@@ -59,6 +60,12 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 	 * replaces a Theme's Kind of the same name slot by slot, so a Kind that gives only a `cell`
 	 * keeps the Theme's input and display. `object` and `reference` can't be replaced:
 	 * `defineAdmin` throws.
+	 *
+	 * A named Kind may also convert the Field's value with `fromInput` and `toInput` (see
+	 * `KindConversions`); a built-in Kind may not, as a type error, and `defineAdmin` throws. A
+	 * Field whose type has no built-in input (a union, a record) is editable once it names an app
+	 * Kind with an `input`: `defineAdmin` throws for one that names none, unless the Field is
+	 * `readOnly: true` or hidden.
 	 */
 	kinds?: AdminKinds;
 }) {
@@ -81,6 +88,9 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 	}
 	assertTargetsMounted(resources);
 	assertAdminKinds(kinds);
+	for (const { resource } of Object.values<AdminEntry>(resources)) {
+		assertKindInputs(resource, kinds);
+	}
 
 	type Name = keyof M & string;
 
