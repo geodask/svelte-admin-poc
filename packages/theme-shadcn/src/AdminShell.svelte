@@ -37,7 +37,7 @@
 	const shell = $derived(createShell(admin));
 </script>
 
-<Sidebar.Provider data-admin-shell class="bg-background text-foreground">
+<Sidebar.Provider data-admin-shell {...shell.linkOptions} class="bg-background text-foreground">
 	<AdminSidebar {shell} {brand} {userMenu} />
 	<Sidebar.Inset>
 		<AdminHeader {admin} {shell} />

@@ -1,4 +1,6 @@
+import { onNavigate } from '$app/navigation';
 import { page } from '$app/state';
+import { onMount } from 'svelte';
 import type { Admin, SidebarItem } from './admin.ts';
 
 /** Where the current page is in the admin, for any admin: what `admin.locate` finds. */
@@ -21,6 +23,41 @@ export type ShellItem = SidebarItem & { active: boolean };
  * // shell.groups, shell.here?.resource.label, shell.here?.id
  */
 export function createShell(admin: ShellAdmin) {
+	// A workaround: Kit's router (3.2) starts a client-side navigation while Svelte is still
+	// rendering async work, and that breaks the render: the URL changes but the list doesn't, Kit's
+	// root throws "Cannot read properties of undefined (reading 'component')", or the page freezes.
+	// It happens when a link is clicked in one of two gaps, so the shell closes both. Drop this once
+	// Kit waits for the render before it starts the next navigation.
+	//
+	// 1. Hydration: Kit handles clicks as soon as its router starts, before the page's async
+	// hydration (the awaits of a View and its cells) has finished. Until then the shell asks Kit
+	// to follow its links with a full page load, as without JavaScript. `onMount` runs only once
+	// the whole hydrated tree has rendered, the shell's own included, so it marks the end of
+	// hydration.
+	let hydrated = $state(false);
+	onMount(() => {
+		hydrated = true;
+	});
+
+	// 2. Another navigation: Kit applies a navigation as soon as its data has loaded, even while
+	// the previous one still renders (its list still loading), as after two quick clicks. So each
+	// navigation waits, before it is applied, for the one before it to complete: Kit completes a
+	// navigation once its render has settled, or drops it once a newer one has replaced it. Kit
+	// awaits what an `onNavigate` callback returns.
+	let previous: Promise<void> | undefined;
+	onNavigate(({ complete }) => {
+		const waitFor = previous;
+		const done = complete.then(
+			() => {},
+			() => {}
+		);
+		previous = done;
+		void done.then(() => {
+			if (previous === done) previous = undefined;
+		});
+		return waitFor;
+	});
+
 	const here = $derived(admin.locate(page.url.pathname));
 	const groups = $derived(
 		admin.sidebar.map((group) => ({
@@ -42,6 +79,14 @@ export function createShell(admin: ShellAdmin) {
 		 */
 		get here(): ShellLocation | undefined {
 			return here;
+		},
+		/**
+		 * Kit's link options for the element that holds the whole admin, to spread on it:
+		 * `data-sveltekit-reload` until the page has hydrated, so a link clicked before then loads
+		 * the page in full, and none after.
+		 */
+		get linkOptions(): { 'data-sveltekit-reload'?: '' } {
+			return hydrated ? {} : { 'data-sveltekit-reload': '' };
 		}
 	};
 }
