@@ -15,7 +15,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --fail-on-warnings && tsc --project tsconfig.bun.json",
 		"test:e2e": "playwright test",
 		"backend": "bun backend/server.ts",
-		"check:client-bundle": "bun scripts/check-client-bundle.ts"
+		"check:client-bundle": "bun scripts/check-client-bundle.ts",
+		"check:docs": "bun scripts/check-docs.ts"
 	},
 	"dependencies": {
 		"@lucide/svelte": "catalog:",

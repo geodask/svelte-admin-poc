@@ -18,6 +18,8 @@ Package names are provisional. Every dependency is pinned to an exact version in
 
 ## Getting started
 
+To add the admin to your own SvelteKit app, follow [Add the admin to a SvelteKit app](docs/add-the-admin-to-a-sveltekit-app.md): it walks through every file the app writes, quoted whole from the demo. To run the demo itself:
+
 You need Node 22 (see `.node-version`) and Bun (see `packageManager` in `package.json`).
 
 ```sh
@@ -36,8 +38,9 @@ The demo backend (`apps/demo/backend`) is a small Bun server that serves seed da
 | `bun run test:unit`           | Vitest in the core                                                               |
 | `bun run test:e2e`            | Playwright against a production build of the demo, with JavaScript on and off    |
 | `bun run check:client-bundle` | After `bun run build`: fails if server-only code reached the demo's client build |
+| `bun run check:docs`          | Fails if a file the docs quote differs from the demo's own file                  |
 
-CI (`.github/workflows/ci.yml`) runs check, lint, unit, the client bundle check and e2e on every push and pull request.
+CI (`.github/workflows/ci.yml`) runs check, lint, the docs check, unit, the client bundle check and e2e on every push and pull request.
 
 ## Wiring a Resource
 

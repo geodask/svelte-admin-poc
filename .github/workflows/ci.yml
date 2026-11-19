@@ -33,6 +33,10 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      # The setup guide quotes the demo's files whole; fail when a quote differs from its file.
+      - name: Check the docs against the demo's files
+        run: bun run check:docs
+
       - name: Unit
         run: bun run test:unit
 
