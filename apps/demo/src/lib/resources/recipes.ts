@@ -48,6 +48,10 @@ export const recipes = defineResource({
 		// A number or a slug: no built-in Kind fits, so it shows as unknown. The forms have no
 		// input for it either, so it must be read-only (the backend sets it) or hidden.
 		sourceId: field(z.union([z.string(), z.number()]), { readOnly: true }),
+		// A whole number from 1 to 5, shown as stars and set with one radio per star: the app's
+		// `stars` Kind, registered in admin.ts. It still sorts as a number, and the recipes with no
+		// rating come last in either order.
+		rating: field(z.int().min(1).max(5), { kind: 'stars', sortable: true }).optional(),
 		// An object: left off the list by default, and edited as a group of inputs.
 		nutrition: z.object({ proteinGrams: z.number(), carbsGrams: z.number() }),
 		instructions: field(z.string(), {

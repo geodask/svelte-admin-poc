@@ -1,4 +1,5 @@
 import { CREATE_SEGMENT, EDIT_SEGMENT, decodeSegment, idFromParam } from './ids.ts';
+import { assertAdminKinds, type AdminKinds } from './kinds.ts';
 import type { IdOf, RecordOf, Resource, ResourceIcon } from './resource.ts';
 import type { ResourceRemote } from './remote.ts';
 
@@ -34,9 +35,9 @@ type AdminResources<M> = {
 };
 
 /**
- * The app's admin: its base path and its Resources by name. Write it once in `admin.ts`; the
- * routes, the param matcher and the sidebar all read the same list. It imports only
- * shared and remote modules, so it is safe in the browser.
+ * The app's admin: its base path, its Resources by name, and its Kinds. Write it once in
+ * `admin.ts`; the routes, the param matcher and the sidebar all read the same list. It imports
+ * only shared and remote modules (and lazy imports of components), so it is safe in the browser.
  *
  * @example
  * export const admin = defineAdmin({
@@ -51,8 +52,19 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 	/** Where the admin is mounted, e.g. `/admin`. Starts with `/` and doesn't end with one. */
 	basePath: string;
 	resources: M;
+	/**
+	 * The app's Kinds, by name: each up to three lazy components (`input`, `cell`, `display`). A
+	 * key is a named Kind from `Kinds`, which Fields name with `kind`, or a built-in Kind
+	 * (`boolean`, `date`...), whose components it replaces for every Field of that Kind. Either
+	 * replaces a Theme's Kind of the same name slot by slot, so a Kind that gives only a `cell`
+	 * keeps the Theme's input and display. `object` and `reference` can't be replaced:
+	 * `defineAdmin` throws.
+	 */
+	kinds?: AdminKinds;
 }) {
 	const { basePath, resources } = config;
+	// A copy, so the admin's Kinds can't change from outside.
+	const kinds: AdminKinds = { ...config.kinds };
 
 	if (!/^\/.*[^/]$/.test(basePath)) {
 		throw new Error(
@@ -68,6 +80,7 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 		}
 	}
 	assertTargetsMounted(resources);
+	assertAdminKinds(kinds);
 
 	type Name = keyof M & string;
 
@@ -78,6 +91,8 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 	return {
 		basePath,
 		resources,
+		/** The app's Kinds, by name, as `kinds` in admin.ts gave them (none: `{}`). */
+		kinds,
 		/**
 		 * The sidebar: the Resources grouped by their group. Groups appear in the order their
 		 * first Resource appears in admin.ts, and keep admin.ts order inside. Resources without a
@@ -138,6 +153,8 @@ export type Admin = {
 	readonly basePath: string;
 	/** Its Resources by name, as admin.ts lists them. */
 	readonly resources: Readonly<Record<string, AdminEntry>>;
+	/** The app's Kinds, by name. */
+	readonly kinds: AdminKinds;
 	/** The sidebar: the Resources grouped by their group. */
 	readonly sidebar: readonly SidebarGroup[];
 	/** The param matcher for a Resource segment. */

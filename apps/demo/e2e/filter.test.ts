@@ -51,18 +51,21 @@ test.describe('filtering recipes by difficulty and vegetarian', () => {
 
 	test('the vegetarian choice filters both ways and clears with Any', async ({ page }) => {
 		await page.goto('/admin/recipes?perPage=100');
+		// The app's boolean cell: ✓ or ✗, then "Yes" or "No" for screen readers.
 		const vegetarianCells = async () =>
-			(await (await columnCells(page, 'Vegetarian')).allInnerTexts()).map((text) => text.trim());
+			(await (await columnCells(page, 'Vegetarian')).allInnerTexts()).map((text) =>
+				text.replace(/\s+/g, ' ').trim()
+			);
 
 		await applyFilters(page, (form) => form.getByRole('radio', { name: 'Yes' }).check());
 		await expectLanded(page, '/admin/recipes?perPage=100&vegetarian=true');
 		await expect(dataRows(page)).toHaveCount(17);
-		expect((await vegetarianCells()).every((text) => text === 'Yes')).toBe(true);
+		expect((await vegetarianCells()).every((text) => text === '✓ Yes')).toBe(true);
 
 		await applyFilters(page, (form) => form.getByRole('radio', { name: 'No' }).check());
 		await expectLanded(page, '/admin/recipes?perPage=100&vegetarian=false');
 		await expect(dataRows(page)).toHaveCount(38);
-		expect((await vegetarianCells()).every((text) => text === 'No')).toBe(true);
+		expect((await vegetarianCells()).every((text) => text === '✗ No')).toBe(true);
 
 		await applyFilters(page, (form) => form.getByRole('radio', { name: 'Any' }).check());
 		await expectLanded(page, '/admin/recipes?perPage=100');
@@ -210,7 +213,7 @@ test.describe('an empty filtered list', () => {
 
 test.describe('a list URL with filters it cannot use', () => {
 	for (const [what, search, rows, first] of [
-		['an unknown filter', '?rating=5&foo=bar', 25, 'Classic Margherita Pizza'],
+		['an unknown filter', '?popularity=5&foo=bar', 25, 'Classic Margherita Pizza'],
 		['a bad enum value', '?difficulty=Spicy', 25, 'Classic Margherita Pizza'],
 		['a non-boolean vegetarian', '?vegetarian=maybe', 25, 'Classic Margherita Pizza'],
 		['a bad value beside a good one', '?difficulty=Hard&vegetarian=yes', 12, 'Chicken Biryani']
@@ -227,7 +230,7 @@ test.describe('a list URL with filters it cannot use', () => {
 
 	test('is cleaned in place @js', async ({ page }) => {
 		for (const [search, clean] of [
-			['?rating=5&page=2', '/admin/recipes?page=2'],
+			['?popularity=5&page=2', '/admin/recipes?page=2'],
 			['?difficulty=Spicy', '/admin/recipes'],
 			['?vegetarian=maybe&difficulty=Easy', '/admin/recipes?difficulty=Easy'],
 			['?vegetarian=', '/admin/recipes'],

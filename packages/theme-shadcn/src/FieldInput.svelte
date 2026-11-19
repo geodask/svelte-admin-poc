@@ -1,5 +1,9 @@
 <!--
-	One Field's input on a create or edit form, chosen by its spec kind: a text, email or url
+	One Field's input on a create or edit form. A Kind's `input` renders it when one is found, slot
+	by slot: the app's Kind of the Field's named Kind (`spec.namedKind`, given the admin), the
+	Theme's, then the app's Kind of its built-in Kind (see the core's `kindComponent`); that
+	component renders the label, help text and issues itself. Otherwise it is chosen by its spec
+	kind: a text, email or url
 	input, a textarea, a number, a checkbox, a select, a date, a datetime read and written in UTC,
 	a list, rows or a group, or for a Reference the ReferencePicker when given the admin (without
 	it, an input for the id itself, of the id's type). It shows the Field's label (with a marker when it is required), its
@@ -35,8 +39,9 @@
 		 */
 		labelHidden?: boolean;
 		/**
-		 * The admin from admin.ts (`view.admin`), so a Reference gets its picker. Without it, a
-		 * Reference is an input for the id itself.
+		 * The admin from admin.ts (`view.admin`), so the app's Kinds render the input and a
+		 * Reference gets its picker. Without it, only the Theme's Kinds do, and a Reference is an
+		 * input for the id itself.
 		 */
 		admin?: Admin;
 	};
@@ -45,6 +50,7 @@
 <script lang="ts">
 	import { onMount, type Snippet } from 'svelte';
 	import {
+		kindComponent,
 		rowCount,
 		withoutRow,
 		type RemoteFormField,
@@ -52,13 +58,17 @@
 	} from '@svelte-admin/core';
 	import FieldInput from './FieldInput.svelte';
 	import FieldIssues from './FieldIssues.svelte';
+	import LazyKind from './LazyKind.svelte';
 	import ReferencePicker from './ReferencePicker.svelte';
+	import { themeKinds } from './kinds.ts';
 
 	let { spec, field: given, labelHidden = false, admin }: FieldInputProps = $props();
 
 	// Every input of a remote form is one at runtime, typed or not: read its items, its Fields
 	// and its attributes untyped, as for any Field.
 	const field = $derived(given as RemoteFormField);
+
+	const kind = $derived(kindComponent('input', spec, admin?.kinds, themeKinds));
 
 	type ListSpec = Extract<FormInputSpec, { kind: 'list' }>;
 	type RowsSpec = Extract<FormInputSpec, { kind: 'rows' }>;
@@ -206,7 +216,9 @@
 	{/each}
 {/snippet}
 
-{#if spec.kind === 'reference' && admin}
+{#if kind}
+	<LazyKind component={kind} props={{ spec, field: given }} />
+{:else if spec.kind === 'reference' && admin}
 	<ReferencePicker {admin} {spec} {field} {labelHidden} />
 {:else if spec.kind === 'list' && spec.mode === 'rows'}
 	{@render container(listRows)}

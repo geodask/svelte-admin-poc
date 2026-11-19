@@ -1,7 +1,10 @@
 <!--
 	A Field's value on the detail View, shown by the Field's Kind. Scalars look as they do in a
 	list View cell, but a list shows every item, an object shows as nested label-value pairs (one
-	group per object for an array of objects), and an empty value shows as a dash. Given the admin,
+	group per object for an array of objects), and an empty value shows as a dash. A Kind's `display`
+	renders a value when one is found, slot by slot: the app's Kind of the Field's named Kind (given
+	the admin), the Theme's, then the app's Kind of its built-in Kind (see the core's
+	`kindComponent`). Otherwise the Theme renders the built-in Kind itself. Given the admin,
 	a Reference shows the Record title of the record it points to, linked to that record's detail
 	View (see ReferenceValue); without it, the raw id. A Theme part, exported so a replaced detail
 	View shows values as the stock one does.
@@ -15,23 +18,30 @@
 		/** The record's value for the Field. */
 		value: unknown;
 		/**
-		 * The whole record the value belongs to, for the Kinds that render from more than one value.
-		 * The stock Kinds read only `value` so far.
+		 * The whole record the value belongs to, which a Kind's display gets beside the value.
+		 * Without it, the Kind gets a record that holds only this value.
 		 */
 		record?: Record<string, unknown>;
-		/** The admin from admin.ts (`view.admin`), so a Reference shows its record's title. */
+		/**
+		 * The admin from admin.ts (`view.admin`), so the app's Kinds render the value and a
+		 * Reference shows its record's title.
+		 */
 		admin?: Admin;
 	};
 </script>
 
 <script lang="ts">
+	import { kindComponent } from '@svelte-admin/core';
 	import FieldValue from './FieldValue.svelte';
+	import LazyKind from './LazyKind.svelte';
 	import ReferenceValue from './ReferenceValue.svelte';
 	import ScalarValue from './ScalarValue.svelte';
 	import { formatScalar } from './format.ts';
+	import { themeKinds } from './kinds.ts';
 
-	// eslint-disable-next-line svelte/no-unused-props -- `record` is there for the Kinds that will read it
-	let { field, value, admin }: FieldValueProps = $props();
+	let { field, value, record, admin }: FieldValueProps = $props();
+
+	const kind = $derived(kindComponent('display', field, admin?.kinds, themeKinds));
 
 	const nested = $derived(field.fields?.filter((f) => f.detail));
 	const isObject = (v: unknown): v is Record<string, unknown> =>
@@ -49,6 +59,8 @@
 
 {#if value === null || value === undefined || (Array.isArray(value) && value.length === 0)}
 	<span class="text-muted-foreground">—</span>
+{:else if kind}
+	<LazyKind component={kind} props={{ field, value, record: record ?? { [field.key]: value } }} />
 {:else if field.kind === 'reference' && admin && (typeof value === 'string' || typeof value === 'number')}
 	<ReferenceValue {admin} {field} {value} />
 {:else if field.kind === 'list' && Array.isArray(value)}

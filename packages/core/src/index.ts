@@ -95,6 +95,23 @@ export {
 	type ReferenceKind
 } from './fields.ts';
 export {
+	assertNamedKinds,
+	builtInKindOf,
+	kindComponent,
+	type AdminKinds,
+	type KindCellProps,
+	type KindComponent,
+	type KindComponents,
+	type KindDisplayProps,
+	type KindInputOf,
+	type KindInputProps,
+	type KindInputValue,
+	type KindRegistry,
+	type Kinds,
+	type KindSlot,
+	type ReplaceableKindName
+} from './kinds.ts';
+export {
 	formSchema,
 	isInputSpec,
 	rowCount,

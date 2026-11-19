@@ -13,6 +13,7 @@ import {
 } from './fields.ts';
 import { dateInputValue, datetimeInputValue, LOCAL_DATETIME } from './date-input.ts';
 import { idFromParam, idFromText } from './ids.ts';
+import type { KindInputOf } from './kinds.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
 /** Which form a spec or a schema is for: the create View's or the edit View's. */
@@ -40,6 +41,11 @@ type FormFieldBase = {
 export type FormInputSpec = FormFieldBase & {
 	/** The example value the input shows while it is empty. */
 	placeholder?: string;
+	/**
+	 * The named Kind the Field names (`FieldMeta.kind`), if any, so a Theme renders that Kind's
+	 * input in place of the built-in one `kind` describes.
+	 */
+	namedKind?: string;
 } & (
 		| { kind: 'text'; format: 'text' | 'email' | 'url' }
 		/** Long text, with `input: 'textarea'`. */
@@ -84,7 +90,7 @@ export const isInputSpec = (spec: FormFieldSpec): spec is FormInputSpec => spec.
 /** The input-specific part of a spec: what `inputFor` adds to the Field's own details. */
 type InputOf = FormInputSpec extends infer S
 	? S extends unknown
-		? Omit<S, keyof FormFieldBase | 'placeholder'>
+		? Omit<S, keyof FormFieldBase | 'placeholder' | 'namedKind'>
 		: never
 	: never;
 
@@ -181,6 +187,7 @@ function specFor(field: Field, schema: z.ZodType): FormInputSpec | undefined {
 	return {
 		...baseOf(field),
 		...(field.placeholder === undefined ? {} : { placeholder: field.placeholder }),
+		...(field.namedKind === undefined ? {} : { namedKind: field.namedKind }),
 		required: field.required && (!(type instanceof z.ZodArray) || minimumLength(type) > 0),
 		...input
 	} as FormInputSpec;
@@ -304,23 +311,43 @@ type FormKeys<R extends Resource, M extends FormMode> = {
 
 /**
  * Whether an input may be left out of what the form sends: a Field in a wrapper (`optional`,
- * `nullable` or `default`), and every boolean, since an unchecked checkbox sends nothing (Kit
- * requires form schemas to say so).
+ * `nullable` or `default`), and every input that sends a boolean, since an unchecked checkbox
+ * sends nothing (Kit requires form schemas to say so).
  */
-type InputOptional<S> =
-	IsWrapped<S> extends true ? true : z.output<UnwrappedSchema<S>> extends boolean ? true : false;
+type InputOptional<S, Top extends boolean> =
+	IsWrapped<S> extends true ? true : FieldInputOf<S, Top> extends boolean ? true : false;
 
-/** The inputs of an object's Fields (a row's or a group's): every one of them, by its key. */
-type ObjectInput<Shape> = Simplify<
+/**
+ * The inputs of an object's Fields, every one of them by its key: the form's own top-level Fields
+ * (`Top`), or a row's or a group's.
+ */
+type ObjectInput<Shape, Top extends boolean = false> = Simplify<
 	{
-		[K in keyof Shape as InputOptional<Shape[K]> extends true ? never : K]: FieldInputOf<Shape[K]>;
+		[K in keyof Shape as InputOptional<Shape[K], Top> extends true ? never : K]: FieldInputOf<
+			Shape[K],
+			Top
+		>;
 	} & {
-		[K in keyof Shape as InputOptional<Shape[K]> extends true ? K : never]?: FieldInputOf<Shape[K]>;
+		[K in keyof Shape as InputOptional<Shape[K], Top> extends true ? K : never]?: FieldInputOf<
+			Shape[K],
+			Top
+		>;
 	}
 >;
 
-/** What one Field's input sends, by its schema: see `FormInput`. */
-type FieldInputOf<S> = InputOfType<UnwrappedSchema<S>, FieldBrandOf<S, 'input'>>;
+/**
+ * What one Field's input sends, by its schema: see `FormInput`. A top-level Field (`Top`) that
+ * names a Kind whose entry in `Kinds` has an `input` type sends that type. (Kinds render only
+ * top-level Fields, so a nested Field's input is always its built-in one.)
+ */
+type FieldInputOf<S, Top extends boolean = false> = Top extends true
+	? [KindInputOf<FieldBrandOf<S, 'kind'>>] extends [never]
+		? BuiltInInputOf<S>
+		: KindInputOf<FieldBrandOf<S, 'kind'>>
+	: BuiltInInputOf<S>;
+
+/** What one Field's built-in input sends, by its schema. */
+type BuiltInInputOf<S> = InputOfType<UnwrappedSchema<S>, FieldBrandOf<S, 'input'>>;
 
 /** What an input sends for an unwrapped Zod type, and the Field's `input` choice. */
 type InputOfType<T, Choice> = T extends z.ZodEnum
@@ -358,16 +385,19 @@ type ListInput<E, Choice> =
  * a boolean for a checkbox, text for any other scalar (a string, an enum's select, a date, a
  * datetime), the target's id type for a Reference (its picker sends the id as text, which the
  * form turns into that type), an array for a list in rows, text for a list in lines, an array of
- * objects for rows, and an object for a group. The id and the read-only and hidden Fields are
- * left out, and `'afterCreate'` Fields appear on create only. A Field in a wrapper may be left out, and so
- * may every boolean, since an unchecked checkbox sends nothing. The edit form also carries the
- * record's typed id, its hidden input, which also types `update.for(id)`.
+ * objects for rows, and an object for a group. A Field that names a Kind whose entry in `Kinds`
+ * says what its input sends (`stars: { input: string }`) maps to that type instead. The id and
+ * the read-only and hidden Fields are left out, and `'afterCreate'` Fields appear on create only.
+ * A Field in a wrapper may be left out, and so may every input that sends a boolean, since an
+ * unchecked checkbox sends nothing. The edit form also carries the record's typed id, its hidden
+ * input, which also types `update.for(id)`.
  *
- * It reads `readOnly`, `hidden` and `input` from the type `field()` returns, so write that
- * metadata inline in `field()`.
+ * It reads `readOnly`, `hidden`, `input` and `kind` from the type `field()` returns, so write
+ * that metadata inline in `field()`.
  */
 export type FormInput<R extends Resource, M extends FormMode> = Simplify<
-	ObjectInput<Pick<ShapeOf<R>, FormKeys<R, M>>> & (M extends 'edit' ? { id: IdOf<R> } : unknown)
+	ObjectInput<Pick<ShapeOf<R>, FormKeys<R, M>>, true> &
+		(M extends 'edit' ? { id: IdOf<R> } : unknown)
 >;
 
 /**
@@ -584,6 +614,9 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 	if (raw === undefined || raw === null || raw === '') return noValue(schema);
 
 	switch (spec.kind) {
+		case 'number':
+			// The built-in number input sends a number. A Kind's input (a radio group) may send text.
+			return spec.namedKind === undefined ? raw : numberFromText(raw);
 		case 'textarea':
 			// A form posted without JavaScript sends line breaks as CRLF; with it, as typed.
 			return typeof raw === 'string' ? raw.replace(/\r\n?/g, '\n') : raw;
@@ -607,6 +640,15 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 		default:
 			return raw;
 	}
+}
+
+/**
+ * A number sent as text, as a number: text that is a finite decimal number, such as `3` or
+ * `-2.5`. Anything else is left as it is, for the Field's schema to reject.
+ */
+function numberFromText(raw: unknown): unknown {
+	if (typeof raw !== 'string' || !/^\s*-?(\d+\.?\d*|\.\d+)\s*$/.test(raw)) return raw;
+	return Number(raw);
 }
 
 /** The plain schema of each id type, which reads an id as a route param is read. */
@@ -653,6 +695,9 @@ function inputPath(path: readonly PropertyKey[], origins: Origins): (string | nu
  *   sets its own message) and an optional one is left out: on edit, that clears it. A Field
  *   that is only `nullable` gets `null`.
  * - An unchecked checkbox means `false`, so the Resource can say `z.boolean()`.
+ * - A number Field that names a Kind may get its number as text from that Kind's input (a radio
+ *   group sends text), which becomes that number, so `3` is 3 and `3a` is left for the schema to
+ *   reject. Any other number Field's input sends a number.
  * - A Reference's picker sends the chosen id as text, which becomes the target's id type by the
  *   rule a route param is read by (`idFromParam`), so `3` is the number 3 and `3a` is invalid.
  * - A textarea's line breaks become `\n`, as typed, though a form posted without JavaScript
