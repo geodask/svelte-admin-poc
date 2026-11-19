@@ -17,7 +17,7 @@ A single attribute of a Resource (e.g. a Recipe's name), together with how it is
 _Avoid_: Column, property, attribute
 
 **Kind**:
-What a Field is for display and input purposes (text, number, date, an enum, a list, a Reference), either detected from its schema or named by the Field. A Theme renders each Kind, and an app can add Kinds or replace a Theme's.
+What a Field is for display and input purposes (text, number, date, an enum, a list, a Reference), either detected from its schema or named by the Field. A Theme renders each Kind, and an app can add Kinds or replace a Theme's. An app's named Kind may also convert between what its input sends and the Field's value, which is how a Field with no built-in input (a union) becomes editable.
 _Avoid_: Type (clashes with schema and TypeScript types), widget, field type
 
 **Reference**:

@@ -150,18 +150,18 @@ export function ownKind(
 		: undefined;
 }
 
-/** Every built-in Kind, which the core finds from a Field's schema. */
-const BUILT_IN_KINDS: readonly KindName[] = [
-	'text',
-	'number',
-	'boolean',
-	'date',
-	'enum',
-	'list',
-	'object',
-	'unknown',
-	'reference'
-];
+/** Every built-in Kind, which the core finds from a Field's schema: checked against `KindName`. */
+const BUILT_IN_KINDS = Object.keys({
+	text: true,
+	number: true,
+	boolean: true,
+	date: true,
+	enum: true,
+	list: true,
+	object: true,
+	unknown: true,
+	reference: true
+} satisfies Record<KindName, true>) as KindName[];
 
 /** The built-in Kinds whose components can't be replaced: see `ReplaceableKindName`. */
 const FIXED_KINDS: readonly KindName[] = ['object', 'reference'];

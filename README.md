@@ -177,7 +177,7 @@ A Field's Kind decides how the Views render it: its input on the create and edit
 rating: field(z.int().min(1).max(5), { kind: 'stars', sortable: true }).optional(),
 ```
 
-A named Kind changes only how the Field looks. Sorting, filtering, the forms' validation and CSV export keep following the schema, so a rating shown as stars still sorts as a number. The described Field keeps its built-in Kind as `kind` and has the named one beside it as `namedKind`, and every form input spec has `namedKind` too.
+A named Kind changes how the Field looks, and may convert what its input sends before the schema validates it (see [Converting a Field's value](#converting-a-fields-value)). Sorting, filtering, the forms' validation and CSV export keep following the schema, so a rating shown as stars still sorts as a number. The described Field keeps its built-in Kind as `kind` and has the named one beside it as `namedKind`, and every form input spec has `namedKind` too.
 
 Kind names are typed. The core exports an empty `interface Kinds {}`, which the Theme and the app fill by module augmentation, so a misspelt or undeclared name in `kind` is a type error. Each entry may say what its input sends, as an `input` type (text, a number, a boolean, or a list of them). `FormInput` then types that Field by it in a replaced form View's `fields`; without one, the Field is typed by what its built-in input sends. The demo declares its Kind in `src/lib/kinds/kinds.d.ts`:
 

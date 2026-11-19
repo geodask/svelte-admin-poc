@@ -85,7 +85,7 @@ export function servedFormSchema<R extends Resource, M extends FormMode>(
 	resource: R,
 	mode: M
 ): StandardSchemaV1<FormInput<R, M>, FormOutput<R, M>> {
-	const named = toFormSpec(resource, mode)
+	const kindedSpec = toFormSpec(resource, mode)
 		.filter(isInputSpec)
 		.find((spec) => spec.namedKind !== undefined);
 	const withoutKinds = formSchema(resource, mode);
@@ -98,10 +98,10 @@ export function servedFormSchema<R extends Resource, M extends FormMode>(
 			validate(value) {
 				const kinds = servedKinds;
 				if (kinds === undefined) {
-					if (named === undefined) return withoutKinds['~standard'].validate(value);
+					if (kindedSpec === undefined) return withoutKinds['~standard'].validate(value);
 					throw new Error(
-						`The ${resource.name} form validates the Field "${named.key}", which names the Kind ` +
-							`"${named.namedKind}", but no admin was given to the server. In ` +
+						`The ${resource.name} form validates the Field "${kindedSpec.key}", which names the Kind ` +
+							`"${kindedSpec.namedKind}", but no admin was given to the server. In ` +
 							'src/hooks.server.ts, write `export const { handleError } = adminHooks(admin);`.'
 					);
 				}

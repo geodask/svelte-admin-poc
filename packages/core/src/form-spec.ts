@@ -204,7 +204,7 @@ function specFor(field: Field, schema: z.ZodType): FormInputSpec | undefined {
  * but that names a Kind, a custom input, which that Kind's input renders. `undefined` when the
  * form has no input for it.
  */
-function topSpecFor(field: Field, schema: z.ZodType): FormInputSpec | undefined {
+function topLevelSpecFor(field: Field, schema: z.ZodType): FormInputSpec | undefined {
 	const spec = specFor(field, schema);
 	if (spec !== undefined || field.namedKind === undefined) return spec;
 	return {
@@ -228,7 +228,7 @@ function roleIn(field: Field, mode: FormMode): 'input' | 'readOnly' | 'none' {
 }
 
 /** Whether a form of either mode gives a top-level Field an input. */
-const isEdited = (field: Field) =>
+const getsAnInput = (field: Field) =>
 	roleIn(field, 'create') === 'input' || roleIn(field, 'edit') === 'input';
 
 /**
@@ -240,7 +240,7 @@ const isEdited = (field: Field) =>
  */
 export function assertFormInputs(name: string, fields: readonly Field[], schema: z.ZodObject) {
 	for (const field of fields) {
-		if (!isEdited(field) || field.namedKind !== undefined) continue;
+		if (!getsAnInput(field) || field.namedKind !== undefined) continue;
 		// A Reference always has its picker. Its target may not have loaded yet (it may be this
 		// very Resource), so its spec, which names the target, can't be built here.
 		if (field.kind === 'reference') continue;
@@ -258,7 +258,8 @@ export function assertFormInputs(name: string, fields: readonly Field[], schema:
  */
 export function assertKindInputs(resource: Resource, kinds: KindRegistry): void {
 	for (const field of resource.fields) {
-		if (!isEdited(field) || field.namedKind === undefined || field.kind === 'reference') continue;
+		if (!getsAnInput(field) || field.namedKind === undefined || field.kind === 'reference')
+			continue;
 		if (specFor(field, resource.schema.shape[field.key] as z.ZodType) !== undefined) continue;
 		if (ownKind(kinds, field.namedKind)?.input !== undefined) continue;
 		throw noInputError(resource.name, field, field.namedKind);
@@ -294,7 +295,7 @@ export function toFormSpec(resource: Resource, mode: FormMode): FormFieldSpec[] 
 		const role = roleIn(field, mode);
 		if (role === 'readOnly') specs.push({ ...baseOf(field), kind: 'readOnly', field });
 		if (role !== 'input') continue;
-		const spec = topSpecFor(field, resource.schema.shape[field.key] as z.ZodType);
+		const spec = topLevelSpecFor(field, resource.schema.shape[field.key] as z.ZodType);
 		// `defineResource` has checked every Field has one; a Resource built by hand may not.
 		if (spec === undefined) throw noInputError(resource.name, field);
 		specs.push(spec);
@@ -686,23 +687,28 @@ function conversionMessage(thrown: unknown): string {
 }
 
 /**
+ * A record's (top-level) values, as `normalizeRecord` gives them, and the Fields whose Kind's
+ * `fromInput` threw, by key, each with the message its issue shows.
+ */
+type NormalizedRecord = { values: Record<string, unknown>; failures: Map<string, string> };
+
+/**
  * The values of a record's (top-level) Fields, as `normalizeObject` gives them, except that a
  * Field whose named Kind has `fromInput` gets what that returns for what its input sent, and an
- * empty input no value without calling it. A throw becomes an issue on the Field, in `issues`,
- * and its key goes in `failed`, so the schema doesn't report the same Field again.
+ * empty input no value without calling it. A throw is a failure of that Field, left out of the
+ * values, so the schema doesn't report the same Field again.
  */
 function normalizeRecord(
 	specs: readonly FormInputSpec[],
 	object: z.ZodObject,
 	raw: unknown,
 	origins: Origins,
-	kinds: KindRegistry | undefined,
-	issues: StandardSchemaV1.Issue[],
-	failed: Set<string>
-): Record<string, unknown> {
+	kinds: KindRegistry | undefined
+): NormalizedRecord {
 	const values = isObject(raw) ? raw : {};
 	const shape = object.shape as Record<string, z.ZodType>;
 	const normalized: Record<string, unknown> = {};
+	const failures = new Map<string, string>();
 	for (const spec of specs) {
 		const sent = values[spec.key];
 		const fromInput = ownKind(kinds, spec.namedKind)?.fromInput;
@@ -715,14 +721,13 @@ function normalizeRecord(
 			try {
 				value = fromInput(sent as never);
 			} catch (thrown) {
-				issues.push({ message: conversionMessage(thrown), path: [spec.key] });
-				failed.add(spec.key);
+				failures.set(spec.key, conversionMessage(thrown));
 				continue;
 			}
 		}
 		if (value !== undefined) normalized[spec.key] = value;
 	}
-	return normalized;
+	return { values: normalized, failures };
 }
 
 /** Text with its line breaks written as LF, as a textarea shows them, whatever the browser sent. */
@@ -862,10 +867,17 @@ export function formSchema<R extends Resource, M extends FormMode>(
 			validate(value) {
 				const raw = (typeof value === 'object' && value !== null ? value : {}) as FormValues;
 				const origins: Origins = new Map();
-				const issues: StandardSchemaV1.Issue[] = [];
-				// The Fields whose conversion failed, which already have their issue.
-				const failed = new Set<string>();
-				const input = normalizeRecord(specs, resource.schema, raw, origins, kinds, issues, failed);
+				const { values: input, failures } = normalizeRecord(
+					specs,
+					resource.schema,
+					raw,
+					origins,
+					kinds
+				);
+				const issues: StandardSchemaV1.Issue[] = [...failures].map(([key, message]) => ({
+					message,
+					path: [key]
+				}));
 
 				let id: IdOf<R> | undefined;
 				if (mode === 'edit') {
@@ -879,7 +891,8 @@ export function formSchema<R extends Resource, M extends FormMode>(
 				});
 				if (!result.success) {
 					for (const issue of result.error.issues) {
-						if (failed.has(issue.path[0] as string)) continue;
+						// A Field whose conversion failed already has its issue.
+						if (failures.has(issue.path[0] as string)) continue;
 						issues.push({ message: issue.message, path: inputPath(issue.path, origins) });
 					}
 				}
