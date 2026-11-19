@@ -615,8 +615,8 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 
 	switch (spec.kind) {
 		case 'number':
-			// A number input sends a number, but a Kind's input (a radio group) may send it as text.
-			return numberFromText(raw);
+			// The built-in number input sends a number. A Kind's input (a radio group) may send text.
+			return spec.namedKind === undefined ? raw : numberFromText(raw);
 		case 'textarea':
 			// A form posted without JavaScript sends line breaks as CRLF; with it, as typed.
 			return typeof raw === 'string' ? raw.replace(/\r\n?/g, '\n') : raw;
@@ -695,8 +695,9 @@ function inputPath(path: readonly PropertyKey[], origins: Origins): (string | nu
  *   sets its own message) and an optional one is left out: on edit, that clears it. A Field
  *   that is only `nullable` gets `null`.
  * - An unchecked checkbox means `false`, so the Resource can say `z.boolean()`.
- * - A number sent as text (by a Kind's input, such as a radio group) becomes that number, so
- *   `3` is 3 and `3a` is left for the schema to reject.
+ * - A number Field that names a Kind may get its number as text from that Kind's input (a radio
+ *   group sends text), which becomes that number, so `3` is 3 and `3a` is left for the schema to
+ *   reject. Any other number Field's input sends a number.
  * - A Reference's picker sends the chosen id as text, which becomes the target's id type by the
  *   rule a route param is read by (`idFromParam`), so `3` is the number 3 and `3a` is invalid.
  * - A textarea's line breaks become `\n`, as typed, though a form posted without JavaScript

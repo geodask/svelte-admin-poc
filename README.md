@@ -210,9 +210,9 @@ export const admin = defineAdmin({
 
 `admin.kinds` holds them. `object` and `reference` can't be replaced, since their rendering depends on the core's nesting and Reference resolution: TypeScript rejects them, and `defineAdmin` throws.
 
-Each slot's component gets the props the core defines and exports, so a Kind is written against a documented contract, and `defineAdmin` checks each component's props against its slot:
+Each slot's component gets the props the core defines and exports, so a Kind is written against a documented contract, and TypeScript checks each component's props against its slot in `defineAdmin`:
 
-- `KindInputProps`: `spec`, the Field's input spec, and `field`, its input on the remote form. The input renders the Field's label, help text (`spec.description`) and issues (`field.issues()`) itself, or with the Theme's `FieldIssues`, and submits its value under the Field's name. A number Field's input may send its value as text, as a radio group does: the form reads text such as `3` as the number 3, and leaves anything else for the schema to reject.
+- `KindInputProps`: `spec`, the Field's input spec, and `field`, its input on the remote form. The input renders the Field's label, help text (`spec.description`) and issues (`field.issues()`) itself, or with the Theme's `FieldIssues`, and submits its value under the Field's name. A number Field that names a Kind may have its input send the number as text, as a radio group does: the form reads text such as `3` as the number 3, and leaves anything else for the schema to reject.
 - `KindCellProps` and `KindDisplayProps`: `field`, the Field, `value`, the record's value for it, and `record`, the whole record. The Theme shows an empty value itself (an empty cell, or "—" on the detail View), so a cell or a display never gets one.
 
 A component may take fewer props than its slot gives. The demo's stars, a cell and a display in one component, renders text only:
@@ -230,7 +230,7 @@ A component may take fewer props than its slot gives. The demo's stars, a cell a
 {/if}
 ```
 
-Replacement is per slot. For each slot, the Theme renders the app's Kind of the Field's named Kind, then the Theme's own Kind of that name, then the app's Kind of the Field's built-in Kind, and otherwise its built-in rendering of that Kind. So a Kind that gives only a `cell` keeps the built-in input and display: in the demo, a recipe's vegetarian Field shows ✓ or ✗ in the list View and still "Yes" or "No" on the detail View. The core's `kindComponent(slot, field, app, theme)` is that rule, for a Field or an input spec. The Theme loads a lazy component with `await` in its markup, so the server renders it, with and without JavaScript. Its `FieldCell`, `FieldValue` and `FieldInput` take the admin (`view.admin`) to render the app's Kinds; without it, they render the Theme's Kinds and its built-in rendering.
+Replacement is per slot. For each slot, the Theme renders the app's Kind of the Field's named Kind, then the Theme's own Kind of that name, then the app's Kind of the Field's built-in Kind, and otherwise its built-in rendering of that Kind. So a Kind that gives only a `cell` keeps the built-in input and display: in the demo, a recipe's vegetarian Field shows ✓ or ✗ in the list View and still "Yes" or "No" on the detail View. The core's `kindComponent(slot, field, app, theme)` is that rule, for a Field or an input spec. The Theme awaits a lazy component in place, with no pending state, so the server renders it, with and without JavaScript. Its `FieldCell`, `FieldValue` and `FieldInput` take the admin (`view.admin`) to render the app's Kinds; without it, they render the Theme's Kinds and its built-in rendering.
 
 The Theme's `AdminShell` checks once, on first render, that every Kind a Field names is the Theme's or the admin's, and otherwise throws an error naming the Resource, the Field and the Kind (the core's `assertNamedKinds`). TypeScript catches the same mistake earlier.
 

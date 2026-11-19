@@ -476,6 +476,13 @@ describe('formSchema', () => {
 			expect.stringMatching(/^value: /)
 		]);
 	});
+
+	it('leaves text for a number Field that names no Kind to the schema, as its input sends a number', async () => {
+		const servings = withField(z.number());
+		expect((await outcome(formSchema(servings, 'create'), { value: '4' })).issues).toEqual([
+			expect.stringMatching(/^value: /)
+		]);
+	});
 });
 
 describe('formSchema for the edit form', () => {

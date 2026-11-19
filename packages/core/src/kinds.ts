@@ -60,13 +60,11 @@ export type KindCellProps = {
 	record: Record<string, unknown>;
 };
 
-/** The props of a Kind's display, on the detail View: the Field, the record's value for it, and the record. */
-export type KindDisplayProps = {
-	field: Field;
-	/** The record's value for the Field. Never empty: the Theme shows an empty value itself. */
-	value: unknown;
-	record: Record<string, unknown>;
-};
+/**
+ * The props of a Kind's display, on the detail View: the same as a cell's, the Field, the record's
+ * value for it, and the record.
+ */
+export type KindDisplayProps = KindCellProps;
 
 /**
  * One component of a Kind, as a lazy import: `() => import('./StarsCell.svelte')`. It is lazy, as
@@ -117,15 +115,19 @@ export function assertAdminKinds(kinds: KindRegistry): void {
 	for (const name of FIXED_KINDS) {
 		if (Object.hasOwn(kinds, name)) {
 			throw new Error(
-				`admin.ts: the Kind "${name}" can't be replaced in this version, since its rendering ` +
-					"depends on the core's nesting and Reference resolution. Remove it from `kinds`."
+				`admin.ts replaces the Kind "${name}" in \`kinds\`, which can't be replaced in this ` +
+					"version, since its rendering depends on the core's nesting and Reference resolution. " +
+					'Remove it.'
 			);
 		}
 	}
 }
 
-/** The built-in Kind of each form spec kind that isn't a built-in Kind's own name. */
-const SPEC_KINDS: Readonly<Partial<Record<string, KindName>>> = {
+/** The form spec kinds that aren't a built-in Kind's own name. */
+type InputKind = Exclude<FormInputSpec['kind'], KindName>;
+
+/** The built-in Kind of each form spec kind that isn't a built-in Kind's own name: all of them. */
+const SPEC_KINDS: Readonly<Record<InputKind, KindName>> = {
 	textarea: 'text',
 	checkbox: 'boolean',
 	select: 'enum',
@@ -139,7 +141,9 @@ const SPEC_KINDS: Readonly<Partial<Record<string, KindName>>> = {
  * input (`checkbox`, `select`...), which tells its Field's built-in Kind (`boolean`, `enum`...).
  */
 export function builtInKindOf(of: Field | FormInputSpec): KindName {
-	return SPEC_KINDS[of.kind] ?? (of.kind as KindName);
+	return Object.hasOwn(SPEC_KINDS, of.kind)
+		? SPEC_KINDS[of.kind as InputKind]
+		: (of.kind as KindName);
 }
 
 /**

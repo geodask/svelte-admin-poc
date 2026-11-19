@@ -176,7 +176,7 @@ describe('defineAdmin with Kinds', () => {
 				resources: {},
 				kinds: { [name]: { cell: lazy('cell') } } as never
 			})
-		).toThrow(new RegExp(`Kind "${name}" can't be replaced`));
+		).toThrow(new RegExp(`the Kind "${name}" in \`kinds\`, which can't be replaced`));
 	});
 });
 
