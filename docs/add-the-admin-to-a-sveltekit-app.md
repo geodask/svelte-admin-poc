@@ -473,13 +473,13 @@ The Theme's `ErrorPage` shows a 404 or a failed load in the admin's style, with 
 
 ## 10. Adding a Resource
 
-The admin above mounts three Resources. Each one more takes three steps:
+The admin above mounts three Resources. Each further Resource takes three steps:
 
 1. **A shared module**, `src/lib/resources/users.ts`: the Resource's schema and settings, from `defineResource`.
 2. **A remote module**, `src/lib/resources/users.remote.ts`: one statement that serves the Resource's records through its Provider.
 3. **An entry in `admin.ts`**: the shared module's import, and `users: { resource: users, remote: () => import('#lib/resources/users.remote.ts') }` under `resources` (see [`admin.ts`](#3-admints)). The key is the Resource's `name`, or `defineAdmin` throws.
 
-The sidebar, the param matcher, the four View routes and the error page pick the new Resource up from `admin.ts`, so no route changes.
+The sidebar, the param matcher and the four View routes pick the new Resource up from `admin.ts`, so no route changes.
 
 ### Two modules, kept apart
 
@@ -567,7 +567,7 @@ export const backend = restProvider(BACKEND_URL);
 
 The demo reads its backend's URL from the demo backend's config. Your app reads its own, from its environment for one. The requests it sends are in the README: the list's in [Sorting](../README.md#sorting) and [Filtering](../README.md#filtering), the writes' in [Writes](../README.md#writes), and the batched lookups' in [References](../README.md#references).
 
-**Your own Provider**, an object with the methods `getList`, `getOne`, `create`, `update` and `deleteOne`, plus the optional `getMany` and `deleteMany`, each typed from the Resource with `ResourceProvider<typeof resource>`. It can start from the REST Provider's methods and change only what differs, as the demo's posts Provider does: it spreads `backend.for(posts)`, leaves out `getMany`, and adds a `deleteMany` over the backend's bulk route.
+**Your own Provider**, an object with the methods `getList`, `getOne`, `create`, `update` and `deleteOne`, plus the optional `getMany` and `deleteMany`, each typed from the Resource with `ResourceProvider<typeof resource>`. It can start from the REST Provider's methods and change only what differs, as the demo's posts Provider does:
 
 <!-- demo: src/lib/server/posts-provider.ts -->
 
@@ -622,9 +622,9 @@ What each method gets and returns is in the README: [Writes](../README.md#writes
 
 ## Mounting at `/`
 
-When the admin is the whole app, such as an internal tool, mount it at `/`, so no URL needs `/admin`. Only three things change from the files above.
+When the admin is the whole app, such as an internal tool, mount it at `/`, so no URL needs `/admin`. Only these things change from the files above.
 
-**The base path.** In `admin.ts`, write `basePath: '/'`. The list hrefs become `/users`, the detail hrefs `/users/3`, and the create and edit hrefs follow, as do the sidebar, the breadcrumb and `homeHref`.
+**The base path.** In `admin.ts`, write `basePath: '/'`. The list hrefs become `/users`, the detail hrefs `/users/3`, and the create and edit hrefs follow, as do the sidebar, the breadcrumb and `admin.homeHref`.
 
 **The route files, one level up.** Move `src/routes/admin` to `src/routes/(admin)`, unchanged. A folder in parentheses is a SvelteKit route group: it adds nothing to the URL, so the View routes now answer at `/users` and `/users/3/edit`, and the admin layout still wraps only the admin's routes, not the rest of your app.
 
@@ -644,7 +644,9 @@ src/routes/
             └── edit/+page.svelte
 ```
 
-**The admin index at the root.** `(admin)/+page.ts` now answers `/` and opens the first Resource's list, so your app has no other root page. The error page's link back to the admin becomes `homeHref={resolve('/')}`.
+**The admin index at the root.** `(admin)/+page.ts` now answers `/` and opens the first Resource's list. Remove your app's own root page, `src/routes/+page.svelte` or `src/routes/+page.ts`, since SvelteKit allows only one route at `/`.
+
+**The error page.** Its link back to the admin becomes `homeHref={resolve('/')}`.
 
 Your other routes keep working beside the admin's. SvelteKit ranks a route with a static segment, such as `src/routes/about`, above the admin's `[resource=resource]` route, and the matcher accepts only the names `admin.ts` mounts, so `/about` stays yours and `/nope` is a 404. A route of yours named after a Resource wins over the admin's too: that is how a View is replaced, below.
 
@@ -656,10 +658,14 @@ A replaced View takes the same admin, Resource and remote module as the stock Vi
 
 The demo has two, as examples:
 
-- **The users list View**, `src/routes/admin/users/+page.svelte`: the users as a card grid, with the stock search, filters, paging and selection.
-- **The posts create View**, `src/routes/admin/posts/new/+page.svelte`: a two-column form, with typed inputs and the author chosen with the Theme's `ReferencePicker`.
+- **The users list View**, `src/routes/admin/users/+page.svelte`: the users as a card grid.
+- **The posts create View**, `src/routes/admin/posts/new/+page.svelte`: a two-column form.
 
-What a replaced View can read from the helpers is in the README: [Typed form fields and a replaced form View](../README.md#typed-form-fields-and-a-replaced-form-view) for the forms, the replaced list View's sort, filters and export under [Sorting](../README.md#sorting), [Filtering](../README.md#filtering) and [Export](../README.md#export), and a Reference under [References](../README.md#references) and [The Reference picker](../README.md#the-reference-picker).
+What a replaced View can read from the helpers is in the README:
+
+- the forms: [Typed form fields and a replaced form View](../README.md#typed-form-fields-and-a-replaced-form-view);
+- the list's sort, filters and export: [Sorting](../README.md#sorting), [Filtering](../README.md#filtering) and [Export](../README.md#export);
+- References: [References](../README.md#references) and [The Reference picker](../README.md#the-reference-picker).
 
 ## In production
 
@@ -670,7 +676,7 @@ SvelteKit refuses a form post whose origin isn't the app's own, and `adapter-nod
 A few files in the demo aren't part of the setup, so this guide doesn't quote them. Don't copy them into your app:
 
 - **The root layout**, `src/routes/+layout.svelte`. Beside importing the stylesheet, it marks the page once it is hydrated, for the e2e tests.
-- **The root redirect**, `src/routes/+page.ts`. It sends `/` to `/admin`, because the demo is only an admin. Your app has its own home page.
+- **The root redirect**, `src/routes/+page.ts`. It sends `/` to `/admin`, because the demo is only an admin. Your app has its own home page, or the admin index when the admin is [mounted at `/`](#mounting-at-).
 - **The demo backend**, `apps/demo/backend`. It is a small Bun server that serves seed data from memory. Your Resources talk to your own backend.
 
 ## Before npm
