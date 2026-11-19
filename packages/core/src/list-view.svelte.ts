@@ -6,7 +6,7 @@ import { activeFilters, type ActiveFilter } from './active-filters.ts';
 import type { Admin } from './admin.ts';
 import { resolveReference, type ReferenceLink } from './reference-link.ts';
 import { createReferencePicker, type ReferencePicker } from './reference-picker.ts';
-import { CREATE_SEGMENT, hasPathSegment, recordPath } from './ids.ts';
+import { createPath, hasPathSegment, recordPath } from './ids.ts';
 import type { Field, FilterOperator } from './fields.ts';
 import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
 import {
@@ -442,7 +442,7 @@ export function createListView<R extends Resource>(
 		},
 		/** The href of the Resource's create View, `{list}/new`, under the list's own path. */
 		get createHref(): string {
-			return `${url.pathname}/${CREATE_SEGMENT}`;
+			return createPath(url.pathname);
 		},
 		/**
 		 * What to say when the page has no records: that none match the search, the filters, or

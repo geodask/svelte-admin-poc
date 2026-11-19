@@ -1,4 +1,4 @@
-import { CREATE_SEGMENT, EDIT_SEGMENT, decodeSegment, idFromParam } from './ids.ts';
+import { CREATE_SEGMENT, EDIT_SEGMENT, decodeSegment, idFromParam, joinPath } from './ids.ts';
 import { assertKindInputs } from './form-spec.ts';
 import { assertAdminKinds, type AdminKinds } from './kinds.ts';
 import type { IdOf, RecordOf, Resource, ResourceIcon } from './resource.ts';
@@ -64,7 +64,10 @@ type AdminResources<M> = {
  * export type ResourceName = ResourceNameOf<typeof admin>;
  */
 export function defineAdmin<const M extends AdminResources<M>>(config: {
-	/** Where the admin is mounted, e.g. `/admin`. Starts with `/` and doesn't end with one. */
+	/**
+	 * Where the admin is mounted: a prefix such as `/admin` or `/shop/admin`, which starts with `/`
+	 * and doesn't end with one, or `/` when the admin is the whole app.
+	 */
 	basePath: string;
 	resources: M;
 	/**
@@ -87,9 +90,11 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 	// A copy, so the admin's Kinds can't change from outside.
 	const kinds: AdminKinds = { ...config.kinds };
 
-	if (!/^\/.*[^/]$/.test(basePath)) {
+	// `/`, or segments that are each `/` and a non-empty name: never `//`, which a browser would
+	// follow to another host.
+	if (basePath !== '/' && !/^(\/[^/]+)+$/.test(basePath)) {
 		throw new Error(
-			`The admin base path must start with "/" and not end with one, got "${basePath}"`
+			`The admin base path must be "/", or start with "/" and not end with one, with no empty segment; got "${basePath}"`
 		);
 	}
 
@@ -108,7 +113,9 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 
 	type Name = keyof M & string;
 
-	const listHref = (name: Name) => `${basePath}/${name}`;
+	const listHref = (name: Name) => joinPath(basePath, name);
+	// What every path in the admin starts with: `/admin/` under `/admin`, `/` at the root.
+	const prefix = joinPath(basePath, '');
 	const isName = (segment: string): segment is Name => Object.hasOwn(resources, segment);
 	const first = Object.keys(resources)[0] as Name | undefined;
 
@@ -164,8 +171,8 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 		 * outside the admin's Resources finds nothing.
 		 */
 		locate(pathname: string): AdminLocation<M> | undefined {
-			if (!pathname.startsWith(`${basePath}/`)) return undefined;
-			const [name, param, action] = pathname.slice(basePath.length + 1).split('/');
+			if (!pathname.startsWith(prefix)) return undefined;
+			const [name, param, action] = pathname.slice(prefix.length).split('/');
 			if (!isName(name)) return undefined;
 			const entry = resources[name] as AdminEntry;
 			const decoded = param === undefined ? undefined : decodeSegment(param);
@@ -191,7 +198,7 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
  * Resources' names and id types, and fits this one.
  */
 export type Admin = {
-	/** Where the admin is mounted, e.g. `/admin`. */
+	/** Where the admin is mounted, e.g. `/admin`, or `/` when it is the whole app. */
 	readonly basePath: string;
 	/** Its Resources by name, as admin.ts lists them. */
 	readonly resources: Readonly<Record<string, AdminEntry>>;

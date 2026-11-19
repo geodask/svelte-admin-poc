@@ -61,9 +61,29 @@ export function listPathOfEditView(pathname: string): string | undefined {
 	return detail?.slice(0, detail.lastIndexOf('/'));
 }
 
+/**
+ * A path with one more segment: the one join every href the admin builds goes through. A path
+ * that already ends in `/` (the root, `/`, for an admin mounted there) takes the segment without
+ * another slash, so `/` and `users` give `/users`, never `//users`, which a browser would follow
+ * to another host.
+ */
+export function joinPath(path: string, segment: string): string {
+	return `${path.endsWith('/') ? path.slice(0, -1) : path}/${segment}`;
+}
+
 /** The path of a record's detail View under its list View's path: `{list}/{id}`. */
 export function recordPath(listPath: string, id: string | number): string {
-	return `${listPath}/${idPathSegment(id)}`;
+	return joinPath(listPath, idPathSegment(id));
+}
+
+/** The path of a Resource's create View under its list View's path: `{list}/new`. */
+export function createPath(listPath: string): string {
+	return joinPath(listPath, CREATE_SEGMENT);
+}
+
+/** The path of a record's edit View under its list View's path: `{list}/{id}/edit`. */
+export function editPath(listPath: string, id: string | number): string {
+	return joinPath(recordPath(listPath, id), EDIT_SEGMENT);
 }
 
 /** A path segment, decoded, or `undefined` when it is malformed. */
