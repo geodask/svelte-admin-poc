@@ -24,6 +24,18 @@ const withField = (schema: z.ZodType) =>
 const specOf = (schema: z.ZodType) => toFormSpec(withField(schema), 'create')[0];
 
 describe('toFormSpec', () => {
+	it("names the Field's named Kind on its input spec, beside its built-in input", () => {
+		expect(specOf(field(z.int(), { kind: 'stars' }).optional())).toEqual({
+			key: 'value',
+			label: 'Value',
+			required: false,
+			namedKind: 'stars',
+			kind: 'number',
+			integer: true
+		});
+		expect(specOf(z.int())).not.toHaveProperty('namedKind');
+	});
+
 	describe('maps each scalar Zod type to an input', () => {
 		it.each([
 			['a string', z.string(), { kind: 'text', format: 'text' }],
@@ -443,6 +455,26 @@ describe('formSchema', () => {
 		expect(await outcome(formSchema(servings, 'create'), { value: 4, extra: 'x' })).toEqual({
 			value: { value: 4 }
 		});
+	});
+	it('reads a number sent as text, as a radio group sends it, and leaves other text to the schema', async () => {
+		const rating = withField(field(z.int().min(1).max(5), { kind: 'stars' }).optional());
+
+		expect(await outcome(formSchema(rating, 'create'), { value: '4' })).toEqual({
+			value: { value: 4 }
+		});
+		expect(await outcome(formSchema(rating, 'create'), { value: ' 2 ' })).toEqual({
+			value: { value: 2 }
+		});
+		// "None" sends empty text: no value, so an optional rating is left out.
+		expect(await outcome(formSchema(rating, 'create'), { value: '' })).toEqual({ value: {} });
+		for (const text of ['4a', '0x4', '1e3', '-']) {
+			expect((await outcome(formSchema(rating, 'create'), { value: text })).issues).toEqual([
+				expect.stringMatching(/^value: /)
+			]);
+		}
+		expect((await outcome(formSchema(rating, 'create'), { value: '9' })).issues).toEqual([
+			expect.stringMatching(/^value: /)
+		]);
 	});
 });
 

@@ -192,7 +192,7 @@ test.describe('a list URL with a sort it cannot use', () => {
 	test('is cleaned in place @js', async ({ page }) => {
 		for (const [search, clean] of [
 			['?sort=cuisine&order=desc&page=2', '/admin/recipes?page=2'],
-			['?sort=rating', '/admin/recipes'],
+			['?sort=popularity', '/admin/recipes'],
 			['?order=desc', '/admin/recipes'],
 			['?sort=name&order=asc', '/admin/recipes?sort=name']
 		]) {
@@ -215,7 +215,7 @@ test.describe('the getList remote function with a sort', () => {
 
 		for (const sort of [
 			{ field: 'cuisine', order: 'asc' },
-			{ field: 'rating', order: 'asc' },
+			{ field: 'popularity', order: 'asc' },
 			{ field: 'name', order: 'up' }
 		]) {
 			const rejected = await call({ page: marker, sort });

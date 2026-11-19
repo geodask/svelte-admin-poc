@@ -167,6 +167,75 @@ A replaced list View calls `createListView(...).exportCsv()`, which never reject
 
 ## Kinds and References
 
+### Kinds
+
+A Field's Kind decides how the Views render it: its input on the create and edit Views, its cell in the list View, and its display on the detail View. Every Field has a built-in Kind, which the core finds from its schema (`text`, `number`, `boolean`, `date`, `enum`, `list`, `object`, `unknown`, and `reference` for a Reference). A Field may also name a Kind with `kind` in `field()`, written inline as the other metadata is:
+
+```ts
+rating: field(z.int().min(1).max(5), { kind: 'stars', sortable: true }).optional(),
+```
+
+A named Kind changes only how the Field looks. Sorting, filtering, the forms' validation and CSV export keep following the schema, so a rating shown as stars still sorts as a number. The described Field keeps its built-in Kind as `kind` and has the named one beside it as `namedKind`, and every form input spec has `namedKind` too.
+
+Kind names are typed. The core exports an empty `interface Kinds {}`, which the Theme and the app fill by module augmentation, so a misspelt or undeclared name in `kind` is a type error. Each entry may say what its input sends, as an `input` type (text, a number, a boolean, or a list of them). `FormInput` then types that Field by it in a replaced form View's `fields`; without one, the Field is typed by what its built-in input sends. The demo declares its Kind in `src/lib/kinds/kinds.d.ts`:
+
+```ts
+declare module '@svelte-admin/core' {
+	interface Kinds {
+		// A radio group, which sends the chosen rating as text.
+		stars: { input: string };
+	}
+}
+
+export {};
+```
+
+The app registers its Kinds once, in `admin.ts`, with `kinds`. A Kind is up to three components, `input`, `cell` and `display`, each a lazy import, as a Resource's icon is, so `admin.ts` still loads in plain Node. A key is a named Kind from `Kinds`, or a built-in Kind, whose components it then replaces for every Field of that Kind:
+
+```ts
+export const admin = defineAdmin({
+	basePath: '/admin',
+	resources: {/* ... */},
+	kinds: {
+		stars: {
+			input: () => import('#lib/kinds/StarsInput.svelte'),
+			cell: () => import('#lib/kinds/Stars.svelte'),
+			display: () => import('#lib/kinds/Stars.svelte')
+		},
+		// Every boolean's list View cell, as ✓ or ✗. Its display and input stay the Theme's.
+		boolean: { cell: () => import('#lib/kinds/BooleanCell.svelte') }
+	}
+});
+```
+
+`admin.kinds` holds them. `object` and `reference` can't be replaced, since their rendering depends on the core's nesting and Reference resolution: TypeScript rejects them, and `defineAdmin` throws.
+
+Each slot's component gets the props the core defines and exports, so a Kind is written against a documented contract, and `defineAdmin` checks each component's props against its slot:
+
+- `KindInputProps`: `spec`, the Field's input spec, and `field`, its input on the remote form. The input renders the Field's label, help text (`spec.description`) and issues (`field.issues()`) itself, or with the Theme's `FieldIssues`, and submits its value under the Field's name. A number Field's input may send its value as text, as a radio group does: the form reads text such as `3` as the number 3, and leaves anything else for the schema to reject.
+- `KindCellProps` and `KindDisplayProps`: `field`, the Field, `value`, the record's value for it, and `record`, the whole record. The Theme shows an empty value itself (an empty cell, or "—" on the detail View), so a cell or a display never gets one.
+
+A component may take fewer props than its slot gives. The demo's stars, a cell and a display in one component, renders text only:
+
+```svelte
+<script lang="ts">
+	import type { KindCellProps } from '@svelte-admin/core';
+
+	let { value }: Pick<KindCellProps, 'value'> = $props();
+</script>
+
+{#if typeof value === 'number'}
+	<span aria-hidden="true">{'★'.repeat(value)}{'☆'.repeat(5 - value)}</span>
+	<span class="sr-only">{value} out of 5 stars</span>
+{/if}
+```
+
+Replacement is per slot. For each slot, the Theme renders the app's Kind of the Field's named Kind, then the Theme's own Kind of that name, then the app's Kind of the Field's built-in Kind, and otherwise its built-in rendering of that Kind. So a Kind that gives only a `cell` keeps the built-in input and display: in the demo, a recipe's vegetarian Field shows ✓ or ✗ in the list View and still "Yes" or "No" on the detail View. The core's `kindComponent(slot, field, app, theme)` is that rule, for a Field or an input spec. The Theme loads a lazy component with `await` in its markup, so the server renders it, with and without JavaScript. Its `FieldCell`, `FieldValue` and `FieldInput` take the admin (`view.admin`) to render the app's Kinds; without it, they render the Theme's Kinds and its built-in rendering.
+
+The Theme's `AdminShell` checks once, on first render, that every Kind a Field names is the Theme's or the admin's, and otherwise throws an error naming the Resource, the Field and the Kind (the core's `assertNamedKinds`). TypeScript catches the same mistake earlier.
+
+In the demo, recipes have an optional `rating`, a whole number from 1 to 5 with `kind: 'stars'`, sortable, and seeded for most recipes. Its cell and display show stars with the rating as text for screen readers, and its input is a radio group of 1 to 5 plus "None", which works without JavaScript and clears the rating on save.
+
 ### References
 
 A Reference is a Field that holds the id of a record of another Resource, its target. Declare one with `ref` in `field()`, a function that returns the target:

@@ -41,7 +41,8 @@ test.describe('the recipes list View', () => {
 			'Tags',
 			'Review count',
 			'Published at',
-			'Source ID'
+			'Source ID',
+			'Rating'
 		]);
 		// `nutrition` is an object, `instructions` is `list: false`, `internalNotes` is hidden.
 		const table = page.getByRole('table');
@@ -66,17 +67,20 @@ test.describe('the recipes list View', () => {
 			'20',
 			'4',
 			'250',
-			'Yes',
+			// The app replaces the boolean cell: ✓ or ✗, with "Yes" or "No" for screen readers.
+			'✓ Yes',
 			'Pizza, Vegetarian',
 			'1,250',
 			// 23:30 UTC on January 1st: the date is in UTC, whatever the time zone.
 			'Jan 1, 2024',
-			'dj-1'
+			'dj-1',
+			// The app's `stars` Kind, with the rating as text for screen readers.
+			'★☆☆☆☆ 1 out of 5 stars'
 		]);
 		// A long list is cut to three items and "+N".
 		await expect(rows.nth(2).getByRole('cell').nth(9)).toHaveText('Vegetarian, Quick, Vegan +2');
 		// No and an empty optional Field.
-		await expect(rows.nth(3).getByRole('cell').nth(8)).toHaveText('No');
+		await expect(rows.nth(3).getByRole('cell').nth(8)).toHaveText('✗ No');
 		await expect(rows.nth(3).getByRole('cell').nth(7)).toHaveText('');
 	});
 

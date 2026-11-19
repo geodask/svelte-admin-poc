@@ -3,34 +3,10 @@
 // placeholder and the help text an input shows. These tests write to the demo backend, so they
 // run one at a time, after the tests that only read (see playwright.config.ts), and with
 // JavaScript on and off.
-import type { APIRequestContext, Page } from '@playwright/test';
-import { BACKEND_URL } from '../../backend/config.ts';
-import { expect, hydrated, test } from '../fixtures.ts';
+import type { Page } from '@playwright/test';
+import { expect, test } from '../fixtures.ts';
 import { valueOf } from '../list-helpers.ts';
-
-/** The record the demo backend holds, read past the admin. */
-async function stored(request: APIRequestContext, resource: string, id: number) {
-	return (await (await request.get(`${BACKEND_URL}/${resource}/${id}`)).json()) as Record<
-		string,
-		unknown
-	>;
-}
-
-const usesJavaScript = () => test.info().project.use.javaScriptEnabled !== false;
-
-/** Open a View with a form, ready to type into: with JavaScript, once it is hydrated. */
-async function open(page: Page, path: string) {
-	await page.goto(path);
-	if (usesJavaScript()) await hydrated(page);
-}
-
-const form = (page: Page) => page.locator('main form');
-const save = (page: Page) => page.getByRole('button', { name: 'Save' }).click();
-const textbox = (page: Page, name: string) =>
-	form(page).getByRole('textbox', { name, exact: true }).first();
-const spinbutton = (page: Page, name: string) =>
-	form(page).getByRole('spinbutton', { name, exact: true }).first();
-const group = (page: Page, name: string) => form(page).getByRole('group', { name, exact: true });
+import { fillRecipe, form, open, save, stored, textbox, usesJavaScript } from '../form-helpers.ts';
 
 /**
  * Add an input to the form that no View renders, as a crafted post would. Kit names each input
@@ -49,21 +25,6 @@ async function craftInput(page: Page, name: string, value: string) {
 		},
 		[name, value]
 	);
-}
-
-/** Fill every input of the recipes create View. */
-async function fillRecipe(page: Page) {
-	await textbox(page, 'Name').fill('Lemon Risotto');
-	await textbox(page, 'Cuisine').fill('Italian');
-	await form(page).getByRole('combobox', { name: 'Difficulty' }).selectOption('Medium');
-	await spinbutton(page, 'Prep time (min)').fill('35');
-	await spinbutton(page, 'Servings').fill('4');
-	await textbox(page, 'Tags').fill('Rice\nVegetarian');
-	await group(page, 'Ingredients 1').getByRole('textbox', { name: 'Name' }).fill('Arborio rice');
-	await textbox(page, 'Published at (UTC)').fill('2024-05-01T12:00');
-	await group(page, 'Nutrition').getByRole('spinbutton', { name: 'Protein grams' }).fill('8');
-	await group(page, 'Nutrition').getByRole('spinbutton', { name: 'Carbs grams' }).fill('60');
-	await textbox(page, 'Instructions').fill('Stir it slowly.');
 }
 
 test.describe("a recipe's read-only and hidden Fields", () => {

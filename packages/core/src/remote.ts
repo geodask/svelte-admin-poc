@@ -29,6 +29,8 @@ export type RemoteFormField = {
 	as(type: RemoteFormInputType): Record<string, unknown>;
 	/** A hidden input, which needs its value given, e.g. the edit form's record id. */
 	as(type: 'hidden', value: string | number): Record<string, unknown>;
+	/** One radio button of a group, which needs the value it sends when checked. */
+	as(type: 'radio', value: string): Record<string, unknown>;
 } & { readonly [key: string | number]: RemoteFormField };
 
 /**

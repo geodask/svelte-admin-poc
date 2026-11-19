@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Kinds } from './kinds.ts';
 import type { IdOf, Resource } from './resource.ts';
 
 /**
@@ -17,7 +18,7 @@ export type FilterOperator = (typeof FILTER_OPERATORS)[number];
 /**
  * The metadata a Field can carry, attached with `field()`: `label`, `description`, `hidden` (in
  * no View), `list: false` (left off the list View only), `readOnly`, `placeholder`, `input`,
- * `sortable`, `filterable` and `ref`.
+ * `sortable`, `filterable`, `ref` and `kind`.
  */
 export type FieldMeta = {
 	label?: string;
@@ -73,6 +74,15 @@ export type FieldMeta = {
 	 * and `filterable` allows `eq` only. Write it inline, so the types see it.
 	 */
 	ref?: () => Resource;
+	/**
+	 * The named Kind the Views render the Field with, such as `'stars'`: its input on the create
+	 * and edit Views, its cell in the list View and its display on the detail View, each from the
+	 * app's Kind of that name in `admin.ts`, else the Theme's, else the Field's built-in rendering.
+	 * It must be a name in `Kinds`, which the Theme and the app fill by module augmentation, so an
+	 * unknown name is a type error. It changes only how the Field looks: sorting, filtering,
+	 * validation and export keep following its schema. Write it inline, so the types see it.
+	 */
+	kind?: keyof Kinds;
 };
 
 /** Who may set a Field the backend owns: never (`true`), or only on create. See `FieldMeta.readOnly`. */
@@ -99,6 +109,7 @@ export type FieldBrand = {
 	sortable: true | undefined;
 	filterable: true | readonly FilterOperator[] | undefined;
 	ref: (() => Resource) | undefined;
+	kind: keyof Kinds | undefined;
 };
 
 /** One key of the metadata as a literal type, or `undefined` when it isn't set. */
@@ -109,8 +120,9 @@ type MetaValue<M, K extends keyof FieldBrand> = M extends { readonly [P in K]: i
 /**
  * A Field's schema as `field()` returns it: the same Zod type, branded in its type with the
  * metadata the forms' and the list's types depend on (`readOnly`, `hidden`, `input`, `sortable`,
- * `filterable` and `ref`), so `FormInput`, `CreateData` and `EditData` can leave out the Fields no
- * form sets, and `ListParams` can name the sortable and filterable ones. The brand survives
+ * `filterable`, `ref` and `kind`), so `FormInput`, `CreateData` and `EditData` can leave out the
+ * Fields no form sets, `FormInput` can type a Field that names a Kind, and `ListParams` can name
+ * the sortable and filterable ones. The brand survives
  * `.optional()`, `.nullable()` and `.default()`, which keep the schema's type inside them.
  */
 export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
@@ -121,6 +133,7 @@ export type FieldSchema<T extends z.ZodType, M extends FieldMeta> = T & {
 		sortable: MetaValue<M, 'sortable'>;
 		filterable: MetaValue<M, 'filterable'>;
 		ref: MetaValue<M, 'ref'>;
+		kind: MetaValue<M, 'kind'>;
 	};
 };
 
@@ -147,10 +160,11 @@ type RefRules<T extends z.ZodType, M> = M extends { readonly ref: () => infer R 
  * Attach metadata to a Field's schema and return the same schema, so it can sit inline in
  * `z.object({...})`. It may go inside or outside `.optional()`, `.nullable()` and `.default()`:
  * `field(z.number(), { label: 'Calories' }).optional()` keeps its label. Its type is branded with
- * `readOnly`, `hidden`, `input`, `sortable`, `filterable` and `ref`, so write the metadata inline
- * (or `as const`) for the types to see it: a read-only Field is then left out of a replaced form
- * View's typed `fields` and of the Provider's write data, a sortable one is in `ListParams`' sort,
- * and a filterable one in its filters. A Reference (`ref`) whose type isn't its target's id type,
+ * `readOnly`, `hidden`, `input`, `sortable`, `filterable`, `ref` and `kind`, so write the metadata
+ * inline (or `as const`) for the types to see it: a read-only Field is then left out of a replaced
+ * form View's typed `fields` and of the Provider's write data, a sortable one is in `ListParams`'
+ * sort, a filterable one in its filters, and one that names a Kind is typed in `fields` by what
+ * that Kind's input sends. A Reference (`ref`) whose type isn't its target's id type,
  * or that is `sortable`, is a type error.
  */
 export function field<T extends z.ZodType, const M extends FieldMeta>(
@@ -197,7 +211,8 @@ export type FieldBrandOf<S, K extends keyof FieldBrand> = (
 
 /**
  * The built-in Kinds: the ones the core finds from a Field's Zod type, and `reference`, found from
- * its `ref`. Named Kinds and Kind registration come later.
+ * its `ref`. A Field may also name a Kind (`kind`), which changes only how it is rendered: see
+ * `Kinds`.
  */
 export type KindName =
 	'text' | 'number' | 'boolean' | 'date' | 'enum' | 'list' | 'object' | 'unknown' | 'reference';
@@ -326,11 +341,15 @@ export function defaultLabel(key: string): string {
 }
 
 /**
- * One Field of a Resource, as the Views need it. Its Kind's details (an enum's options, a
- * Reference's target and id type) sit beside it.
+ * One Field of a Resource, as the Views need it. `kind` is its built-in Kind, which sorting,
+ * filtering, the forms' validation and export follow; its Kind's details (an enum's options, a
+ * Reference's target and id type) sit beside it. `namedKind` is the Kind it names, if any, which
+ * the Views render it with.
  */
 export type Field = (DetectedKind | ReferenceKind) & {
 	key: string;
+	/** The named Kind the Views render it with (`FieldMeta.kind`), if it names one. */
+	namedKind?: string;
 	label: string;
 	description?: string;
 	/** False when any wrapper (`optional`, `nullable`, `default`) lets the value be left out. */
@@ -397,6 +416,7 @@ export function describeField(key: string, schema: z.ZodType): Field {
 	return {
 		...kind,
 		key,
+		...(meta.kind === undefined ? {} : { namedKind: meta.kind }),
 		label: meta.label ?? defaultLabel(key),
 		...(meta.description === undefined ? {} : { description: meta.description }),
 		...(meta.input === undefined ? {} : { input: meta.input }),

@@ -42,6 +42,20 @@ export const recipeEditReviews: RecipeEdit['reviewCount'] = 0;
 // `vegetarian` is a checkbox, so it may be left out.
 export const recipeWithoutVegetarian: Pick<RecipeCreate, 'vegetarian'> = {};
 
+// A recipe's rating names the app's `stars` Kind, whose radio group sends the rating as text, so
+// its input is typed as text, on create and on edit, and may be left out ("None")...
+export const recipeRatingInput: Exactly<RecipeCreate['rating'], string | undefined> = true;
+export const recipeRatingEditInput: Exactly<RecipeEdit['rating'], string | undefined> = true;
+// @ts-expect-error the radio group sends text, not a number
+export const recipeRatingNumber: RecipeCreate['rating'] = 4;
+// ...while the record, the Provider's data and the sort keep the schema's number.
+export const recipeRating: Exactly<RecordOf<typeof recipes>['rating'], number | undefined> = true;
+export const recipeRatingData: Exactly<CreateData<typeof recipes>['rating'], number | undefined> =
+	true;
+// A Field may only name a Kind someone declared.
+// @ts-expect-error no one declared the Kind "stras"
+export const misspeltKind = field(z.number(), { kind: 'stras' });
+
 // Users' email is set once, on create.
 export const userEmail: FormInput<typeof users, 'create'>['email'] = 'lin@example.com';
 // @ts-expect-error not on edit
@@ -65,7 +79,7 @@ export const postSearch: ListParams<typeof posts>['search'] = 'hello';
 type Exactly<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 export const recipeSortKeys: Exactly<
 	SortableKey<typeof recipes>,
-	'name' | 'prepTimeMinutes' | 'caloriesPerServing' | 'publishedAt'
+	'name' | 'prepTimeMinutes' | 'caloriesPerServing' | 'publishedAt' | 'rating'
 > = true;
 export const userSortKeys: Exactly<SortableKey<typeof users>, 'name' | 'joinedAt'> = true;
 export const postSortKeys: Exactly<SortableKey<typeof posts>, 'id' | 'title' | 'viewCount'> = true;

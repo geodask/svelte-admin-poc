@@ -69,6 +69,7 @@ test.describe('the recipes detail View', () => {
 			'Review count',
 			'Published at',
 			'Source ID',
+			'Rating',
 			'Nutrition',
 			'Protein grams',
 			'Carbs grams',
