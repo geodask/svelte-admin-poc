@@ -39,6 +39,7 @@ export async function fillRecipe(page: Page) {
 	await textbox(page, 'Tags').fill('Rice\nVegetarian');
 	await group(page, 'Ingredients 1').getByRole('textbox', { name: 'Name' }).fill('Arborio rice');
 	await textbox(page, 'Published at (UTC)').fill('2024-05-01T12:00');
+	await textbox(page, 'Source ID').fill('lemon-1');
 	await group(page, 'Nutrition').getByRole('spinbutton', { name: 'Protein grams' }).fill('8');
 	await group(page, 'Nutrition').getByRole('spinbutton', { name: 'Carbs grams' }).fill('60');
 	await textbox(page, 'Instructions').fill('Stir it slowly.');

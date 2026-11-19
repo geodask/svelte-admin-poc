@@ -30,8 +30,6 @@ type RecipeEdit = FormInput<typeof recipes, 'edit'>;
 export const recipeId: RecipeCreate['id'] = 1;
 // @ts-expect-error the backend counts the reviews
 export const recipeReviews: RecipeCreate['reviewCount'] = 0;
-// @ts-expect-error the backend sets the source
-export const recipeSource: RecipeCreate['sourceId'] = 'local-1';
 // @ts-expect-error hidden Fields are in no form
 export const recipeNotes: RecipeCreate['internalNotes'] = '';
 // ...nor on edit, which carries the typed id instead.
@@ -51,6 +49,16 @@ export const recipeRatingNumber: RecipeCreate['rating'] = 4;
 // ...while the record, the Provider's data and the sort keep the schema's number.
 export const recipeRating: Exactly<RecordOf<typeof recipes>['rating'], number | undefined> = true;
 export const recipeRatingData: Exactly<CreateData<typeof recipes>['rating'], number | undefined> =
+	true;
+// A recipe's source id, a number or a slug, names the app's `numberOrSlug` Kind, whose text input
+// makes it editable: its input is typed as text, on create and on edit...
+export const recipeSourceInput: Exactly<RecipeCreate['sourceId'], string> = true;
+export const recipeSourceEditInput: Exactly<RecipeEdit['sourceId'], string> = true;
+// @ts-expect-error the text input sends text, which `fromInput` reads as a number
+export const recipeSourceNumber: RecipeCreate['sourceId'] = 42;
+// ...while the record and the Provider's data keep the schema's number or slug.
+export const recipeSource: Exactly<RecordOf<typeof recipes>['sourceId'], string | number> = true;
+export const recipeSourceData: Exactly<EditData<typeof recipes>['sourceId'], string | number> =
 	true;
 // A Field may only name a Kind someone declared.
 // @ts-expect-error no one declared the Kind "stras"

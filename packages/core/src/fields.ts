@@ -79,8 +79,9 @@ export type FieldMeta = {
 	 * and edit Views, its cell in the list View and its display on the detail View, each from the
 	 * app's Kind of that name in `admin.ts`, else the Theme's, else the Field's built-in rendering.
 	 * It must be a name in `Kinds`, which the Theme and the app fill by module augmentation, so an
-	 * unknown name is a type error. It changes only how the Field looks: sorting, filtering,
-	 * validation and export keep following its schema. Write it inline, so the types see it.
+	 * unknown name is a type error. It changes how the Field looks, and its Kind may convert what
+	 * its input sends (`fromInput`, `toInput`): sorting, filtering, validation and export keep
+	 * following its schema. Write it inline, so the types see it.
 	 */
 	kind?: keyof Kinds;
 };
@@ -211,8 +212,8 @@ export type FieldBrandOf<S, K extends keyof FieldBrand> = (
 
 /**
  * The built-in Kinds: the ones the core finds from a Field's Zod type, and `reference`, found from
- * its `ref`. A Field may also name a Kind (`kind`), which changes only how it is rendered: see
- * `Kinds`.
+ * its `ref`. A Field may also name a Kind (`kind`), which changes how it is rendered and may
+ * convert its input's value: see `Kinds`.
  */
 export type KindName =
 	'text' | 'number' | 'boolean' | 'date' | 'enum' | 'list' | 'object' | 'unknown' | 'reference';

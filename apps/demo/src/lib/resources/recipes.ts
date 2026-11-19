@@ -46,9 +46,13 @@ export const recipes = defineResource({
 		reviewCount: field(z.number(), { readOnly: true }),
 		// Filtered with a from and a to date and time, in UTC.
 		publishedAt: field(z.iso.datetime(), { sortable: true, filterable: true }),
-		// A number or a slug: no built-in Kind fits, so it shows as unknown. The forms have no
-		// input for it either, so it must be read-only (the backend sets it) or hidden.
-		sourceId: field(z.union([z.string(), z.number()]), { readOnly: true }),
+		// A number or a slug: no built-in Kind fits, so it shows as unknown, and the forms have no
+		// built-in input for it. The app's `numberOrSlug` Kind gives it one, a text input, and
+		// converts what is typed: digits are saved as a number, a slug as text.
+		sourceId: field(z.union([z.string(), z.number()]), {
+			kind: 'numberOrSlug',
+			placeholder: 'e.g. 42 or abc-1'
+		}),
 		// A whole number from 1 to 5, shown as stars and set with one radio per star: the app's
 		// `stars` Kind, registered in admin.ts. It still sorts as a number, and the recipes with no
 		// rating come last in either order.

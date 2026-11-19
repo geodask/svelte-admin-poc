@@ -13,7 +13,6 @@ import { error, invalid, redirect } from '@sveltejs/kit';
 import { z } from 'zod';
 import { FieldError, NotFoundError, ProviderError } from './errors.ts';
 import {
-	formSchema,
 	isInputSpec,
 	toFormSpec,
 	type EditData,
@@ -31,6 +30,7 @@ import {
 	recordPath
 } from './ids.ts';
 import { toCsv } from './csv.ts';
+import { servedFormSchema } from './hooks.ts';
 import { collectPages } from './export-pages.ts';
 import { resolveIds } from './resolve-ids.ts';
 import { exportParamsSchema, listParamsSchema, withDefaultSort } from './list-params.ts';
@@ -64,8 +64,10 @@ export type ServeResourceOptions = {
  *
  * - `getList` and `getOne` are remote queries. When `getList` is asked for no sort and the
  *   Resource has a `defaultSort`, the Provider gets that sort, so it needn't know the default.
- * - `create` is a remote form, validated with `formSchema(resource, 'create')`, which the
- *   browser also runs as its preflight. It works without JavaScript too. After a save it
+ * - `create` is a remote form, validated with `formSchema(resource, 'create', kinds)`, which the
+ *   browser also runs as its preflight. The server's `kinds` are the admin's, which
+ *   `adminHooks(admin)` in `hooks.server.ts` hands it: a form with a Field that names a Kind fails
+ *   as an unexpected error without them. It works without JavaScript too. After a save it
  *   refreshes the list queries the client asks for and redirects with a 303 to the new record's
  *   detail View.
  * - `update` is the edit form, likewise, redirecting to the record's detail View.
@@ -284,14 +286,15 @@ export function serveResource<R extends Resource>(
 }
 
 /**
- * A Resource's form schema as `serveResource` hands it to Kit's `form()`, with its input typed
+ * A Resource's form schema as `serveResource` hands it to Kit's `form()`: `servedFormSchema`,
+ * which converts with the Kinds `adminHooks` was given, with its input typed
  * loosely. Kit checks a form schema's input type for booleans that aren't optional, a check it
  * can't settle for a Resource that is still a type parameter. `FormInput` makes every boolean
  * optional (the type tests check that Kit takes `formSchema` as it is for a concrete Resource),
  * and the remote forms `serveResource` returns are typed with it.
  */
 function kitFormSchema<R extends Resource, M extends FormMode>(resource: R, mode: M) {
-	return formSchema(resource, mode) as StandardSchemaV1<FormValues, FormOutput<R, M>>;
+	return servedFormSchema(resource, mode) as StandardSchemaV1<FormValues, FormOutput<R, M>>;
 }
 
 /** A remote form typed with another input type, keeping its output. */

@@ -78,7 +78,7 @@ export function createFormView<
 	id: IdOf<R>
 ): FormView<R, 'edit', ReturnType<Remote['update']['for']>>;
 export function createFormView<R extends Resource>(
-	// How the form View reaches the admin's other Resources: a Reference's target.
+	// How the form View reaches the admin's other Resources (a Reference's target) and its Kinds.
 	admin: Admin,
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>, IdOf<R>>,
@@ -94,7 +94,8 @@ export function createFormView<R extends Resource>(
 	);
 	const detailViewHref = $derived(editing ? recordPath(listViewHref, id) : undefined);
 	const instance = editing ? remote.update.for(id) : remote.create;
-	const form: RemoteFormLike = instance.preflight(formSchema(resource, mode));
+	// The admin's Kinds, so a Kind's conversions run in the browser's preflight and prefill too.
+	const form: RemoteFormLike = instance.preflight(formSchema(resource, mode, admin.kinds));
 	const spec: readonly FormFieldSpec[] = toFormSpec(resource, mode);
 
 	return {
@@ -154,7 +155,7 @@ export function createFormView<R extends Resource>(
 		 * inputs: Kit skips it after a failed submit, so what the user typed stays.
 		 */
 		prefill(record: RecordOf<R>): void {
-			form.fields.set(toFormValues(spec, record));
+			form.fields.set(toFormValues(spec, record, admin.kinds));
 		},
 		/** The href of the Resource's list View. */
 		get listViewHref(): string {

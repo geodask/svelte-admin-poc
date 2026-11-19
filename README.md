@@ -53,6 +53,8 @@ The admin layout renders the Theme's `AdminShell` with the admin from `admin.ts`
 
 Each route that renders a View passes it the same admin, beside the Resource and its remote functions: `<ListView {admin} {resource} {remote} />`, and likewise `DetailView`, `CreateView` and `EditView`. The core's headless helpers take it as their first argument: `createListView(admin, resource, remote)`, `createDetailView(admin, resource, remote, id)` and `createFormView(admin, resource, remote, 'create')` (or `'edit', id`). It is always an argument, never context, and it is typed as the core's `Admin`, so anything that isn't an admin is a type error. It is how the Views reach the admin's other Resources: a Reference's target, for one (see [References](#references)).
 
+The app's `src/hooks.server.ts` is one line, `export const { handleError } = adminHooks(admin);`, with `adminHooks` from `@svelte-admin/core/hooks`. Its `handleError` logs unexpected errors and remote function validation failures, and shows the user only a safe message. `adminHooks` also hands the admin's Kinds to the server's forms, so a Kind's conversions run there too (see [Converting a Field's value](#converting-a-fields-value)). An app whose Fields name no Kind may re-export the plain hook instead: `export { handleError } from '@svelte-admin/core/hooks';`.
+
 `@svelte-admin/core` is the browser-safe entry. `serveResource` lives in `@svelte-admin/core/server`, the bundled REST Provider in `@svelte-admin/core/rest`, and the export's CSV writer and pager in `@svelte-admin/core/export`; import those only from `.remote.ts` files and server-only modules.
 
 ## Writes
@@ -175,7 +177,7 @@ A Field's Kind decides how the Views render it: its input on the create and edit
 rating: field(z.int().min(1).max(5), { kind: 'stars', sortable: true }).optional(),
 ```
 
-A named Kind changes only how the Field looks. Sorting, filtering, the forms' validation and CSV export keep following the schema, so a rating shown as stars still sorts as a number. The described Field keeps its built-in Kind as `kind` and has the named one beside it as `namedKind`, and every form input spec has `namedKind` too.
+A named Kind changes how the Field looks, and may convert what its input sends before the schema validates it (see [Converting a Field's value](#converting-a-fields-value)). Sorting, filtering, the forms' validation and CSV export keep following the schema, so a rating shown as stars still sorts as a number. The described Field keeps its built-in Kind as `kind` and has the named one beside it as `namedKind`, and every form input spec has `namedKind` too.
 
 Kind names are typed. The core exports an empty `interface Kinds {}`, which the Theme and the app fill by module augmentation, so a misspelt or undeclared name in `kind` is a type error. Each entry may say what its input sends, as an `input` type (text, a number, a boolean, or a list of them). `FormInput` then types that Field by it in a replaced form View's `fields`; without one, the Field is typed by what its built-in input sends. The demo declares its Kind in `src/lib/kinds/kinds.d.ts`:
 
@@ -235,6 +237,33 @@ Replacement is per slot. For each slot, the Theme renders the app's Kind of the 
 The Theme's `AdminShell` checks once, on first render, that every Kind a Field names is the Theme's or the admin's, and otherwise throws an error naming the Resource, the Field and the Kind (the core's `assertNamedKinds`). TypeScript catches the same mistake earlier.
 
 In the demo, recipes have an optional `rating`, a whole number from 1 to 5 with `kind: 'stars'`, sortable, and seeded for most recipes. Its cell and display show stars with the rating as text for screen readers, and its input is a radio group of 1 to 5 plus "None", which works without JavaScript and clears the rating on save.
+
+#### Converting a Field's value
+
+A named Kind may also convert between what its input sends and the Field's value, with two optional functions beside its components in `admin.ts`:
+
+- `fromInput(raw)` turns what the input sent into the value the Resource's schema then validates. It runs before the schema, on the server and in the browser's preflight, so the schema stays the one rule for what is valid. An empty input (no value, empty text, or a list of only those) means no value without calling it, so a required Field reports "Required" as any other does, and an optional one is cleared. A throw becomes an issue under the Field's input, with the thrown error's message, and the input keeps what was typed.
+- `toInput(value)` turns the record's value into what the input shows, for the edit form's prefill, with and without JavaScript. It is never called for a missing value.
+
+`raw` is typed by the Kind's `input` type in `Kinds`, and `toInput` must give one back. Conversions are refused on a built-in Kind (`date`, `number`...), whose values the core reads itself: TypeScript rejects them, and `defineAdmin` throws. The core's `formSchema(resource, mode, kinds)` and `toFormValues(spec, record, kinds)` take the Kinds, and `createFormView` passes them the admin's, so a replaced form View converts too.
+
+So a Field whose type has no built-in input, such as a union or a record, can be edited once it names an app Kind with an `input`. Its form spec is `{ kind: 'custom' }`, which only that Kind's input renders, and `FormInput` types it by the Kind's `input` type. `defineResource` can't see the app's Kinds, so it leaves a Field that names a Kind to `defineAdmin`, which throws at startup, naming the Resource, the Field and the Kind, for one the forms would edit that names no app Kind with an `input`. Without a Kind, such a Field must still be `readOnly: true` or hidden, and `defineResource` throws otherwise.
+
+The server finds the Kinds through `adminHooks(admin)` in `hooks.server.ts`. Kit 3.2 loads the hooks file when the server starts, before any request, but loads `src/params.ts` (and so `admin.ts`) only when a request first resolves a route, and `admin.ts` registers nothing with the server anyway. Without the hooks, a remote form call right after a restart could reach a Kind's Field before the server had its converters. So a form that validates a Field naming a Kind fails as an unexpected error, naming the fix, when no admin was given to `adminHooks`.
+
+In the demo, recipes' `sourceId` is a number or a slug, `z.union([z.string(), z.number()])`, with `kind: 'numberOrSlug'`. The app's Kind is a text input (`src/lib/kinds/NumberOrSlugInput.svelte`, the Theme's `FieldInput` as a text input) and two functions in `src/lib/kinds/number-or-slug.ts`:
+
+```ts
+numberOrSlug: {
+	input: () => import('#lib/kinds/NumberOrSlugInput.svelte'),
+	// Digits are a number, a slug (`abc-1`) is text, and anything else is refused.
+	fromInput: numberOrSlugFromInput,
+	// The value as text.
+	toInput: numberOrSlugToInput
+}
+```
+
+`Kinds` declares it as `numberOrSlug: { input: string }`. Typing `42` saves the number 42 and `abc-1` the text `abc-1`, and the edit View shows either as text. The demo backend keeps the source id a form gives it, and sets its own only when a create gives none.
 
 #### The Theme's Kinds
 

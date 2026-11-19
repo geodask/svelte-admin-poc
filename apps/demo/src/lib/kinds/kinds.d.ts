@@ -7,6 +7,11 @@ declare module '@svelte-admin/core' {
 		 * chosen rating as text (or nothing for "None").
 		 */
 		stars: { input: string };
+		/**
+		 * A number or a slug (a union), edited as text: digits are saved as a number and a slug as
+		 * text. Its text input sends what was typed.
+		 */
+		numberOrSlug: { input: string };
 	}
 }
 

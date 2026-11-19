@@ -42,6 +42,34 @@ export type KindInputOf<K> = K extends keyof Kinds
 	: never;
 
 /**
+ * What the input of the named Kind `K` sends, as its conversions see it: its `input` type in
+ * `Kinds`, or any `KindInputValue` when its entry doesn't say.
+ */
+export type KindRawInput<K> = [KindInputOf<K>] extends [never] ? KindInputValue : KindInputOf<K>;
+
+/**
+ * A named Kind's conversions between what its input sends (`I`) and the Field's value. Both are
+ * optional, and only a named Kind may have them: the core reads a built-in Kind's values itself.
+ *
+ * - `fromInput(raw)` turns what the input sent into the value the Resource's schema then
+ *   validates, on the server and in the browser. It is never called for an empty input (no value,
+ *   empty text, or a list of only those), which means no value, as for any Field. A throw becomes
+ *   an issue under the Field's input, with the thrown error's message.
+ * - `toInput(value)` turns the record's value into what the input shows, for the edit form's
+ *   prefill. It is never called for a missing value.
+ *
+ * They are written as methods, so a Kind's own input type (`fromInput(raw: string)`) fits the
+ * untyped `KindRegistry`.
+ */
+export type KindConversions<I = KindInputValue> = {
+	fromInput?(raw: I): unknown;
+	toInput?(value: unknown): I;
+};
+
+/** What a built-in Kind's entry in `kinds` can't have: conversions. */
+type NoConversions = { fromInput?: never; toInput?: never };
+
+/**
  * The props of a Kind's input, on the create and edit Views: the Field's input spec (from the
  * core's `createFormView(...).spec`) and its input on the remote form. The component renders the
  * label, the help text (`spec.description`) and the issues (`field.issues()`) itself, or reuses
@@ -95,20 +123,52 @@ export type KindSlot = keyof KindComponents;
 export type ReplaceableKindName = Exclude<KindName, 'object' | 'reference'>;
 
 /**
- * The app's Kinds, in `admin.ts`, by name: a named Kind from `Kinds`, or a built-in Kind whose
- * components it replaces for every Field of that Kind (`date`, `boolean`...). Either replaces a
- * Theme's Kind of the same name slot by slot.
+ * The app's Kinds, in `admin.ts`, by name: a named Kind from `Kinds`, with its components and
+ * its conversions, or a built-in Kind whose components it replaces for every Field of that Kind
+ * (`date`, `boolean`...), with no conversions. Either replaces a Theme's Kind of the same name
+ * slot by slot.
  */
-export type AdminKinds = { readonly [K in keyof Kinds | ReplaceableKindName]?: KindComponents };
+export type AdminKinds = {
+	readonly [K in keyof Kinds | ReplaceableKindName]?: K extends ReplaceableKindName
+		? KindComponents & NoConversions
+		: KindComponents & KindConversions<KindRawInput<K>>;
+};
+
+/** One Kind as a registry holds it, untyped: its components and its conversions. */
+export type KindDefinition = KindComponents & KindConversions;
 
 /** Kinds by name, as an app's or a Theme's registry holds them, untyped. */
-export type KindRegistry = Readonly<Partial<Record<string, KindComponents>>>;
+export type KindRegistry = Readonly<Partial<Record<string, KindDefinition>>>;
+
+/** A registry's Kind of a name, if it has one of its own (never an inherited key). */
+export function ownKind(
+	registry: KindRegistry | undefined,
+	name: string | undefined
+): KindDefinition | undefined {
+	return registry !== undefined && name !== undefined && Object.hasOwn(registry, name)
+		? registry[name]
+		: undefined;
+}
+
+/** Every built-in Kind, which the core finds from a Field's schema: checked against `KindName`. */
+const BUILT_IN_KINDS = Object.keys({
+	text: true,
+	number: true,
+	boolean: true,
+	date: true,
+	enum: true,
+	list: true,
+	object: true,
+	unknown: true,
+	reference: true
+} satisfies Record<KindName, true>) as KindName[];
 
 /** The built-in Kinds whose components can't be replaced: see `ReplaceableKindName`. */
 const FIXED_KINDS: readonly KindName[] = ['object', 'reference'];
 
 /**
- * Fails at startup when the app's Kinds replace one that can't be: `object` or `reference`.
+ * Fails at startup when the app's Kinds replace one that can't be (`object` or `reference`), or
+ * give a built-in Kind conversions, since the core reads a built-in Kind's values itself.
  * `defineAdmin` runs it.
  */
 export function assertAdminKinds(kinds: KindRegistry): void {
@@ -118,6 +178,16 @@ export function assertAdminKinds(kinds: KindRegistry): void {
 				`admin.ts replaces the Kind "${name}" in \`kinds\`, which can't be replaced in this ` +
 					"version, since its rendering depends on the core's nesting and Reference resolution. " +
 					'Remove it.'
+			);
+		}
+	}
+	for (const name of BUILT_IN_KINDS) {
+		const kind = ownKind(kinds, name);
+		for (const conversion of ['fromInput', 'toInput'] as const) {
+			if (kind?.[conversion] === undefined) continue;
+			throw new Error(
+				`admin.ts gives the built-in Kind "${name}" \`${conversion}\` in \`kinds\`. The core ` +
+					"reads a built-in Kind's values itself, so only a named Kind may convert them. Remove it."
 			);
 		}
 	}
@@ -133,7 +203,9 @@ const SPEC_KINDS: Readonly<Record<InputKind, KindName>> = {
 	select: 'enum',
 	datetime: 'date',
 	rows: 'object',
-	group: 'object'
+	group: 'object',
+	// A Field whose type has no built-in input, which only its named Kind's input renders.
+	custom: 'unknown'
 };
 
 /**

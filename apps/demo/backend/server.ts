@@ -27,8 +27,9 @@
 //                                     and matched against each record's id written as text
 //   POST /{resource}                  create a record from the JSON body, with the next id (the
 //                                     highest plus one) and the Fields only the backend sets
-//                                     (recipes' sourceId, reviewCount and internalNotes, posts'
-//                                     viewCount), whatever the body says; answers 201 with the
+//                                     (recipes' reviewCount and internalNotes, posts'
+//                                     viewCount), whatever the body says, and a recipe's sourceId
+//                                     when the body gives none; answers 201 with the
 //                                     created record. A user
 //                                     whose email is already taken is a 422 with an issue on email,
 //                                     and so is a post whose userId names no user, on userId
@@ -73,13 +74,17 @@ const bulkDeletable = new Set(['posts']);
 
 /**
  * The Fields only the backend sets, which no form sends, and their values for a record created
- * with `id`. A POST sets them, and a PUT keeps them as they are. (The id is always the
- * backend's.)
+ * with `id` from `body`. A POST sets them, and a PUT keeps them as they are. (The id is always
+ * the backend's.) A recipe's sourceId is the body's when it gives one, and the backend's own
+ * otherwise.
  */
-const backendOwned: Record<string, (id: number) => Record<string, unknown>> = {
-	recipes: (id) => ({
+const backendOwned: Record<
+	string,
+	(id: number, body: Record<string, unknown>) => Record<string, unknown>
+> = {
+	recipes: (id, body) => ({
 		reviewCount: 0,
-		sourceId: `local-${id}`,
+		...(body.sourceId === undefined ? { sourceId: `local-${id}` } : {}),
 		internalNotes: 'Created in the admin'
 	}),
 	posts: () => ({ viewCount: 0 })
@@ -87,7 +92,7 @@ const backendOwned: Record<string, (id: number) => Record<string, unknown>> = {
 
 /** The Fields a PUT keeps as they are, since no edit can set them: the backend's own, and more. */
 const keptOnUpdate: Record<string, string[]> = {
-	recipes: ['reviewCount', 'sourceId', 'internalNotes'],
+	recipes: ['reviewCount', 'internalNotes'],
 	posts: ['viewCount'],
 	// Set once on create.
 	users: ['email']
@@ -338,7 +343,11 @@ const server = Bun.serve({
 			if (issues.length > 0) return json({ issues }, 422);
 			// Every demo Resource has number ids, so the next one is the highest plus one.
 			const id = Math.max(0, ...records.map((record) => Number(record.id))) + 1;
-			const record = { ...body, ...backendOwned[segments[0]]?.(id), id };
+			const record = {
+				...body,
+				...backendOwned[segments[0]]?.(id, body as Record<string, unknown>),
+				id
+			};
 			records.push(record);
 			return json(record, 201);
 		}
