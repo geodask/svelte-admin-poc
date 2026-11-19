@@ -20,9 +20,8 @@ export function imageSrc(value: unknown): string | undefined {
 	if (typeof value !== 'string') return undefined;
 	if (/^https?:\/\//i.test(value)) {
 		const url = parse(value);
-		return url && (url.protocol === 'http:' || url.protocol === 'https:') && url.host
-			? url.href
-			: undefined;
+		// The scheme is http(s), as tested above; a URL with no host doesn't parse.
+		return url?.host ? url.href : undefined;
 	}
 	if (value.startsWith('/')) {
 		const url = parse(value, SAME_SITE);

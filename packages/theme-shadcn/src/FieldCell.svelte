@@ -2,7 +2,9 @@
 	A Field's value in a list View cell, shown by the Field's Kind, as a link when given an href.
 	A Kind's `cell` renders it when one is found, slot by slot: the app's Kind of the Field's named
 	Kind (given the admin), the Theme's, then the app's Kind of its built-in Kind (see the core's
-	`kindComponent`). Otherwise the Theme renders the built-in Kind itself. Given the admin, a
+	`kindComponent`). A Theme Kind's cell renders only a value that fits it (badges a list), and
+	any other renders as its built-in Kind. Otherwise the Theme renders the built-in Kind itself.
+	Given the admin, a
 	Reference shows the Record title of the record it points to, linked to that record's detail
 	View (see ReferenceValue); without it, the raw id. An empty value is an empty cell, whatever
 	the Kind. A Theme part, exported so a replaced list View shows values as the stock one does.
@@ -31,19 +33,15 @@
 </script>
 
 <script lang="ts">
-	import { kindComponent } from '@svelte-admin/core';
 	import LazyKind from './LazyKind.svelte';
 	import ReferenceValue from './ReferenceValue.svelte';
 	import ScalarValue from './ScalarValue.svelte';
-	import { formatScalar } from './format.ts';
-	import { themeKinds } from './kinds.ts';
-
-	/** How many items of a list the cell shows before "+N". */
-	const LIST_ITEMS_SHOWN = 3;
+	import { CELL_ITEMS_SHOWN, formatScalar } from './format.ts';
+	import { themeKindComponent } from './kinds.ts';
 
 	let { field, value, record, admin, href }: FieldCellProps = $props();
 
-	const kind = $derived(kindComponent('cell', field, admin?.kinds, themeKinds));
+	const kind = $derived(themeKindComponent('cell', field, value, admin?.kinds));
 </script>
 
 {#snippet content()}
@@ -57,9 +55,9 @@
 	{:else if field.kind === 'list' && Array.isArray(value)}
 		{@const items = value.map(formatScalar)}
 		<span title={items.join(', ')}>
-			{items.slice(0, LIST_ITEMS_SHOWN).join(', ')}
-			{#if items.length > LIST_ITEMS_SHOWN}
-				<span class="text-muted-foreground">+{items.length - LIST_ITEMS_SHOWN}</span>
+			{items.slice(0, CELL_ITEMS_SHOWN).join(', ')}
+			{#if items.length > CELL_ITEMS_SHOWN}
+				<span class="text-muted-foreground">+{items.length - CELL_ITEMS_SHOWN}</span>
 			{/if}
 		</span>
 	{:else}

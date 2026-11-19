@@ -2,7 +2,9 @@
 	One Field's input on a create or edit form. A Kind's `input` renders it when one is found, slot
 	by slot: the app's Kind of the Field's named Kind (`spec.namedKind`, given the admin), the
 	Theme's, then the app's Kind of its built-in Kind (see the core's `kindComponent`); that
-	component renders the label, help text and issues itself. Otherwise it is chosen by its spec
+	component renders the label, help text and issues itself. A Theme Kind's input renders only a
+	Field it fits (a textarea text), and any other gets its built-in input. Otherwise it is chosen
+	by its spec
 	kind: a text, email or url
 	input, a textarea, a number, a checkbox, a select, a date, a datetime read and written in UTC,
 	a list, rows or a group, or for a Reference the ReferencePicker when given the admin (without
@@ -50,7 +52,6 @@
 <script lang="ts">
 	import { onMount, type Snippet } from 'svelte';
 	import {
-		kindComponent,
 		rowCount,
 		withoutRow,
 		type RemoteFormField,
@@ -60,7 +61,7 @@
 	import FieldIssues from './FieldIssues.svelte';
 	import LazyKind from './LazyKind.svelte';
 	import ReferencePicker from './ReferencePicker.svelte';
-	import { themeKinds } from './kinds.ts';
+	import { themeKindComponent } from './kinds.ts';
 
 	let { spec, field: given, labelHidden = false, admin }: FieldInputProps = $props();
 
@@ -68,7 +69,7 @@
 	// and its attributes untyped, as for any Field.
 	const field = $derived(given as RemoteFormField);
 
-	const kind = $derived(kindComponent('input', spec, admin?.kinds, themeKinds));
+	const kind = $derived(themeKindComponent('input', spec, undefined, admin?.kinds));
 
 	type ListSpec = Extract<FormInputSpec, { kind: 'list' }>;
 	type RowsSpec = Extract<FormInputSpec, { kind: 'rows' }>;

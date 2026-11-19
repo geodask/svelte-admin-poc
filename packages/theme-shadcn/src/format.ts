@@ -1,6 +1,9 @@
 // How the Theme writes a Field's value as text. Every format uses a fixed `en` locale, and
 // dates use UTC, so the server and the browser produce the same text and hydration matches.
 
+/** How many items of a list a list View cell shows before "+N". */
+export const CELL_ITEMS_SHOWN = 3;
+
 const numberFormat = new Intl.NumberFormat('en');
 const dateFormat = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeZone: 'UTC' });
 

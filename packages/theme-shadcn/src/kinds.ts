@@ -1,5 +1,11 @@
-import type { Field, FormInputSpec, KindRegistry } from '@svelte-admin/core';
-import type { Component } from 'svelte';
+import {
+	kindComponent,
+	type Field,
+	type FormInputSpec,
+	type KindComponents,
+	type KindRegistry,
+	type KindSlot
+} from '@svelte-admin/core';
 import TextareaInput from './kinds/TextareaInput.svelte';
 import TextareaCell from './kinds/TextareaCell.svelte';
 import TextareaDisplay from './kinds/TextareaDisplay.svelte';
@@ -27,48 +33,30 @@ declare module '@svelte-admin/core' {
 }
 
 /**
- * A component the Theme imports itself, as the lazy import a Kind's slot takes. An app's Kinds
- * are lazy because `admin.ts` loads in plain Node; the Theme's never do, and loading them up front
- * keeps a page from waiting on more chunks while it hydrates (with them lazy, a list URL cleaned
- * in place right after hydration failed in Kit's router).
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Svelte's own constraint on props
-const loaded = <P extends Record<string, any>>(component: Component<P>) => {
-	const module = { default: component };
-	return async () => module;
-};
-
-/**
  * The Theme's own Kinds, by name. A Field that names one of them is rendered with its components,
- * slot by slot, unless the app's Kind of the same name gives that slot. A value that doesn't fit
- * the Kind (badges on a number) falls back to the Theme's built-in rendering.
+ * slot by slot, unless the app's Kind of the same name gives that slot. The Theme imports them up
+ * front: only an app's Kinds must be lazy, since `admin.ts` loads in plain Node, and with these
+ * lazy too, a list URL cleaned in place right after hydration failed in Kit's router. Each slot
+ * reads its component when it renders, never while the modules load, so the import cycle through
+ * FieldInput (which the inputs render, and which reads this registry) is safe.
  */
 export const themeKinds: KindRegistry = {
 	textarea: {
-		input: loaded(TextareaInput),
-		cell: loaded(TextareaCell),
-		display: loaded(TextareaDisplay)
+		input: async () => ({ default: TextareaInput }),
+		cell: async () => ({ default: TextareaCell }),
+		display: async () => ({ default: TextareaDisplay })
 	},
 	// No input: a list's own input, the app's for the built-in list Kind, or the Theme's.
 	badges: {
-		cell: loaded(BadgesCell),
-		display: loaded(BadgesDisplay)
+		cell: async () => ({ default: BadgesCell }),
+		display: async () => ({ default: BadgesDisplay })
 	},
 	image: {
-		input: loaded(ImageInput),
-		cell: loaded(ImageCell),
-		display: loaded(ImageDisplay)
+		input: async () => ({ default: ImageInput }),
+		cell: async () => ({ default: ImageCell }),
+		display: async () => ({ default: ImageDisplay })
 	}
 };
-
-/**
- * The Field (or input spec) without its named Kind, which a Theme Kind's component renders with
- * the Theme's parts when the value doesn't fit it, so they render the built-in Kind, not this one.
- * The parts get no admin, so the app's Kinds don't render it either.
- */
-export function withoutNamedKind<T extends Field | FormInputSpec>(of: T): T {
-	return { ...of, namedKind: undefined };
-}
 
 /** Whether a value is a list of text, numbers or enum values, which `badges` shows. */
 export function isBadgeList(value: unknown): value is (string | number)[] {
@@ -76,4 +64,34 @@ export function isBadgeList(value: unknown): value is (string | number)[] {
 		Array.isArray(value) &&
 		value.every((item) => typeof item === 'string' || typeof item === 'number')
 	);
+}
+
+/** What each Theme Kind can render: which values (a cell, a display) and which inputs. */
+const FITS: Readonly<
+	Record<string, { value: (value: unknown) => boolean; input: (spec: FormInputSpec) => boolean }>
+> = {
+	textarea: { value: (value) => typeof value === 'string', input: (spec) => spec.kind === 'text' },
+	badges: { value: isBadgeList, input: () => true },
+	image: { value: (value) => typeof value === 'string', input: (spec) => spec.kind === 'text' }
+};
+
+/**
+ * The component that renders a Field (or an input spec) in one slot, as the core's
+ * `kindComponent` finds it from the app's Kinds and the Theme's, or `undefined` for the Theme's
+ * built-in rendering. When that component is a Theme Kind's and the value (for a cell or a
+ * display) or the input spec doesn't fit it, such as badges on a number, the Field renders as
+ * its built-in Kind instead, the app's replacement of that Kind included.
+ */
+export function themeKindComponent<S extends KindSlot>(
+	slot: S,
+	of: Field | FormInputSpec,
+	value: unknown,
+	app: KindRegistry | undefined
+): KindComponents[S] | undefined {
+	const component = kindComponent(slot, of, app, themeKinds);
+	const name = of.namedKind;
+	if (name === undefined || component === undefined) return component;
+	if (component !== themeKinds[name]?.[slot]) return component;
+	const fits = slot === 'input' ? FITS[name].input(of as FormInputSpec) : FITS[name].value(value);
+	return fits ? component : kindComponent(slot, { ...of, namedKind: undefined }, app, themeKinds);
 }

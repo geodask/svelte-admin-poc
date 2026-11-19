@@ -1,18 +1,13 @@
 <!--
-	The Theme's `badges` Kind on the detail View: every item as a badge. A value that isn't a list
-	of text or enum values shows as the built-in value.
+	The Theme's `badges` Kind on the detail View: every item as a badge. FieldValue renders it for
+	a list of text or enum values only.
 -->
 <script lang="ts">
 	import type { KindDisplayProps } from '@svelte-admin/core';
-	import FieldValue from '../FieldValue.svelte';
-	import { isBadgeList, withoutNamedKind } from '../kinds.ts';
+	import { isBadgeList } from '../kinds.ts';
 	import Badges from './Badges.svelte';
 
-	let { field, value, record }: KindDisplayProps = $props();
+	let { value }: Pick<KindDisplayProps, 'value'> = $props();
 </script>
 
-{#if isBadgeList(value)}
-	<Badges items={value} class="flex-wrap" />
-{:else}
-	<FieldValue field={withoutNamedKind(field)} {value} {record} />
-{/if}
+<Badges items={isBadgeList(value) ? value : []} class="flex-wrap" />
