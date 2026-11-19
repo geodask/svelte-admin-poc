@@ -1165,3 +1165,56 @@ defineResource({
 		order: field(z.number(), { sortable: true })
 	})
 });
+
+// `admin.entry` is typed per mounted name, as `admin.resources[name]` is: the Resource and the
+// remote module its lazy import gives.
+const people = defineResource({
+	name: 'people',
+	label: 'People',
+	schema: z.object({ id: z.number(), email: z.string() })
+});
+const peopleRemote = serveResource(people, userProvider);
+const twoAdmin = defineAdmin({
+	basePath: '/admin',
+	resources: {
+		recipes: { resource: recipes, remote: async () => recipesRemote },
+		people: { resource: people, remote: async () => peopleRemote }
+	}
+});
+expectTypeOf(twoAdmin.entry('recipes')).resolves.toEqualTypeOf<{
+	resource: typeof recipes;
+	remote: typeof recipesRemote;
+}>();
+expectTypeOf(twoAdmin.entry('people')).resolves.toEqualTypeOf<{
+	resource: typeof people;
+	remote: typeof peopleRemote;
+}>();
+// The matcher's param, a union of the mounted names, gives a union of pairs: each Resource with
+// its own remote module, never another's.
+declare const param: 'recipes' | 'people';
+expectTypeOf(twoAdmin.entry(param)).resolves.toEqualTypeOf<
+	| { resource: typeof recipes; remote: typeof recipesRemote }
+	| { resource: typeof people; remote: typeof peopleRemote }
+>();
+// @ts-expect-error only a mounted Resource's name is accepted
+void twoAdmin.entry('chefs');
+// Any admin's `entry` fits `Admin`'s, which takes any name.
+const entryOf: Admin['entry'] = twoAdmin.entry;
+void entryOf;
+
+// An admin.ts entry whose remote module lacks one of the eight remote functions is refused, so a
+// missing `lookup` never shows up as a broken Reference at runtime.
+const { lookup: _lookup, ...withoutLookup } = recipesRemote;
+void _lookup;
+defineAdmin({
+	basePath: '/admin',
+	// @ts-expect-error the remote module must export `lookup`
+	resources: { recipes: { resource: recipes, remote: async () => withoutLookup } }
+});
+const { exportList: _exportList, ...withoutExport } = recipesRemote;
+void _exportList;
+defineAdmin({
+	basePath: '/admin',
+	// @ts-expect-error the remote module must export `exportList`
+	resources: { recipes: { resource: recipes, remote: async () => withoutExport } }
+});

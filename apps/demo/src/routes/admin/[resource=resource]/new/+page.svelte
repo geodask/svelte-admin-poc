@@ -5,8 +5,7 @@
 
 	let { params }: PageProps = $props();
 
-	const entry = $derived(admin.resources[params.resource]);
-	const remote = $derived(await entry.remote());
+	const { resource, remote } = $derived(await admin.entry(params.resource));
 </script>
 
-<CreateView {admin} resource={entry.resource} {remote} />
+<CreateView {admin} {resource} {remote} />

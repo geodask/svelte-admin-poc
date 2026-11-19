@@ -59,6 +59,7 @@ export {
 	type AdminEntry,
 	type AdminLocation,
 	type AdminView,
+	type LoadedEntry,
 	type ResourceNameOf,
 	type SidebarGroup,
 	type SidebarItem
