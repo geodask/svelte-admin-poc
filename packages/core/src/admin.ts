@@ -16,6 +16,15 @@ export type AdminEntry<R extends Resource = Resource<string, any>> = {
 	remote: () => Promise<ResourceRemote<RecordOf<R>>>;
 };
 
+/**
+ * A Resource and its remote module, loaded: what `admin.entry(name)` resolves to. For a union of
+ * names it is a union of pairs, one per Resource, so each Resource keeps its own remote functions.
+ */
+export type LoadedEntry<E extends AdminEntry = AdminEntry> = {
+	resource: E['resource'];
+	remote: Awaited<ReturnType<E['remote']>>;
+};
+
 /** One link in the sidebar: a Resource's list View. */
 export type SidebarItem = {
 	/** The Resource's name. */
@@ -123,6 +132,24 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 		/** Where the admin's index leads: the first Resource's list in admin.ts, if there is one. */
 		homeHref: first === undefined ? undefined : listHref(first),
 		/**
+		 * A Resource and its remote module, together in one promise, once the module has loaded.
+		 * A View route reads both from it, so a switch to another Resource never pairs the new
+		 * Resource with the old Resource's remote functions (and asks them for a list they don't
+		 * take, such as another Resource's sort). It imports the module on every call; the
+		 * bundler's module cache makes repeat calls cheap. A name that isn't mounted rejects: the
+		 * param matcher has already turned one into a 404, so it is a programmer error.
+		 *
+		 * @example
+		 * const { resource, remote } = $derived(await admin.entry(params.resource));
+		 */
+		async entry<K extends Name>(name: K): Promise<{ [N in K]: LoadedEntry<M[N]> }[K]> {
+			if (!isName(name)) {
+				throw new Error(`The admin has no Resource named "${name}"; add it to admin.ts`);
+			}
+			const { resource, remote } = resources[name] as AdminEntry;
+			return { resource, remote: await remote() } as LoadedEntry<M[K]>;
+		},
+		/**
 		 * The Resource a path is on, which of its Views, and on a detail or edit View the
 		 * record's typed id, for the shell's active sidebar link and breadcrumb. The path is a URL
 		 * pathname, still encoded. A path on a Resource's list or anything under it finds that
@@ -171,6 +198,8 @@ export type Admin = {
 	matchResource(param: string): string | undefined;
 	/** Where the admin's index leads: the first Resource's list, if there is one. */
 	readonly homeHref: string | undefined;
+	/** A Resource and its remote module, together in one promise, once the module has loaded. */
+	entry(name: string): Promise<LoadedEntry>;
 	/** The Resource a path is on, which of its Views, and the record's typed id. */
 	locate(pathname: string): AdminLocation<Record<string, AdminEntry>> | undefined;
 };

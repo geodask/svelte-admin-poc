@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures.ts';
+import { expect, hydrated, test } from './fixtures.ts';
+import { serverLog } from './server-log.ts';
 
 const sidebar = (page: Page) => page.getByRole('complementary');
 const resourceNav = (page: Page) => page.getByRole('navigation', { name: 'Resources' });
@@ -60,6 +61,52 @@ test.describe('the sidebar', () => {
 			'true'
 		);
 	});
+
+	// Each list asks its own remote functions for its own sort: posts open sorted by id, which
+	// recipes can't sort by. A switch that paired the new Resource with the old one's remote
+	// functions, even for a moment, would ask the old ones for the new list, and they'd reject it.
+	for (const { from, fromLabel, to } of [
+		{
+			from: '/admin/users?sort=joinedAt&order=desc&role=editor',
+			fromLabel: 'Users',
+			to: 'Recipes'
+		},
+		{
+			from: '/admin/recipes?sort=name&order=desc&difficulty=Easy',
+			fromLabel: 'Recipes',
+			to: 'Posts'
+		},
+		{
+			from: '/admin/posts?sort=viewCount&order=desc&status=published',
+			fromLabel: 'Posts',
+			to: 'Recipes'
+		}
+	]) {
+		test(`moves from a sorted and filtered list of ${fromLabel} to ${to} @js`, async ({ page }) => {
+			const rejected: string[] = [];
+			page.on('response', (response) => {
+				if (response.url().includes('/_app/remote/') && response.status() >= 400) {
+					rejected.push(`${response.status()} ${response.url()}`);
+				}
+			});
+			await page.goto(from);
+			await hydrated(page);
+			const logBefore = (await serverLog()).length;
+
+			await resourceNav(page).getByRole('link', { name: to }).click();
+
+			await expect(page).toHaveURL(`/admin/${to.toLowerCase()}`);
+			await expect(page.getByRole('heading', { level: 1, name: to })).toBeVisible();
+			await expect(page.getByRole('table').getByRole('row').nth(1)).toBeVisible();
+			await expect(page.getByRole('alert')).toHaveCount(0);
+			expect(rejected).toEqual([]);
+			// Nor did the old Resource's remote functions fail their schema on the server.
+			const logged = (await serverLog()).slice(logBefore);
+			expect(logged).not.toContain(
+				`${fromLabel.toLowerCase()}.remote.ts) schema validation failed`
+			);
+		});
+	}
 
 	test("shows the app's brand and user menu", async ({ page }) => {
 		await page.goto('/admin/recipes');
