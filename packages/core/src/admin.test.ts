@@ -200,7 +200,7 @@ describe('entry, a Resource and its remote module together', () => {
 	const usersRemote = { getList: () => {} } as unknown as ResourceRemote;
 	const importRecipes = vi.fn(async () => recipesRemote);
 	const importUsers = vi.fn(async () => usersRemote);
-	const app = defineAdmin({
+	const lazyAdmin = defineAdmin({
 		basePath: '/admin',
 		resources: {
 			recipes: { resource: recipes, remote: importRecipes },
@@ -214,30 +214,30 @@ describe('entry, a Resource and its remote module together', () => {
 	});
 
 	it('resolves to the mounted Resource and the module its lazy import gives', async () => {
-		await expect(app.entry('recipes')).resolves.toEqual({
+		await expect(lazyAdmin.entry('recipes')).resolves.toEqual({
 			resource: recipes,
 			remote: recipesRemote
 		});
-		const { resource, remote } = await app.entry('users');
+		const { resource, remote } = await lazyAdmin.entry('users');
 		expect(resource).toBe(users);
 		expect(remote).toBe(usersRemote);
 	});
 
 	it('imports the remote module once per call, and only that Resource’s', async () => {
-		await app.entry('users');
+		await lazyAdmin.entry('users');
 		expect(importUsers).toHaveBeenCalledTimes(1);
 		expect(importRecipes).not.toHaveBeenCalled();
-		await app.entry('users');
+		await lazyAdmin.entry('users');
 		expect(importUsers).toHaveBeenCalledTimes(2);
 	});
 
 	it.each(['nope', 'toString', ''])('rejects for %j, a name that is not mounted', async (name) => {
 		// @ts-expect-error only a mounted Resource's name is accepted
-		await expect(app.entry(name)).rejects.toThrow(`"${name}"`);
+		await expect(lazyAdmin.entry(name)).rejects.toThrow(`"${name}"`);
 	});
 
 	it('rejects when the remote module fails to load', async () => {
 		importRecipes.mockRejectedValueOnce(new Error('chunk failed'));
-		await expect(app.entry('recipes')).rejects.toThrow('chunk failed');
+		await expect(lazyAdmin.entry('recipes')).rejects.toThrow('chunk failed');
 	});
 });

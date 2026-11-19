@@ -51,21 +51,7 @@ Each Resource costs about 4 lines of wiring in the demo:
 
 The admin layout renders the Theme's `AdminShell` with the admin from `admin.ts` and the app's own `brand` and `userMenu` snippets (the shell wraps the brand in a link to the first Resource). The `/admin` index redirects to the first Resource's list.
 
-Each route that renders a View reads the Resource and its remote module together with `admin.entry(name)`, which resolves to both once the module has loaded, so a switch to another Resource never pairs the new Resource with the old one's remote functions. A name that isn't mounted rejects, though the param matcher has already made it a 404. The list route is the whole pattern:
-
-```svelte
-<script lang="ts">
-	import { ListView } from '@svelte-admin/theme-shadcn';
-	import { admin } from '#lib/admin.ts';
-	import type { PageProps } from './$types';
-
-	let { params }: PageProps = $props();
-
-	const { resource, remote } = $derived(await admin.entry(params.resource));
-</script>
-
-<ListView {admin} {resource} {remote} />
-```
+Each route that renders a View reads the Resource and its remote module together, from `admin.entry(name)`: `const { resource, remote } = $derived(await admin.entry(params.resource));`. It resolves to both once the module has loaded, so a switch to another Resource never pairs the new Resource with the old one's remote functions. A name that isn't mounted rejects, though the param matcher has already made it a 404.
 
 Each route passes its View the same admin, beside the Resource and its remote functions: `<ListView {admin} {resource} {remote} />`, and likewise `DetailView`, `CreateView` and `EditView`. The core's headless helpers take it as their first argument: `createListView(admin, resource, remote)`, `createDetailView(admin, resource, remote, id)` and `createFormView(admin, resource, remote, 'create')` (or `'edit', id`). It is always an argument, never context, and it is typed as the core's `Admin`, so anything that isn't an admin is a type error. It is how the Views reach the admin's other Resources: a Reference's target, for one (see [References](#references)).
 

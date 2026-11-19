@@ -25,6 +25,11 @@ export type LoadedEntry<E extends AdminEntry = AdminEntry> = {
 	remote: Awaited<ReturnType<E['remote']>>;
 };
 
+/** What `entry` resolves to for the names `K`: one pair per Resource, never a mix of two. */
+type LoadedEntryOf<M, K extends keyof M> = {
+	[N in K]: M[N] extends AdminEntry ? LoadedEntry<M[N]> : never;
+}[K];
+
 /** One link in the sidebar: a Resource's list View. */
 export type SidebarItem = {
 	/** The Resource's name. */
@@ -142,12 +147,12 @@ export function defineAdmin<const M extends AdminResources<M>>(config: {
 		 * @example
 		 * const { resource, remote } = $derived(await admin.entry(params.resource));
 		 */
-		async entry<K extends Name>(name: K): Promise<{ [N in K]: LoadedEntry<M[N]> }[K]> {
+		async entry<K extends Name>(name: K): Promise<LoadedEntryOf<M, K>> {
 			if (!isName(name)) {
 				throw new Error(`The admin has no Resource named "${name}"; add it to admin.ts`);
 			}
 			const { resource, remote } = resources[name] as AdminEntry;
-			return { resource, remote: await remote() } as LoadedEntry<M[K]>;
+			return { resource, remote: await remote() } as LoadedEntryOf<M, K>;
 		},
 		/**
 		 * The Resource a path is on, which of its Views, and on a detail or edit View the
