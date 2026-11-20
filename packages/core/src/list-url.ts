@@ -103,17 +103,13 @@ function schemaOf(resource: Pick<FilterFieldsResource, 'schema'>, field: Field):
  * input sends it, with the rules the forms use: a datetime as `YYYY-MM-DDTHH:mm` (seconds
  * optional) in UTC, becoming an ISO datetime string, and a date as `YYYY-MM-DD`, becoming an ISO
  * date string or, for `z.date()`, a `Date` at midnight UTC. The value must then be of the
- * Field's base type (`valueSchema`, its `filterValueSchema`), as `getList` checks it.
+ * Field's base type (its `filterValueSchema`), as `getList` checks it.
  */
-function readFilterValue(
-	field: Field,
-	valueSchema: z.ZodType<FilterValue>,
-	text: string
-): FilterValue | undefined {
+function readFilterValue(field: Field, schema: z.ZodType, text: string): FilterValue | undefined {
 	if (text.trim() === '') return undefined;
 	const value = urlValue(field, text);
 	if (value === undefined) return undefined;
-	return valueSchema.safeParse(value).success ? value : undefined;
+	return filterValueSchema(field, schema).safeParse(value).success ? value : undefined;
 }
 
 /** A filter value as the list URL writes it, read into the Field's type, before it is checked. */
@@ -190,8 +186,8 @@ function readFilters(
 	const filters: ListFilter[] = [];
 	for (const field of filterableFields(resource)) {
 		const { key, filterOperators: operators } = field;
-		const valueSchema = filterValueSchema(field, schemaOf(resource, field));
-		const read = (text: string) => readFilterValue(field, valueSchema, text);
+		const schema = schemaOf(resource, field);
+		const read = (text: string) => readFilterValue(field, schema, text);
 		const values = [
 			...new Map(
 				searchParams
