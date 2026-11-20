@@ -1,6 +1,6 @@
 # Add the admin to a SvelteKit app
 
-This guide takes an existing SvelteKit app to a working admin, one file at a time, in the order you write them. It mounts the admin under `/admin`, as the demo app does.
+This guide takes an existing SvelteKit app to a working admin, one file at a time, in the order you write them, and then to its next Resource. It mounts the admin under `/admin`, as the demo app does. [Mounting at `/`](#mounting-at-) shows what changes when the admin is the whole app, and [Replacing a View](#replacing-a-view) is the way out when a stock View doesn't fit.
 
 Every file below is quoted whole from the demo (`apps/demo`), under its path there, never as an excerpt. The demo's files are the source of truth. CI runs `bun run check:docs`, which fails when a quote here differs from the file the demo runs. So what you copy is what works. The terms (Resource, View, Field, Kind, Theme, Provider) are the ones in [`CONTEXT.md`](../CONTEXT.md).
 
@@ -8,7 +8,7 @@ Every file below is quoted whole from the demo (`apps/demo`), under its path the
 
 The admin is built on features that are still experimental: remote functions in SvelteKit and async Svelte. It needs the exact versions this workspace pins in the `catalog` of the root `package.json`: SvelteKit 3.2, Svelte 5.57, Vite 8, Tailwind CSS 4 and Zod 4, on Node 22.
 
-The packages aren't published. `@svelte-admin/core` and `@svelte-admin/theme-shadcn` are private, and an app uses them as a member of this bun workspace, as the demo does, with `"@svelte-admin/core": "workspace:*"` and `"@svelte-admin/theme-shadcn": "workspace:*"` in its dependencies. See [ADR 0001](adr/0001-rebuild-the-proof-of-concept-as-a-workspace.md) for why.
+The packages aren't published, so for now your app is a member of this bun workspace, as the demo is. See [Before npm](#before-npm).
 
 Beside them, the demo depends on `zod` and `@lucide/svelte` (for its icons), and on `@sveltejs/adapter-node`, `@tailwindcss/vite` and `tailwindcss` for its build. See `apps/demo/package.json` for the full list.
 
@@ -225,7 +225,7 @@ export type ResourceName = ResourceNameOf<typeof admin>;
 
 `ResourceName` is the union of the mounted names, for app code that names a Resource.
 
-The Resource modules themselves (`recipes.ts` and `recipes.remote.ts`, for one) are covered in [Wiring a Resource](../README.md#wiring-a-resource) in the README.
+The Resource modules themselves (`users.ts` and `users.remote.ts`, for one) come in [Adding a Resource](#10-adding-a-resource).
 
 ## 4. `params.ts`
 
@@ -471,6 +471,202 @@ The Theme's `ErrorPage` shows a 404 or a failed load in the admin's style, with 
 />
 ```
 
+## 10. Adding a Resource
+
+The admin above mounts three Resources. Each further Resource takes three steps:
+
+1. **A shared module**, `src/lib/resources/users.ts`: the Resource's schema and settings, from `defineResource`.
+2. **A remote module**, `src/lib/resources/users.remote.ts`: one statement that serves the Resource's records through its Provider.
+3. **An entry in `admin.ts`**: the shared module's import, and `users: { resource: users, remote: () => import('#lib/resources/users.remote.ts') }` under `resources` (see [`admin.ts`](#3-admints)). The key is the Resource's `name`, or `defineAdmin` throws.
+
+The sidebar, the param matcher and the four View routes pick the new Resource up from `admin.ts`, so no route changes.
+
+### Two modules, kept apart
+
+The shared module and the remote module are separate on purpose, because they run in different places:
+
+- **The shared module is browser-safe.** `admin.ts` imports it, and every View, the sidebar and `params.ts` read `admin.ts`, so it reaches the browser. It holds only metadata: the schema, the labels, what sorts and filters. Like `admin.ts`, it must load in plain Node (see [`params.ts`](#4-paramsts)), which is why the icon is a lazy import.
+- **The remote module is server-only.** SvelteKit runs a `.remote.ts` file's functions on the server and gives the browser only calls to them, so the remote module, and the Provider it imports, never reach the browser. A Provider's backend URL and credentials belong on this side. `admin.ts` imports the remote module lazily, so `admin.ts` itself stays browser-safe.
+
+Never import a Provider, `@svelte-admin/core/server` or `@svelte-admin/core/rest` from the shared module or from `admin.ts`.
+
+### The shared module
+
+The demo's users are a short example. Each Field is a Zod type, wrapped in `field()` when it has settings:
+
+<!-- demo: src/lib/resources/users.ts -->
+
+```ts
+import { defineResource, field } from '@svelte-admin/core';
+import { z } from 'zod';
+
+export const users = defineResource({
+	name: 'users',
+	label: 'Users',
+	icon: () => import('@lucide/svelte/icons/users'),
+	group: 'People',
+	// The demo backend searches users by name and email.
+	searchable: true,
+	schema: z.object({
+		id: z.number(),
+		name: field(z.string(), { sortable: true }),
+		// Set once on create, then shown as text on the edit View.
+		email: field(z.email(), { readOnly: 'afterCreate', placeholder: 'name@example.com' }),
+		// Optional, so clearing it on the edit View removes it.
+		phone: z.string().optional(),
+		role: field(z.enum(['admin', 'editor', 'viewer']), { filterable: true }),
+		active: field(z.boolean(), { filterable: true }),
+		joinedAt: field(z.iso.datetime(), { sortable: true, filterable: true })
+	}),
+	// The list opens in name order, with nothing in the URL.
+	defaultSort: { field: 'name', order: 'asc' }
+});
+```
+
+Each setting has its section in the README's reference:
+
+- `searchable`, `sortable`, `filterable`, `defaultSort` and `perPage`: [Sorting](../README.md#sorting), [Filtering](../README.md#filtering) and [Default sort and page size](../README.md#default-sort-and-page-size).
+- `readOnly`, `hidden` and `input`: [Writes](../README.md#writes) and [Typed form fields](../README.md#typed-form-fields-and-a-replaced-form-view).
+- `kind`: [Kinds](../README.md#kinds).
+- `ref`: [References](../README.md#references).
+- `group` and `icon` place the Resource in the sidebar. The icon is a lazy import of a Lucide icon, and the sidebar groups Resources by `group` in the order `admin.ts` lists them.
+
+### The remote module
+
+One statement: `serveResource` from `@svelte-admin/core/server` takes the Resource and its Provider, and returns the Resource's eight remote functions. SvelteKit requires each remote function to be a named export of a `.remote.ts` file, so the module re-exports all eight by name:
+
+<!-- demo: src/lib/resources/users.remote.ts -->
+
+```ts
+import { serveResource } from '@svelte-admin/core/server';
+import { backend } from '#lib/server/backend.ts';
+import { users } from './users.ts';
+
+export const { getList, getOne, lookup, create, update, deleteOne, deleteMany, exportList } =
+	serveResource(users, backend.for(users));
+```
+
+Copy the statement as it is, and change only the Resource and the Provider. `admin.ts` requires all eight, so a remote module that leaves one out is a type error in its `admin.ts` entry, not a broken Reference (a missing `lookup`) or a failed export (a missing `exportList`) at runtime.
+
+### The Provider
+
+The Provider is how the Resource reaches your backend. There are two choices.
+
+**The bundled REST Provider**, for a backend that follows its REST convention. `restProvider(baseUrl)` from `@svelte-admin/core/rest` is shared by every Resource, and `backend.for(users)` is the Provider for one, typed from it, as in `users.remote.ts` above. The demo creates it once, in a server-only module:
+
+<!-- demo: src/lib/server/backend.ts -->
+
+```ts
+// The demo backend, through the bundled REST Provider. Server-only: nothing here may reach the
+// browser (CI checks the client build for the backend URL).
+import { restProvider } from '@svelte-admin/core/rest';
+import { BACKEND_URL } from '../../../backend/config.ts';
+
+export const backend = restProvider(BACKEND_URL);
+```
+
+The demo reads its backend's URL from the demo backend's config. Your app reads its own, from its environment for one. The requests it sends are in the README: the list's in [Sorting](../README.md#sorting) and [Filtering](../README.md#filtering), the writes' in [Writes](../README.md#writes), and the batched lookups' in [References](../README.md#references).
+
+**Your own Provider**, an object with the methods `getList`, `getOne`, `create`, `update` and `deleteOne`, plus the optional `getMany` and `deleteMany`, each typed from the Resource with `ResourceProvider<typeof resource>`. It can start from the REST Provider's methods and change only what differs, as the demo's posts Provider does:
+
+<!-- demo: src/lib/server/posts-provider.ts -->
+
+```ts
+// The posts Provider: the bundled REST Provider's methods (so its `getList` forwards the page, the
+// page size, the sort and the filters), but not its `getMany`, plus `deleteMany` over the demo
+// backend's bulk route, which the REST convention doesn't have. It shows how an app spreads the
+// bundled Provider for one Resource, adding a method and leaving one out. Recipes and users have
+// no bulk route, so their bulk deletes fall back to one `deleteOne` per id. Without `getMany`, the
+// posts that a page's posts reply to are looked up with one `getOne` each, so the demo covers
+// that fallback. Server-only, like `backend.ts`.
+import { NotFoundError, type ResourceProvider } from '@svelte-admin/core';
+import { BACKEND_URL } from '../../../backend/config.ts';
+import { posts } from '#lib/resources/posts.ts';
+import { backend } from './backend.ts';
+
+/** The Provider for posts: the bundled REST Provider's methods but `getMany`, plus `deleteMany`. */
+export const postsProvider: ResourceProvider<typeof posts> = {
+	...backend.for(posts),
+	// Left out, so the admin looks posts up with `getOne`, one request per id.
+	getMany: undefined,
+	/** `DELETE /posts?id=1&id=2`: all of them, or none (a 404 when any doesn't exist). */
+	async deleteMany({ fetch }, ids) {
+		const query = new URLSearchParams(ids.map((id) => ['id', String(id)]));
+		const response = await fetch(`${BACKEND_URL}/posts?${query}`, { method: 'DELETE' });
+		// Nothing is read from the response, so free its body.
+		await response.body?.cancel();
+		if (response.status === 404) throw new NotFoundError();
+		if (!response.ok) {
+			throw new Error(`Posts Provider: DELETE /posts failed with ${response.status}`);
+		}
+	}
+};
+```
+
+The posts remote module passes it to `serveResource` in place of `backend.for(posts)`, with an option that caps the export:
+
+<!-- demo: src/lib/resources/posts.remote.ts -->
+
+```ts
+import { serveResource } from '@svelte-admin/core/server';
+import { postsProvider } from '#lib/server/posts-provider.ts';
+import { posts } from './posts.ts';
+
+// Exports stop at 50 posts, so with the 60 seeded ones the e2e suite covers the cap, and the
+// export pages through a backend that answers with `hasNextPage` instead of a total.
+export const { getList, getOne, lookup, create, update, deleteOne, deleteMany, exportList } =
+	serveResource(posts, postsProvider, { maxExportRows: 50 });
+```
+
+What each method gets and returns is in the README: [Writes](../README.md#writes) for `create`, `update`, `deleteOne` and `deleteMany`, and [References](../README.md#references) for `getMany`.
+
+## Mounting at `/`
+
+When the admin is the whole app, such as an internal tool, mount it at `/`, so no URL needs `/admin`. Only these things change from the files above.
+
+**The base path.** In `admin.ts`, write `basePath: '/'`. The list hrefs become `/users`, the detail hrefs `/users/3`, and the create and edit hrefs follow, as do the sidebar, the breadcrumb and `admin.homeHref`.
+
+**The route files, one level up.** Move `src/routes/admin` to `src/routes/(admin)`, unchanged. A folder in parentheses is a SvelteKit route group: it adds nothing to the URL, so the View routes now answer at `/users` and `/users/3/edit`, and the admin layout still wraps only the admin's routes, not the rest of your app.
+
+```text
+src/routes/
+├── +error.svelte
+├── +layout.svelte
+└── (admin)/
+    ├── +layout.svelte          the admin layout
+    ├── +page.ts                the admin index, now at /
+    └── [resource=resource]/
+        ├── +page.svelte
+        ├── new/+page.svelte
+        └── [id]/
+            ├── +layout.ts
+            ├── +page.svelte
+            └── edit/+page.svelte
+```
+
+**The admin index at the root.** `(admin)/+page.ts` now answers `/` and opens the first Resource's list. Remove your app's own root page, `src/routes/+page.svelte` or `src/routes/+page.ts`, since SvelteKit allows only one route at `/`.
+
+**The error page.** Its link back to the admin becomes `homeHref={resolve('/')}`.
+
+Your other routes keep working beside the admin's. SvelteKit ranks a route with a static segment, such as `src/routes/about`, above the admin's `[resource=resource]` route, and the matcher accepts only the names `admin.ts` mounts, so `/about` stays yours and `/nope` is a 404. A route of yours named after a Resource wins over the admin's too: that is how a View is replaced, below.
+
+## Replacing a View
+
+When a stock View doesn't fit one Resource, replace that one View with a route of your own at its path. A route at the View's own path wins over the admin's, since its segment is static: `src/routes/admin/users/+page.svelte` replaces the users list View, and `src/routes/admin/posts/new/+page.svelte` the posts create View (under `src/routes/(admin)` when mounted at `/`). The admin's other Views of that Resource, and every View of the others, stay stock.
+
+A replaced View takes the same admin, Resource and remote module as the stock View's route. It names its Resource, so it imports them directly instead of calling `admin.entry`: the admin from `admin.ts`, the Resource from its shared module and the remote functions as `* as remote` from its remote module. It builds on the core's headless helpers from `@svelte-admin/core/views`, such as `createListView(admin, users, remote)` or `createFormView(admin, posts, remote, 'create')`, which keep the stock View's behaviour, and on the Theme's exported parts, which keep its look. It sits under the admin layout, so the shell wraps it as it wraps the stock Views.
+
+The demo has two, as examples:
+
+- **The users list View**, `src/routes/admin/users/+page.svelte`: the users as a card grid.
+- **The posts create View**, `src/routes/admin/posts/new/+page.svelte`: a two-column form.
+
+What a replaced View can read from the helpers is in the README:
+
+- the forms: [Typed form fields and a replaced form View](../README.md#typed-form-fields-and-a-replaced-form-view);
+- the list's sort, filters and export: [Sorting](../README.md#sorting), [Filtering](../README.md#filtering) and [Export](../README.md#export);
+- References: [References](../README.md#references) and [The Reference picker](../README.md#the-reference-picker).
+
 ## In production
 
 SvelteKit refuses a form post whose origin isn't the app's own, and `adapter-node` can't always tell the app's origin from the request, behind a proxy above all. So set `ORIGIN` to the URL people reach the app at when you run the build, such as `ORIGIN=https://admin.example.com node build`, or the create and edit forms may be refused. The demo's e2e suite sets `http://localhost:4173`.
@@ -480,5 +676,13 @@ SvelteKit refuses a form post whose origin isn't the app's own, and `adapter-nod
 A few files in the demo aren't part of the setup, so this guide doesn't quote them. Don't copy them into your app:
 
 - **The root layout**, `src/routes/+layout.svelte`. Beside importing the stylesheet, it marks the page once it is hydrated, for the e2e tests.
-- **The root redirect**, `src/routes/+page.ts`. It sends `/` to `/admin`, because the demo is only an admin. Your app has its own home page.
+- **The root redirect**, `src/routes/+page.ts`. It sends `/` to `/admin`, because the demo is only an admin. Your app has its own home page, or the admin index when the admin is [mounted at `/`](#mounting-at-).
 - **The demo backend**, `apps/demo/backend`. It is a small Bun server that serves seed data from memory. Your Resources talk to your own backend.
+
+## Before npm
+
+`@svelte-admin/core` and `@svelte-admin/theme-shadcn` are private, at version `0.0.0`, and aren't published to npm. They stay that way until remote functions and async Svelte are stable, so no one depends on an API that may still move. See [ADR 0001](adr/0001-rebuild-the-proof-of-concept-as-a-workspace.md).
+
+Until then, an app is a member of this bun workspace, as the demo is: it lives under `apps/`, and its `package.json` depends on `"@svelte-admin/core": "workspace:*"` and `"@svelte-admin/theme-shadcn": "workspace:*"`, and on the rest through `catalog:`, so it gets the versions the workspace pins.
+
+An app outside the workspace isn't supported yet. The packages declare `workspace:*` and `catalog:` versions, which mean nothing outside it, and they export their TypeScript and Svelte sources, which an app's build would have to compile from `node_modules`.

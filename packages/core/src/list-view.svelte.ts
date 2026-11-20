@@ -1,5 +1,5 @@
 import { goto } from '$app/navigation';
-import { page } from '$app/state';
+import { navigating, page } from '$app/state';
 import { settled, untrack } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { activeFilters, type ActiveFilter } from './active-filters.ts';
@@ -170,6 +170,8 @@ export function createListView<R extends Resource>(
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
 	const url = $derived(new URL(page.url.href));
 	const params = $derived(readListParams(url, resource));
+	/** The path and query the address bar shows now, which may be ahead of `page.url`. */
+	const browserHref = () => location.pathname + location.search;
 	/** The href of this list with `next` params, leaving out the Resource's defaults. */
 	const hrefOf = (next: ListParams) => listHref(url, next, resource);
 	const fields = resource.fields.filter((field) => field.list);
@@ -375,6 +377,20 @@ export function createListView<R extends Resource>(
 		return sort?.field === key ? sort.order : undefined;
 	}
 
+	/**
+	 * Whether another navigation (a pager or page-size link, Back) started since the search was
+	 * typed, so the waiting search must not undo it. The effect above drops a waiting search once
+	 * the list renders the new URL, but async Svelte holds that render while the new page loads,
+	 * and the search's pause can end first: while the navigation still loads, or once the address
+	 * bar shows it. The list's own search navigation doesn't count.
+	 */
+	function navigatedSince(typedAt: string): boolean {
+		const to = navigating.to?.url;
+		if (to && to.pathname + to.search !== searchHref) return true;
+		const now = browserHref();
+		return now !== typedAt && now !== searchHref;
+	}
+
 	/** Write a search to the URL now, in place, at page 1 of the current page size. */
 	function writeSearch(text: string) {
 		clearTimeout(debounce);
@@ -506,7 +522,10 @@ export function createListView<R extends Resource>(
 		setSearch(text: string) {
 			draft = text;
 			clearTimeout(debounce);
-			debounce = setTimeout(() => writeSearch(text), SEARCH_DEBOUNCE_MS);
+			const typedAt = browserHref();
+			debounce = setTimeout(() => {
+				if (!navigatedSince(typedAt)) writeSearch(text);
+			}, SEARCH_DEBOUNCE_MS);
 		},
 		/** Write the search box's text to the URL now, e.g. when its form is submitted. */
 		submitSearch() {
