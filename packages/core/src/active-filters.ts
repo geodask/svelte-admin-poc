@@ -75,7 +75,7 @@ async function filterLabel(
 ): Promise<string> {
 	const text = async (value: FilterValue) => {
 		const link = admin && (await resolveReference(admin, field, value));
-		return link?.title ?? valueText(resource, field, value);
+		return link?.title ?? valueText(field, value);
 	};
 	const values =
 		filter.operator === 'in'
@@ -90,7 +90,7 @@ async function filterLabel(
  * enum members as they are. A datetime adds its time in UTC unless it is midnight, since a filter
  * holds it to the minute.
  */
-function valueText(resource: ListUrlResource, field: Field, value: FilterValue): string {
+function valueText(field: Field, value: FilterValue): string {
 	// An id, as the URL writes it: `1234`, never `1,234`.
 	if (field.kind === 'reference') return String(value);
 	if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -99,7 +99,7 @@ function valueText(resource: ListUrlResource, field: Field, value: FilterValue):
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return String(value);
 	const day = dateFormat.format(date);
-	if (dateInputType(resource, field.key) !== 'datetime') return day;
+	if (dateInputType(field) !== 'datetime') return day;
 	// The time as the filter input writes it, in UTC: `HH:mm`, with seconds only when they aren't zero.
 	const time = datetimeInputValue(date).slice(11);
 	return time === '00:00' ? day : `${day}, ${time} UTC`;

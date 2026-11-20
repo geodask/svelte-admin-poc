@@ -5,8 +5,8 @@ import {
 	readDateInput,
 	readDatetimeInput
 } from './date-input.ts';
-import { unwrap, type Field, type FilterOperator } from './fields.ts';
-import { idFromText } from './ids.ts';
+import type { Field, FilterOperator } from './fields.ts';
+import { idOfType } from './ids.ts';
 import {
 	canonicalValues,
 	filterableFields,
@@ -90,17 +90,6 @@ function readSort(
  */
 const INPUT_NUMBER = /^-?(\d+(\.\d+)?|\.\d+)([eE][-+]?\d+)?$/;
 
-/**
- * Which type a date Field holds: an ISO datetime string, an ISO date string, or a `Date`. The
- * list URL writes a datetime as a `datetime-local` input does, and the other two as a `date`
- * input does.
- */
-function dateType(schema: z.ZodType): 'datetime' | 'date' | 'Date' {
-	const type = unwrap(schema);
-	if (type instanceof z.ZodISODateTime) return 'datetime';
-	return type instanceof z.ZodDate ? 'Date' : 'date';
-}
-
 /** The schema of a Resource's Field, by its key. */
 function schemaOf(resource: Pick<FilterFieldsResource, 'schema'>, field: Field): z.ZodType {
 	return resource.schema.shape[field.key] as z.ZodType;
@@ -114,17 +103,17 @@ function schemaOf(resource: Pick<FilterFieldsResource, 'schema'>, field: Field):
  * input sends it, with the rules the forms use: a datetime as `YYYY-MM-DDTHH:mm` (seconds
  * optional) in UTC, becoming an ISO datetime string, and a date as `YYYY-MM-DD`, becoming an ISO
  * date string or, for `z.date()`, a `Date` at midnight UTC. The value must then be of the
- * Field's base type, as `getList` checks it.
+ * Field's base type (its `filterValueSchema`), as `getList` checks it.
  */
 function readFilterValue(field: Field, schema: z.ZodType, text: string): FilterValue | undefined {
 	if (text.trim() === '') return undefined;
-	const value = urlValue(field, schema, text);
+	const value = urlValue(field, text);
 	if (value === undefined) return undefined;
 	return filterValueSchema(field, schema).safeParse(value).success ? value : undefined;
 }
 
 /** A filter value as the list URL writes it, read into the Field's type, before it is checked. */
-function urlValue(field: Field, schema: z.ZodType, text: string): FilterValue | undefined {
+function urlValue(field: Field, text: string): FilterValue | undefined {
 	switch (field.kind) {
 		case 'enum':
 			return field.options.find((option) => String(option) === text);
@@ -134,12 +123,11 @@ function urlValue(field: Field, schema: z.ZodType, text: string): FilterValue | 
 			return INPUT_NUMBER.test(text) ? Number(text) : undefined;
 		case 'reference':
 			// As a route param names a record, so `3a` and `03` name no number id.
-			return idFromText(unwrap(schema), text);
+			return idOfType(field.id, text);
 		case 'date': {
-			const type = dateType(schema);
-			if (type === 'datetime') return readDatetimeInput(text);
+			if (field.dateType === 'datetime') return readDatetimeInput(text);
 			const day = readDateInput(text);
-			return type === 'Date' ? day : day && text;
+			return field.dateType === 'Date' ? day : day && text;
 		}
 		default:
 			return text;
@@ -152,24 +140,23 @@ function urlValue(field: Field, schema: z.ZodType, text: string): FilterValue | 
  * as a `date` input does (`2024-03-01`), and anything else as text.
  */
 export function filterInputValue(
-	resource: FilterFieldsResource,
+	resource: Pick<Resource, 'fields'>,
 	key: string,
 	value: FilterValue
 ): string {
-	if (dateInputType(resource, key) === 'datetime') {
+	const field = resource.fields.find((candidate) => candidate.key === key);
+	if (field !== undefined && dateInputType(field) === 'datetime') {
 		return datetimeInputValue(value as string | Date);
 	}
 	return value instanceof Date ? dateInputValue(value) : String(value);
 }
 
 /**
- * The input a date filter on a Resource's Field `key` uses: `datetime` (a `datetime-local` input,
- * in UTC) for an ISO datetime Field, else `date`.
+ * The input a date filter on a Field uses: `datetime` (a `datetime-local` input, in UTC) for an
+ * ISO datetime Field, else `date`.
  */
-export function dateInputType(resource: FilterFieldsResource, key: string): 'date' | 'datetime' {
-	const field = resource.fields.find((candidate) => candidate.key === key);
-	if (field?.kind !== 'date') return 'date';
-	return dateType(schemaOf(resource, field)) === 'datetime' ? 'datetime' : 'date';
+export function dateInputType(field: Field): 'date' | 'datetime' {
+	return field.kind === 'date' && field.dateType === 'datetime' ? 'datetime' : 'date';
 }
 
 /** A filter value as the shared encoder writes it: a `Date` as an ISO string, anything else as text. */

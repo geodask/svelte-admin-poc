@@ -136,9 +136,10 @@ export function canonicalFilters<F extends ListFilter>(
 /**
  * The schema of one filter value of a Field: its Kind's base type, never the Field's own
  * refinements (a filter value isn't a record value, so `name.contains=piz` is fine on a Field
- * that needs five letters). A date keeps the Field's own type: an ISO date or datetime string,
- * or a `Date`. A Reference's value is an id, so it keeps the Field's own type, which is its
- * target's id type.
+ * that needs five letters). A date keeps the type the Field records (`dateType`): an ISO date or
+ * datetime string, or a `Date`, a datetime in the Field's own format (offset and precision). A
+ * Reference's value is an id, so it keeps the Field's own type, which is its target's id type.
+ * Only a filterable Field has one: it throws for any other Kind.
  */
 export function filterValueSchema(field: Field, schema: z.ZodType): z.ZodType<FilterValue> {
 	switch (field.kind) {
@@ -152,15 +153,16 @@ export function filterValueSchema(field: Field, schema: z.ZodType): z.ZodType<Fi
 			return z.boolean();
 		case 'enum':
 			return z.literal(field.options);
-		default: {
-			const type = unwrap(schema);
-			if (type instanceof z.ZodISODate) return z.iso.date();
-			if (type instanceof z.ZodISODateTime) {
-				const { offset, local, precision } = type._zod.def;
-				return z.iso.datetime({ offset, local, precision });
-			}
-			return z.date();
+		case 'date': {
+			if (field.dateType === 'date') return z.iso.date();
+			if (field.dateType === 'Date') return z.date();
+			// The Field's own datetime format: whether it takes an offset or no zone, and its
+			// precision.
+			const { offset, local, precision } = (unwrap(schema) as z.ZodISODateTime)._zod.def;
+			return z.iso.datetime({ offset, local, precision });
 		}
+		default:
+			throw new Error(`A ${field.kind} Field can't be filtered.`);
 	}
 }
 
