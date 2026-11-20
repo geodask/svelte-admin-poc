@@ -1,9 +1,46 @@
 // The Field input codec: how a Field's value is written as the text of its HTML input, and how
-// that text is read back into the Field's type. The forms and the filters both read and write
-// their date inputs here, so a date that doesn't exist is never turned into another one in
-// either. It goes by the input details a Field records (its `dateType`). Shared, pure.
+// that text is read back into the Field's type. The forms, the filters and the Reference picker
+// all read their date, number and Reference inputs here, with one rule each, so a date that
+// doesn't exist is never turned into another one, and `1e3` or `03` means the same everywhere.
+// It goes by the input details a Field records (its `dateType`) and, for a Reference, by the
+// target's id schema. Shared, pure.
 
+import type { z } from 'zod';
 import type { DateType } from './fields.ts';
+import { idFromText } from './ids.ts';
+import type { Resource } from './resource.ts';
+
+/**
+ * A number as a number input may send it: an HTML floating-point number, such as `15`, `-5`,
+ * `45.5`, `.5` or `1e3`, with no sign but a leading `-` and no spaces around it.
+ */
+const INPUT_NUMBER = /^-?(\d+(\.\d+)?|\.\d+)([eE][-+]?\d+)?$/;
+
+/**
+ * What a number input sent, as a number, or `undefined` when it holds none: a finite decimal
+ * number as a number input sends it (`3`, `-2.5`, `.5`, `1e3`). Text with spaces around it, a
+ * trailing dot (`3.`), a `+`, hex, words, or a number too large to be finite holds none, and nor
+ * does empty text. An integer Field's number is read the same way, and its schema rejects `2.5`.
+ */
+export function readNumberInput(text: string): number | undefined {
+	if (!INPUT_NUMBER.test(text)) return undefined;
+	const number = Number(text);
+	return Number.isFinite(number) ? number : undefined;
+}
+
+/**
+ * What a Reference's input sent, as an id of its target, or `undefined` when it names none: read
+ * by the target's id schema, as a route param is (`idFromText`). For a number id, only a number
+ * written as it prints names one (`3`, not `03`, `3.0` or `3a`), and a string id is read as
+ * written. Empty text names no id, whatever the id type.
+ */
+export function readReferenceInput(
+	target: Pick<Resource, 'schema'>,
+	text: string
+): string | number | undefined {
+	if (text === '') return undefined;
+	return idFromText(target.schema.shape.id as z.ZodType, text);
+}
 
 /** A `datetime-local` input's value: a date and a time, to the minute or finer, with no zone. */
 const LOCAL_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/;

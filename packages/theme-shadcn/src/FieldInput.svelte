@@ -270,8 +270,14 @@
 					aria-describedby={describedBy}
 					class={[control, 'py-2']}></textarea>
 			{:else}
+				<!--
+					A number input is bound as text, so the form gets what was sent and reads it by the
+					core's number rule, the filters' too, never Kit's own (`parseFloat`, which reads
+					` 3 ` and `3a` as 3, as a browser that shows a text box would send them).
+				-->
 				<input
-					{...field.as(scalarInput.type)}
+					{...field.as(scalarInput.type === 'number' ? 'text' : scalarInput.type)}
+					type={scalarInput.type}
 					id={inputId}
 					placeholder={spec.placeholder}
 					step={scalarInput.step}
