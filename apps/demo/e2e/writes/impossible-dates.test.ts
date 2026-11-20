@@ -7,14 +7,15 @@
 // an app's Kind with a text input sends what was typed, so these tests turn the input into a
 // text box first, as such a browser shows it.
 import type { APIRequestContext, Locator, Page } from '@playwright/test';
-import { BACKEND_URL } from '../../backend/config.ts';
 import { expect, test } from '../fixtures.ts';
+import { backendLog } from '../list-helpers.ts';
 import { fillRecipe, open, save, stored, textbox, usesJavaScript } from '../form-helpers.ts';
 
 /** The `POST /recipes` and `PUT /recipes/...` requests the demo backend has received so far. */
 async function recipeWrites(request: APIRequestContext) {
-	const log = (await (await request.get(`${BACKEND_URL}/requests`)).json()) as string[];
-	return log.filter((line) => line === 'POST /recipes' || line.startsWith('PUT /recipes/'));
+	return (await backendLog(request)).filter(
+		(line) => line === 'POST /recipes' || line.startsWith('PUT /recipes/')
+	);
 }
 
 /** A form's date input by its label, made a text box that takes any text, as some browsers show it. */

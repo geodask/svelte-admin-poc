@@ -138,7 +138,7 @@ export function filterInputValue(
 ): string {
 	const field = resource.fields.find((candidate) => candidate.key === key);
 	if (field?.kind === 'date') return writeDateInput(field.dateType, value as string | Date);
-	return value instanceof Date ? writeDateInput('Date', value) : String(value);
+	return String(value);
 }
 
 /**

@@ -35,12 +35,15 @@ export function readDateInput(dateType: DateType, text: string): string | Date |
  * same value: a datetime in UTC to the minute (`2024-03-01T23:30`), with its seconds, then its
  * milliseconds, only when they aren't zero; an ISO date as it is; and a `Date` as its UTC day
  * (`2024-03-01`). A value that is no date is written as text (an invalid `Date` as empty), so
- * an input shows it rather than throwing.
+ * an input shows it rather than throwing, and so is a datetime that doesn't exist, which is
+ * never written as the date it would roll over to.
  */
 export function writeDateInput(dateType: DateType, value: string | Date): string {
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return value instanceof Date ? '' : String(value);
 	if (dateType === 'datetime') {
+		// `Date` rolls a day or time that doesn't exist over, so such text is written as it is.
+		if (typeof value === 'string' && rollsOver(value)) return value;
 		return date
 			.toISOString()
 			.replace(/Z$/, '')
@@ -59,6 +62,15 @@ function readDatetime(text: string): string | undefined {
 	// A day or time out of range rolls over (February 30th is March 1st, 24:00 the next day), so
 	// its day, hours, minutes or seconds read back changed. Milliseconds can't roll over.
 	return iso.startsWith(text.slice(0, 19)) ? iso : undefined;
+}
+
+/**
+ * Whether an ISO datetime string names a day or time that doesn't exist (`2024-02-30T10:00Z`),
+ * which `Date` would roll over to another. Its zone is left out, since it doesn't change that.
+ */
+function rollsOver(text: string): boolean {
+	const local = text.replace(/(Z|[+-]\d{2}:?\d{2})$/i, '');
+	return LOCAL_DATETIME.test(local) && readDatetime(local) === undefined;
 }
 
 /** A `date` input's text as a `Date` at midnight UTC, or `undefined`. */

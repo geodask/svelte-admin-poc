@@ -85,6 +85,11 @@ describe('a value written into its date input', () => {
 		expect(writeDateInput('Date', new Date('2024-02-29T23:30:00Z'))).toBe('2024-02-29');
 	});
 
+	it('is a datetime that does not exist as it is, never the date it would roll over to', () => {
+		expect(writeDateInput('datetime', '2024-02-30T10:00:00Z')).toBe('2024-02-30T10:00:00Z');
+		expect(writeDateInput('datetime', '2024-03-01T24:00:00Z')).toBe('2024-03-01T24:00:00Z');
+	});
+
 	it('is text that is no date as it is, so an input never throws', () => {
 		expect(writeDateInput('datetime', 'soon')).toBe('soon');
 		expect(writeDateInput('date', 'soon')).toBe('soon');
