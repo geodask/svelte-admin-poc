@@ -17,6 +17,7 @@ export type Recipe = {
 	ingredients: { name: string; quantity?: string }[];
 	reviewCount: number;
 	publishedAt: string;
+	lastCookedOn?: string;
 	sourceId: string | number;
 	rating?: number;
 	nutrition: { proteinGrams: number; carbsGrams: number };
@@ -137,6 +138,10 @@ export const recipes: Recipe[] = rows.map(
 		reviewCount: 1250 + index * 37,
 		// Late in the UTC day, so formatting it in any other time zone would show another date.
 		publishedAt: new Date(Date.UTC(2024, 0, 1 + index * 7, 23, 30)).toISOString(),
+		// Every other recipe was cooked a few days after it was published; the rest never were.
+		...(index % 2 === 0
+			? { lastCookedOn: new Date(Date.UTC(2024, 0, 4 + index * 7)).toISOString().slice(0, 10) }
+			: {}),
 		// Imported recipes keep their source's id, which is a number or a slug.
 		sourceId: index % 2 === 0 ? `dj-${index + 1}` : 9000 + index,
 		// Every fourth recipe has no rating; the others cycle through 1 to 5 stars.

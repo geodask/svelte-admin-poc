@@ -2,9 +2,9 @@
 // the active filter chips under a list View's toolbar. Shared and browser-safe: it reaches a
 // Reference's target through the admin, so it imports no remote module itself.
 import type { Admin } from './admin.ts';
-import { datetimeInputValue } from './date-input.ts';
 import type { Field, FilterOperator } from './fields.ts';
-import { dateInputType, listHref, readListParams, type ListUrlResource } from './list-url.ts';
+import { writeDateInput } from './input-codec.ts';
+import { listHref, readListParams, type ListUrlResource } from './list-url.ts';
 import type { FilterValue, ListFilter, ListParams } from './provider.ts';
 import { resolveReference } from './reference-link.ts';
 
@@ -99,8 +99,8 @@ function valueText(field: Field, value: FilterValue): string {
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return String(value);
 	const day = dateFormat.format(date);
-	if (dateInputType(field) !== 'datetime') return day;
+	if (field.dateType !== 'datetime') return day;
 	// The time as the filter input writes it, in UTC: `HH:mm`, with seconds only when they aren't zero.
-	const time = datetimeInputValue(date).slice(11);
+	const time = writeDateInput('datetime', date).slice(11);
 	return time === '00:00' ? day : `${day}, ${time} UTC`;
 }
