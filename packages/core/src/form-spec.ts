@@ -439,12 +439,13 @@ type ListInput<E, Choice> =
  * form's `fields`. So a View that replaces the create or edit View gets `fields.name` checked,
  * and no input for a Field the server would ignore.
  *
- * Each Field the form has an input for maps to what that input sends: a number for a number
- * (the Theme's number input sends it as text, which the form reads as a number),
- * a boolean for a checkbox, text for any other scalar (a string, an enum's select, a date, a
- * datetime), the target's id type for a Reference (its picker sends the id as text, which the
- * form turns into that type), an array for a list in rows, text for a list in lines, an array of
- * objects for rows, and an object for a group. A Field that names a Kind whose entry in `Kinds`
+ * Each Field the form has an input for maps to what that input sends: a number for a number, a
+ * boolean for a checkbox, text for any other scalar (a string, an enum's select, a date, a
+ * datetime), the target's id type for a Reference, an array for a list in rows, text for a list
+ * in lines, an array of objects for rows, and an object for a group. The Theme's number input and
+ * a Reference's picker send their value as text, which the form reads by the same rules as the
+ * filters; a replaced View's `as('number')` input is read by Kit's own rule (`parseFloat`)
+ * before the form sees it. A Field that names a Kind whose entry in `Kinds`
  * says what its input sends (`stars: { input: string }`) maps to that type instead. The id and
  * the read-only and hidden Fields are left out, and `'afterCreate'` Fields appear on create only.
  * A Field in a wrapper may be left out, and so may every input that sends a boolean, since an

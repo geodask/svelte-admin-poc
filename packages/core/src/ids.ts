@@ -111,9 +111,9 @@ export function idFromParam<R extends Resource>(resource: R, param: string): IdO
 
 /**
  * The id written as `text`, read with an id schema, or `undefined` when it names none: the rule a
- * route param is read by, also the input codec's for a Reference's id (`readReferenceInput`). The text goes
- * through the schema, which never coerces: for a number id, only a number written as
- * `String(id)` writes it (`1`, not `01`, `1.0` or `1e0`).
+ * route param is read by, also the input codec's for a Reference's id (`readReferenceInput`).
+ * The text goes through the schema, which never coerces: for a number id, only a number written
+ * as `String(id)` writes it (`1`, not `01`, `1.0` or `1e0`).
  */
 export function idFromText(schema: z.ZodType, text: string): string | number | undefined {
 	const asString = schema.safeParse(text);
