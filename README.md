@@ -119,7 +119,7 @@ The list URL writes a filter by its Field's key: a bare param means `eq` and a r
 | date (`z.date()`)             | `YYYY-MM-DD`                                                       | a `Date` at midnight UTC        |
 | datetime (`z.iso.datetime()`) | `YYYY-MM-DDTHH:mm` in UTC, with seconds only when they aren't zero | the ISO datetime string, in UTC |
 
-These are the rules the forms use for their date inputs, so a filter value is always in the Field's own type. Params for an unknown or non-filterable Field, empty or malformed values (`prepTimeMinutes.gte=abc`, a date with a zone or on no real day), and operators the Field doesn't allow (`cuisine.contains` when `cuisine` allows only `eq` and `in`) are dropped when the URL is read, and with JavaScript the URL is cleaned in place.
+The forms read and write their date inputs by the same rules, with the same code, so a filter value is always in the Field's own type. A date that doesn't exist (30 February, month 13, 24:00) is never turned into the date it would roll over to: a filter drops it, and a create or edit form keeps it as typed and shows an issue on its input. Params for an unknown or non-filterable Field, empty or malformed values (`prepTimeMinutes.gte=abc`, a date with a zone or on no real day), and operators the Field doesn't allow (`cuisine.contains` when `cuisine` allows only `eq` and `in`) are dropped when the URL is read, and with JavaScript the URL is cleaned in place.
 
 The server checks a filter value against the Field's base type only (a string, a finite number, a boolean, an enum member, or its date type), never its refinements, so `name.contains=piz` is fine on a Field that needs five letters.
 

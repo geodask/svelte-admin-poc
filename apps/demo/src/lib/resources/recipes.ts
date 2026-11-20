@@ -46,6 +46,9 @@ export const recipes = defineResource({
 		reviewCount: field(z.number(), { readOnly: true }),
 		// Filtered with a from and a to date and time, in UTC.
 		publishedAt: field(z.iso.datetime(), { sortable: true, filterable: true }),
+		// A day, with no time: edited in a `date` input, and left off the list. Some recipes have
+		// never been cooked.
+		lastCookedOn: field(z.iso.date(), { label: 'Last cooked', list: false }).optional(),
 		// A number or a slug: no built-in Kind fits, so it shows as unknown, and the forms have no
 		// built-in input for it. The app's `numberOrSlug` Kind gives it one, a text input, and
 		// converts what is typed: digits are saved as a number, a slug as text.

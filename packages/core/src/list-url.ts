@@ -1,12 +1,7 @@
 import { z } from 'zod';
-import {
-	dateInputValue,
-	datetimeInputValue,
-	readDateInput,
-	readDatetimeInput
-} from './date-input.ts';
 import type { Field, FilterOperator } from './fields.ts';
 import { idOfType } from './ids.ts';
+import { readDateInput, writeDateInput } from './input-codec.ts';
 import {
 	canonicalValues,
 	filterableFields,
@@ -124,11 +119,8 @@ function urlValue(field: Field, text: string): FilterValue | undefined {
 		case 'reference':
 			// As a route param names a record, so `3a` and `03` name no number id.
 			return idOfType(field.id, text);
-		case 'date': {
-			if (field.dateType === 'datetime') return readDatetimeInput(text);
-			const day = readDateInput(text);
-			return field.dateType === 'Date' ? day : day && text;
-		}
+		case 'date':
+			return readDateInput(field.dateType, text);
 		default:
 			return text;
 	}
@@ -145,10 +137,8 @@ export function filterInputValue(
 	value: FilterValue
 ): string {
 	const field = resource.fields.find((candidate) => candidate.key === key);
-	if (field !== undefined && dateInputType(field) === 'datetime') {
-		return datetimeInputValue(value as string | Date);
-	}
-	return value instanceof Date ? dateInputValue(value) : String(value);
+	if (field?.kind === 'date') return writeDateInput(field.dateType, value as string | Date);
+	return String(value);
 }
 
 /**

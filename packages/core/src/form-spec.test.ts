@@ -398,37 +398,36 @@ describe('formSchema', () => {
 		});
 	});
 
-	it('turns a date string into the type the schema wants', async () => {
+	it('reads a date input into the type the schema wants, a datetime in UTC', async () => {
+		// Every rule for reading a date input is the input codec's, and tested with it.
 		expect(
 			await outcome(formSchema(withField(z.iso.date()), 'create'), { value: '2024-01-08' })
 		).toEqual({ value: { value: '2024-01-08' } });
 		expect(
 			await outcome(formSchema(withField(z.date()), 'create'), { value: '2024-01-08' })
 		).toEqual({ value: { value: new Date(Date.UTC(2024, 0, 8)) } });
+		expect(
+			await outcome(formSchema(withField(z.iso.datetime()), 'create'), {
+				value: '2024-01-08T23:30'
+			})
+		).toEqual({ value: { value: '2024-01-08T23:30:00.000Z' } });
 	});
 
-	it('reads a datetime input in UTC and gives an ISO string, with or without seconds', async () => {
-		const schema = formSchema(withField(z.iso.datetime()), 'create');
-
-		expect(await outcome(schema, { value: '2024-01-08T23:30' })).toEqual({
-			value: { value: '2024-01-08T23:30:00.000Z' }
-		});
-		expect(await outcome(schema, { value: '2024-01-08T23:30:15' })).toEqual({
-			value: { value: '2024-01-08T23:30:15.000Z' }
-		});
-	});
-
-	it('reports a date or datetime that is no real date as an issue, never an error', async () => {
-		const datetime = formSchema(withField(z.iso.datetime()), 'create');
-		const date = formSchema(withField(z.date()), 'create');
-
-		expect((await outcome(datetime, { value: '2024-13-45T10:00' })).issues).toEqual([
-			expect.stringMatching(/^value: /)
-		]);
-		expect((await outcome(date, { value: '2024-13-45' })).issues).toEqual([
-			expect.stringMatching(/^value: /)
-		]);
-	});
+	it.each([
+		['an ISO datetime', '2024-02-30T10:00', z.iso.datetime()],
+		['an ISO datetime', '2024-03-01T24:00', z.iso.datetime()],
+		['an ISO datetime', '2024-13-45T10:00', z.iso.datetime()],
+		['an ISO date', '2024-02-30', z.iso.date()],
+		['a Date', '2024-02-30', z.date()],
+		['a Date', '2024-13-45', z.date()]
+	])(
+		'reports %s that does not exist, %s, as an issue on its input, never another date',
+		async (_, text, type) => {
+			expect(
+				(await outcome(formSchema(withField(type), 'create'), { value: text })).issues
+			).toEqual([expect.stringMatching(/^value: /)]);
+		}
+	);
 
 	it("reports the schema's own message for a bad value", async () => {
 		expect(await outcome(formSchema(users, 'create'), { ...filledUser, email: 'ada' })).toEqual({
@@ -775,19 +774,11 @@ describe('toFormValues', () => {
 		expect(valuesOf(z.enum({ One: 1, Two: 2 }), 2)).toEqual({ value: '2' });
 	});
 
-	it('writes a datetime in UTC to the minute, with seconds only when it has them', () => {
+	it('writes a date as its date input does, a datetime in UTC', () => {
+		// Every rule for writing a date input is the input codec's, and tested with it.
 		expect(valuesOf(z.iso.datetime(), '2024-03-01T23:30:00.000Z')).toEqual({
 			value: '2024-03-01T23:30'
 		});
-		expect(valuesOf(z.iso.datetime(), '2024-03-01T23:30:15Z')).toEqual({
-			value: '2024-03-01T23:30:15'
-		});
-		expect(valuesOf(z.iso.datetime(), '2024-03-01T23:30:15.250Z')).toEqual({
-			value: '2024-03-01T23:30:15.250'
-		});
-	});
-
-	it('writes a date as its day, in UTC for a Date', () => {
 		expect(valuesOf(z.iso.date(), '2024-01-08')).toEqual({ value: '2024-01-08' });
 		expect(valuesOf(z.date(), new Date(Date.UTC(2024, 0, 8)))).toEqual({ value: '2024-01-08' });
 	});

@@ -685,17 +685,12 @@ describe('the list URL helper', () => {
 			]);
 		});
 
-		it('read a datetime as the input sends it, in UTC, into an ISO datetime string', () => {
+		it('read a date into the Field type, as its date input sends it', () => {
+			// Every rule for reading a date input is the input codec's, and tested with it.
 			expect(
-				filtersIn('?publishedAt.gte=2024-03-01T00:00&publishedAt.lte=2024-03-31T23:30:15')
+				filtersIn('?publishedAt.gte=2024-03-01T23:30&cookedOn.lt=2024-03-01&bakedOn.gte=2024-02-29')
 			).toEqual([
-				{ field: 'publishedAt', operator: 'lte', value: '2024-03-31T23:30:15.000Z' },
-				{ field: 'publishedAt', operator: 'gte', value: '2024-03-01T00:00:00.000Z' }
-			]);
-		});
-
-		it('read a date into the Field type: an ISO date string, or a Date at midnight UTC', () => {
-			expect(filtersIn('?cookedOn.lt=2024-03-01&bakedOn.gte=2024-02-29')).toEqual([
+				{ field: 'publishedAt', operator: 'gte', value: '2024-03-01T23:30:00.000Z' },
 				{ field: 'cookedOn', operator: 'lt', value: '2024-03-01' },
 				{ field: 'bakedOn', operator: 'gte', value: new Date('2024-02-29T00:00:00Z') }
 			]);
@@ -717,13 +712,10 @@ describe('the list URL helper', () => {
 			['an operator text does not have', '?name.gte=a'],
 			['an operator number does not have', '?prepTimeMinutes.contains=1'],
 			['eq on a Field narrowed to a range', '?calories=300'],
-			['a datetime with a zone', '?publishedAt.gte=2024-03-01T00:00Z'],
-			['a datetime without a time', '?publishedAt.gte=2024-03-01'],
-			['a datetime on no real day', '?publishedAt.gte=2024-02-30T00:00'],
-			['a datetime with no real time', '?publishedAt.lte=2024-03-01T25:00'],
-			['a date that is no real day', '?cookedOn=2024-13-01&bakedOn=2024-02-30'],
-			['a date with a time', '?cookedOn.lt=2024-03-01T00:00&bakedOn.gte=2024-03-01T00:00'],
-			['a date as words', '?bakedOn=yesterday']
+			[
+				'a date that does not exist, of each type',
+				'?publishedAt.gte=2024-02-30T00:00&cookedOn=2024-02-30&bakedOn=2024-02-30'
+			]
 		])('drop %s', (_, search) => {
 			expect(filtersIn(search)).toBeUndefined();
 		});

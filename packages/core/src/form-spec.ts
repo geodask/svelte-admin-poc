@@ -12,7 +12,7 @@ import {
 	type IsWrapped,
 	type UnwrappedSchema
 } from './fields.ts';
-import { dateInputValue, datetimeInputValue, LOCAL_DATETIME } from './date-input.ts';
+import { readDateInput, writeDateInput } from './input-codec.ts';
 import { idFromParam, idOfType } from './ids.ts';
 import { ownKind, type KindInputOf, type KindRegistry } from './kinds.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
@@ -526,9 +526,9 @@ function inputValue(spec: FormInputSpec, value: unknown): unknown {
 			// As the select or the picker sends it: an id as text.
 			return String(value);
 		case 'date':
-			return value instanceof Date ? dateInputValue(value) : String(value);
+			return writeDateInput(spec.dateType, value as string | Date);
 		case 'datetime':
-			return datetimeInputValue(String(value));
+			return writeDateInput('datetime', value as string | Date);
 		case 'list': {
 			if (!Array.isArray(value)) return undefined;
 			const items = value.map((item) =>
@@ -759,17 +759,13 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 			return spec.options.find((option) => String(option) === String(raw)) ?? raw;
 		case 'reference':
 			return referenceId(spec, raw);
-		case 'date': {
-			if (spec.dateType !== 'Date' || typeof raw !== 'string') return raw;
-			const date = new Date(`${raw}T00:00:00Z`);
-			return Number.isNaN(date.getTime()) ? raw : date;
-		}
+		case 'date':
 		case 'datetime': {
-			// The input has no time zone: it is read as UTC, as the Views show dates. Text that is
-			// no real date (month 13) is left as it is, for the schema to report.
-			if (typeof raw !== 'string' || !LOCAL_DATETIME.test(raw)) return raw;
-			const date = new Date(`${raw}Z`);
-			return Number.isNaN(date.getTime()) ? raw : date.toISOString();
+			// Read in UTC, as the Views show dates, into the schema's type. Text that is no real
+			// date (30 February, month 13) is left as it is, for the schema to report, and is
+			// never turned into the date it would roll over to.
+			if (typeof raw !== 'string') return raw;
+			return readDateInput(spec.kind === 'date' ? spec.dateType : 'datetime', raw) ?? raw;
 		}
 		default:
 			return raw;
@@ -834,7 +830,9 @@ function inputPath(path: readonly PropertyKey[], origins: Origins): (string | nu
  * - A textarea's line breaks become `\n`, as typed, though a form posted without JavaScript
  *   sends them as CRLF.
  * - A date becomes the schema's type (a `Date` for `z.date()`, the text for `z.iso.date()`),
- *   and a datetime is read in UTC and becomes an ISO string.
+ *   and a datetime is read in UTC and becomes an ISO string, by the same rules as a date filter
+ *   (`readDateInput`). A date that doesn't exist (30 February, 24:00) is left as typed, so the
+ *   schema reports it, rather than becoming the date it would roll over to.
  * - A blank row isn't an item, so a list or rows sends only the rows with a value, and a list
  *   in lines sends one item per line, trimmed, without the blank lines. An issue about one item
  *   names the row it came from, so it shows under that row's input; an issue about one line
