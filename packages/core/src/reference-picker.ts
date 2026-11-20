@@ -1,11 +1,10 @@
 // The headless Reference picker: what a Theme needs to let a person choose a Reference's record by
 // its Record title, in a form and in a list View's filter. Shared and browser-safe: it reaches the
 // target through the admin, so it imports no remote module itself.
-import type { z } from 'zod';
 import type { Admin } from './admin.ts';
 import type { Field } from './fields.ts';
 import type { FormInputSpec } from './form-spec.ts';
-import { idFromText } from './ids.ts';
+import { readReferenceInput } from './input-codec.ts';
 import type { ListParams } from './provider.ts';
 import { recordTitle } from './record-title.ts';
 import type { ResourceRemote } from './remote.ts';
@@ -54,9 +53,11 @@ export type ReferencePicker = {
  * for the target names, so it works during SSR too. It asks for nothing until a property is read.
  *
  * `field` is a Reference Field (`view.fields` of a list or detail View) or a Reference input's
- * form spec (`view.spec` of a form View); anything else throws. `current` is the Reference's value: the target's typed id, or the id as a form holds it, as text
- * (a number id `3` as `'3'`). Empty (`undefined`, `null` or `''`) is no choice, and so is text that
- * names no id of the target (`3a` for a number id).
+ * form spec (`view.spec` of a form View); anything else throws. `current` is the Reference's
+ * value: the target's typed id, or the id as a form holds it, as text (a number id `3` as `'3'`),
+ * read by the input codec with the target's id schema, as the forms and filters read it
+ * (`readReferenceInput`). Empty (`undefined`, `null` or `''`) is no choice, and so is text that
+ * names no id of the target (`3a` or `03` for a number id).
  *
  * @example
  * const picker = createReferencePicker(admin, spec, view.inputs.userId.value());
@@ -75,7 +76,11 @@ export function createReferencePicker(
 	// `defineAdmin` has checked that every Reference's target is mounted under its name.
 	const entry = admin.resources[name];
 	const target = entry.resource;
-	const currentId = typedId(target, current);
+	// The input codec reads the id as a form holds it, as text, or a typed id as it prints.
+	const currentId =
+		typeof current === 'string' || typeof current === 'number'
+			? readReferenceInput(target, String(current))
+			: undefined;
 
 	/** The target's remote functions, read loosely: the picker works for any target. */
 	const remote = (): Promise<
@@ -130,14 +135,4 @@ export function createReferencePicker(
 			return (await firstPage()).filter((option) => option.title.toLowerCase().includes(lower));
 		}
 	};
-}
-
-/**
- * A Reference's value as the target's typed id, or `undefined` when it names none: read by the
- * rule `formSchema` reads the picker's value by (`idFromText`), with the target's id schema.
- */
-function typedId(target: Resource, value: unknown): string | number | undefined {
-	if (typeof value !== 'string' && typeof value !== 'number') return undefined;
-	const text = String(value);
-	return text === '' ? undefined : idFromText(target.schema.shape.id as z.ZodType, text);
 }

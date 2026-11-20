@@ -697,15 +697,8 @@ describe('the list URL helper', () => {
 		});
 
 		it.each([
+			// Every rule for reading a number input is the input codec's, and tested with it.
 			['a number that is not a number', '?prepTimeMinutes.gte=abc'],
-			['a number with a plus sign', '?prepTimeMinutes.gte=%2B5'],
-			['a number with a trailing dot', '?prepTimeMinutes.gte=5.'],
-			['a number in hex', '?prepTimeMinutes=0x10'],
-			['a number with spaces', '?prepTimeMinutes.lte=%2010'],
-			[
-				'a number that is not finite',
-				'?prepTimeMinutes.lt=Infinity&prepTimeMinutes.gt=NaN&prepTimeMinutes.gte=1e999'
-			],
 			['an empty number', '?prepTimeMinutes.gte=&prepTimeMinutes.lte='],
 			['blank text', '?name.contains=&name=%20%20'],
 			['contains on a Field narrowed to eq and in', '?cuisine.contains=Ital'],

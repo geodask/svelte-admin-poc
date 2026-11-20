@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import type { Field, FilterOperator } from './fields.ts';
-import { idOfType } from './ids.ts';
-import { readDateInput, writeDateInput } from './input-codec.ts';
+import {
+	readDateInput,
+	readNumberInput,
+	readReferenceInput,
+	writeDateInput
+} from './input-codec.ts';
 import {
 	canonicalValues,
 	filterableFields,
@@ -79,12 +83,6 @@ function readSort(
 	return { field, order: searchParams.get('order') === 'desc' ? 'desc' : 'asc' };
 }
 
-/**
- * A number as a number input may send it: an HTML floating-point number, such as `15`, `-5`,
- * `45.5`, `.5` or `1e3`. The list URL writes it back as a plain decimal.
- */
-const INPUT_NUMBER = /^-?(\d+(\.\d+)?|\.\d+)([eE][-+]?\d+)?$/;
-
 /** The schema of a Resource's Field, by its key. */
 function schemaOf(resource: Pick<FilterFieldsResource, 'schema'>, field: Field): z.ZodType {
 	return resource.schema.shape[field.key] as z.ZodType;
@@ -92,13 +90,12 @@ function schemaOf(resource: Pick<FilterFieldsResource, 'schema'>, field: Field):
 
 /**
  * One filter value as the list URL writes it, read into the Field's type, or `undefined` when it
- * is empty, blank or malformed: text as written; a number as a number input sends it; a boolean as `true`
- * or `false`; an enum member as written (any other text is no member); a Reference's id by the
- * rule a route param is read by (`idFromParam`), so `3a` names no number id; and a date as the filter
- * input sends it, with the rules the forms use: a datetime as `YYYY-MM-DDTHH:mm` (seconds
- * optional) in UTC, becoming an ISO datetime string, and a date as `YYYY-MM-DD`, becoming an ISO
- * date string or, for `z.date()`, a `Date` at midnight UTC. The value must then be of the
- * Field's base type (its `filterValueSchema`), as `getList` checks it.
+ * is empty, blank or malformed: text as written; a boolean as `true` or `false`; an enum member
+ * as written (any other text is no member); and a number, a Reference's id and a date as the
+ * forms read them, by the Field input codec (`readNumberInput`, `readReferenceInput`,
+ * `readDateInput`): a number as a number input sends it, an id by the target's id schema, so
+ * `03` and `3a` name no number id, and a date as its date input sends it, in UTC. The value must
+ * then be of the Field's base type (its `filterValueSchema`), as `getList` checks it.
  */
 function readFilterValue(field: Field, schema: z.ZodType, text: string): FilterValue | undefined {
 	if (text.trim() === '') return undefined;
@@ -115,10 +112,9 @@ function urlValue(field: Field, text: string): FilterValue | undefined {
 		case 'boolean':
 			return text === 'true' ? true : text === 'false' ? false : undefined;
 		case 'number':
-			return INPUT_NUMBER.test(text) ? Number(text) : undefined;
+			return readNumberInput(text);
 		case 'reference':
-			// As a route param names a record, so `3a` and `03` name no number id.
-			return idOfType(field.id, text);
+			return readReferenceInput(field.ref(), text);
 		case 'date':
 			return readDateInput(field.dateType, text);
 		default:

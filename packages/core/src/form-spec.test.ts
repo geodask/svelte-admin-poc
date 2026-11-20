@@ -455,30 +455,24 @@ describe('formSchema', () => {
 			value: { value: 4 }
 		});
 	});
-	it('reads a number sent as text, as a radio group sends it, and leaves other text to the schema', async () => {
+	it('reads a number sent as text by the input codec, for any number Field, and leaves other text to the schema', async () => {
+		// Every rule for reading a number input is the input codec's, and tested with it.
+		const servings = withField(z.number());
 		const rating = withField(field(z.int().min(1).max(5), { kind: 'stars' }).optional());
 
+		expect(await outcome(formSchema(servings, 'create'), { value: '1e3' })).toEqual({
+			value: { value: 1000 }
+		});
+		// A radio group sends text too.
 		expect(await outcome(formSchema(rating, 'create'), { value: '4' })).toEqual({
 			value: { value: 4 }
 		});
-		expect(await outcome(formSchema(rating, 'create'), { value: ' 2 ' })).toEqual({
-			value: { value: 2 }
-		});
-		// "None" sends empty text: no value, so an optional rating is left out.
-		expect(await outcome(formSchema(rating, 'create'), { value: '' })).toEqual({ value: {} });
-		for (const text of ['4a', '0x4', '1e3', '-']) {
-			expect((await outcome(formSchema(rating, 'create'), { value: text })).issues).toEqual([
-				expect.stringMatching(/^value: /)
-			]);
-		}
-		expect((await outcome(formSchema(rating, 'create'), { value: '9' })).issues).toEqual([
+		expect((await outcome(formSchema(servings, 'create'), { value: ' 3 ' })).issues).toEqual([
 			expect.stringMatching(/^value: /)
 		]);
-	});
-
-	it('leaves text for a number Field that names no Kind to the schema, as its input sends a number', async () => {
-		const servings = withField(z.number());
-		expect((await outcome(formSchema(servings, 'create'), { value: '4' })).issues).toEqual([
+		// "None" sends empty text: no value, so an optional rating is left out.
+		expect(await outcome(formSchema(rating, 'create'), { value: '' })).toEqual({ value: {} });
+		expect((await outcome(formSchema(rating, 'create'), { value: '2.5' })).issues).toEqual([
 			expect.stringMatching(/^value: /)
 		]);
 	});

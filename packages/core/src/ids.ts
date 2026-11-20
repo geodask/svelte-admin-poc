@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { ReferenceKind } from './fields.ts';
 import type { IdOf, Resource } from './resource.ts';
 
 /**
@@ -112,7 +111,7 @@ export function idFromParam<R extends Resource>(resource: R, param: string): IdO
 
 /**
  * The id written as `text`, read with an id schema, or `undefined` when it names none: the rule a
- * route param is read by, also used for a Reference's filter value in the list URL. The text goes
+ * route param is read by, also the input codec's for a Reference's id (`readReferenceInput`). The text goes
  * through the schema, which never coerces: for a number id, only a number written as
  * `String(id)` writes it (`1`, not `01`, `1.0` or `1e0`).
  */
@@ -124,17 +123,4 @@ export function idFromText(schema: z.ZodType, text: string): string | number | u
 	if (!Number.isFinite(number) || String(number) !== text) return undefined;
 	const asNumber = schema.safeParse(number);
 	return asNumber.success ? (asNumber.data as number) : undefined;
-}
-
-/** The plain schema of each id type, which reads an id with no refinement of its own. */
-const ID_TYPE_SCHEMAS = { string: z.string(), number: z.number() } as const;
-
-/**
- * The id written as `text`, read as an id of `type` by the rule a route param is read by
- * (`idFromText`), or `undefined` when it names none: for a number id, only a number written as
- * `String(id)` (`3`, not `03` or `3a`). A Reference's Field records its target's id type, so a
- * Reference's value is read by it.
- */
-export function idOfType(type: ReferenceKind['id'], text: string): string | number | undefined {
-	return idFromText(ID_TYPE_SCHEMAS[type], text);
 }

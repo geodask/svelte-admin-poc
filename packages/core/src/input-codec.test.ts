@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { readDateInput, writeDateInput } from './input-codec.ts';
+import { z } from 'zod';
+import {
+	readDateInput,
+	readNumberInput,
+	readReferenceInput,
+	writeDateInput
+} from './input-codec.ts';
 
 describe('a datetime input', () => {
 	it('reads in UTC into an ISO datetime string, to the minute or finer', () => {
@@ -108,5 +114,87 @@ describe('a real date', () => {
 		const value = readDateInput(dateType, text);
 		expect(value).toBeDefined();
 		expect(writeDateInput(dateType, value!)).toBe(text);
+	});
+});
+
+describe('a number input', () => {
+	it.each([
+		['15', 15],
+		['3', 3],
+		['-2.5', -2.5],
+		['45.5', 45.5],
+		['0.5', 0.5],
+		['.5', 0.5],
+		['1e3', 1000],
+		['1E3', 1000],
+		['2.5e-1', 0.25],
+		['-5', -5],
+		['010.50', 10.5]
+	])('reads %j as a number, as a number input sends it', (text, number) => {
+		expect(readNumberInput(text)).toBe(number);
+	});
+
+	it.each([
+		['empty', ''],
+		['blank', '  '],
+		['with spaces around it', ' 3 '],
+		['with a space before it', ' 3'],
+		['with a space after it', '3 '],
+		['followed by letters', '3a'],
+		['with a trailing dot', '3.'],
+		['with a plus sign', '+5'],
+		['in hex', '0x10'],
+		['a lone minus sign', '-'],
+		['as words', 'abc'],
+		['not finite', 'Infinity'],
+		['too large to be finite', '1e999'],
+		['not a number', 'NaN']
+	])('reads no number from text %s', (_, text) => {
+		expect(readNumberInput(text)).toBeUndefined();
+	});
+
+	it('reads a fraction for an integer Field too, which its schema then rejects', () => {
+		expect(readNumberInput('2.5')).toBe(2.5);
+		expect(z.int().safeParse(readNumberInput('2.5')).success).toBe(false);
+		expect(z.int().safeParse(readNumberInput('2')).success).toBe(true);
+	});
+});
+
+describe('a Reference id', () => {
+	const numberTarget = { schema: z.object({ id: z.number() }) };
+	const intTarget = { schema: z.object({ id: z.int().positive() }) };
+	const stringTarget = { schema: z.object({ id: z.string() }) };
+	const uuidTarget = { schema: z.object({ id: z.uuid() }) };
+
+	it('reads a number id as it prints', () => {
+		expect(readReferenceInput(numberTarget, '3')).toBe(3);
+		expect(readReferenceInput(numberTarget, '-2.5')).toBe(-2.5);
+	});
+
+	it.each(['03', '3a', '3.0', '1e0', ' 3', '3 ', '+3', 'Infinity', ''])(
+		'reads no number id from %j, as a route param would name none',
+		(text) => {
+			expect(readReferenceInput(numberTarget, text)).toBeUndefined();
+		}
+	);
+
+	it("reads by the target's id schema, with its refinements", () => {
+		expect(readReferenceInput(intTarget, '3')).toBe(3);
+		expect(readReferenceInput(intTarget, '2.5')).toBeUndefined();
+		expect(readReferenceInput(intTarget, '-3')).toBeUndefined();
+		expect(readReferenceInput(uuidTarget, '3')).toBeUndefined();
+		const uuid = '7f9c24e8-3b12-4fef-91e0-3a7f1c5b2d4a';
+		expect(readReferenceInput(uuidTarget, uuid)).toBe(uuid);
+	});
+
+	it('reads a string id as written, digits and spaces too', () => {
+		expect(readReferenceInput(stringTarget, 'bread/rye')).toBe('bread/rye');
+		expect(readReferenceInput(stringTarget, '03')).toBe('03');
+		expect(readReferenceInput(stringTarget, ' rye ')).toBe(' rye ');
+	});
+
+	it('reads no id from empty text, for any id type', () => {
+		expect(readReferenceInput(stringTarget, '')).toBeUndefined();
+		expect(readReferenceInput(numberTarget, '')).toBeUndefined();
 	});
 });

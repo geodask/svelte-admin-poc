@@ -12,8 +12,13 @@ import {
 	type IsWrapped,
 	type UnwrappedSchema
 } from './fields.ts';
-import { readDateInput, writeDateInput } from './input-codec.ts';
-import { idFromParam, idOfType } from './ids.ts';
+import {
+	readDateInput,
+	readNumberInput,
+	readReferenceInput,
+	writeDateInput
+} from './input-codec.ts';
+import { idFromParam } from './ids.ts';
 import { ownKind, type KindInputOf, type KindRegistry } from './kinds.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -56,7 +61,7 @@ export type FormInputSpec = FormFieldBase & {
 		| { kind: 'select'; options: readonly (string | number)[] }
 		/**
 		 * A Reference: a picker of the target's records, by their Record title. It sends the chosen
-		 * record's id as text, which the form turns into the id's type. `target` is the target
+		 * record's id as text, which the form reads by the target's id schema. `target` is the target
 		 * Resource's name, under which `admin.ts` lists it.
 		 */
 		| { kind: 'reference'; target: string; id: 'string' | 'number' }
@@ -434,7 +439,8 @@ type ListInput<E, Choice> =
  * form's `fields`. So a View that replaces the create or edit View gets `fields.name` checked,
  * and no input for a Field the server would ignore.
  *
- * Each Field the form has an input for maps to what that input sends: a number for a number,
+ * Each Field the form has an input for maps to what that input sends: a number for a number
+ * (the Theme's number input sends it as text, which the form reads as a number),
  * a boolean for a checkbox, text for any other scalar (a string, an enum's select, a date, a
  * datetime), the target's id type for a Reference (its picker sends the id as text, which the
  * form turns into that type), an array for a list in rows, text for a list in lines, an array of
@@ -691,6 +697,9 @@ function conversionMessage(thrown: unknown): string {
 	return thrown instanceof Error && thrown.message !== '' ? thrown.message : 'Invalid input';
 }
 
+/** Each Reference's target, by the Field's key. Only a top-level Field can be a Reference. */
+type Targets = ReadonlyMap<string, Resource>;
+
 /**
  * A record's (top-level) values, as `normalizeRecord` gives them, and the Fields whose Kind's
  * `fromInput` threw, by key, each with the message its issue shows.
@@ -708,6 +717,7 @@ function normalizeRecord(
 	object: z.ZodObject,
 	raw: unknown,
 	origins: Origins,
+	targets: Targets,
 	kinds: KindRegistry | undefined
 ): NormalizedRecord {
 	const values = isObject(raw) ? raw : {};
@@ -718,7 +728,9 @@ function normalizeRecord(
 		const sent = values[spec.key];
 		const fromInput = ownKind(kinds, spec.namedKind)?.fromInput;
 		let value: unknown;
-		if (fromInput === undefined) {
+		if (fromInput === undefined && spec.kind === 'reference') {
+			value = referenceValue(targets.get(spec.key)!, shape[spec.key], sent);
+		} else if (fromInput === undefined) {
 			value = normalize(spec, shape[spec.key], sent, [spec.key], origins);
 		} else if (isEmptyInput(sent)) {
 			value = noValue(shape[spec.key]);
@@ -746,8 +758,10 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 
 	switch (spec.kind) {
 		case 'number':
-			// The built-in number input sends a number. A Kind's input (a radio group) may send text.
-			return spec.namedKind === undefined ? raw : numberFromText(raw);
+			// The Theme's number input and a Kind's (a radio group) send text, which is read by the
+			// input codec; a replaced View's `as('number')` input sends a number. Text that is no
+			// number is left as it is, for the schema to reject.
+			return typeof raw === 'string' ? (readNumberInput(raw) ?? raw) : raw;
 		case 'textarea':
 			// A form posted without JavaScript sends line breaks as CRLF; with it, as typed.
 			return lineBreaksAsLf(raw);
@@ -757,8 +771,6 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 		case 'select':
 			// A select sends text, so a number option is matched by how it is written.
 			return spec.options.find((option) => String(option) === String(raw)) ?? raw;
-		case 'reference':
-			return referenceId(spec, raw);
 		case 'date':
 		case 'datetime': {
 			// Read in UTC, as the Views show dates, into the schema's type. Text that is no real
@@ -773,22 +785,15 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 }
 
 /**
- * A number sent as text, as a number: text that is a finite decimal number, such as `3` or
- * `-2.5`. Anything else is left as it is, for the Field's schema to reject.
+ * The id a Reference's picker sent, as an id of its target, read by the input codec with the
+ * target's id schema (`readReferenceInput`): for a number id, only a number written as it prints
+ * (`3`, not `03` or `3a`). An empty input means no value, and anything else is left as it is,
+ * for the Field's schema to reject. A typed id (a replaced View's) is read as it prints.
  */
-function numberFromText(raw: unknown): unknown {
-	if (typeof raw !== 'string' || !/^\s*-?(\d+\.?\d*|\.\d+)\s*$/.test(raw)) return raw;
-	return Number(raw);
-}
-
-/**
- * The id a Reference's picker sent, in the target's id type, by the rule a route param is read
- * by (`idFromParam`): for a number id, only a number written as `String(id)` (`3`, not `03` or
- * `3a`). Anything else is left as it is, for the Field's schema to reject.
- */
-function referenceId(spec: Extract<FormInputSpec, { kind: 'reference' }>, raw: unknown): unknown {
+function referenceValue(target: Resource, schema: z.ZodType, raw: unknown): unknown {
+	if (raw === undefined || raw === null || raw === '') return noValue(schema);
 	if (typeof raw !== 'string' && typeof raw !== 'number') return raw;
-	return idOfType(spec.id, String(raw)) ?? raw;
+	return readReferenceInput(target, String(raw)) ?? raw;
 }
 
 /**
@@ -822,11 +827,13 @@ function inputPath(path: readonly PropertyKey[], origins: Origins): (string | nu
  *   sets its own message) and an optional one is left out: on edit, that clears it. A Field
  *   that is only `nullable` gets `null`.
  * - An unchecked checkbox means `false`, so the Resource can say `z.boolean()`.
- * - A number Field that names a Kind may get its number as text from that Kind's input (a radio
- *   group sends text), which becomes that number, so `3` is 3 and `3a` is left for the schema to
- *   reject. Any other number Field's input sends a number.
- * - A Reference's picker sends the chosen id as text, which becomes the target's id type by the
- *   rule a route param is read by (`idFromParam`), so `3` is the number 3 and `3a` is invalid.
+ * - A number Field's input sends its number as text (the Theme's number input, a Kind's radio
+ *   group), which is read by the same rule as a number filter (`readNumberInput`): `3`, `-2.5`,
+ *   `.5` and `1e3` are numbers, and text that isn't one (`3a`, ` 3 `, `3.`) is left for the
+ *   schema to reject. A number sent as a number (a replaced View's `as('number')`) is kept.
+ * - A Reference's picker sends the chosen id as text, which is read by the target's id schema,
+ *   by the same rule as a Reference filter (`readReferenceInput`), so `3` is the number 3 and
+ *   `3a` and `03` are invalid.
  * - A textarea's line breaks become `\n`, as typed, though a form posted without JavaScript
  *   sends them as CRLF.
  * - A date becomes the schema's type (a `Date` for `z.date()`, the text for `z.iso.date()`),
@@ -859,6 +866,12 @@ export function formSchema<R extends Resource, M extends FormMode>(
 	const specs = toFormSpec(resource, mode).filter(isInputSpec);
 	const keys: Record<string, true> = Object.fromEntries(specs.map((spec) => [spec.key, true]));
 	const target = resource.schema.pick(keys as z.util.Mask<string>);
+	// Called here, as `toFormSpec` calls them, once every Resource module has loaded.
+	const targets: Targets = new Map(
+		resource.fields.flatMap((field) =>
+			field.kind === 'reference' ? [[field.key, field.ref()] as const] : []
+		)
+	);
 
 	return {
 		'~standard': {
@@ -872,6 +885,7 @@ export function formSchema<R extends Resource, M extends FormMode>(
 					resource.schema,
 					raw,
 					origins,
+					targets,
 					kinds
 				);
 				const issues: StandardSchemaV1.Issue[] = [...failures].map(([key, message]) => ({

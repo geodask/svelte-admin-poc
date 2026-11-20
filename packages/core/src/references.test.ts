@@ -196,12 +196,11 @@ describe('a Reference filter in the list URL', () => {
 		]);
 	});
 
-	it.each(['3a', '03', '3.0', '1e1', ' 3', ''])(
-		'drops %j, which names no number id by the route param rule',
-		(value) => {
-			expect(read(`userId=${encodeURIComponent(value)}`).filters).toBeUndefined();
-		}
-	);
+	it('drops text that names no id, by the input codec', () => {
+		// Every rule for reading a Reference's id is the input codec's, and tested with it.
+		expect(read('userId=03').filters).toBeUndefined();
+		expect(read('userId=').filters).toBeUndefined();
+	});
 
 	it('keeps one value of a repeated param, since a Reference has no `in`', () => {
 		expect(read('userId=3&userId=4').filters).toEqual([
@@ -230,6 +229,34 @@ describe('a Reference filter in getList', () => {
 		['a number for a string id', { field: 'tagId', operator: 'eq', value: 3 }]
 	])('rejects %s', (_, filter) => {
 		expect(parse([filter]).success).toBe(false);
+	});
+});
+
+describe('a Reference read by its target’s id schema, in filters and forms', () => {
+	// The Field takes any number, but its target's ids are positive integers.
+	const members = defineResource({
+		name: 'members',
+		label: 'Members',
+		schema: z.object({ id: z.int().positive(), name: z.string() })
+	});
+	const notes = withField('notes', {
+		memberId: field(z.number(), { ref: () => members, filterable: true })
+	});
+
+	it('drops a filter value that names no id of the target', () => {
+		const read = (query: string) =>
+			readListParams(new URL(`http://admin.test/notes?${query}`), notes).filters;
+		expect(read('memberId=3')).toEqual([{ field: 'memberId', operator: 'eq', value: 3 }]);
+		expect(read('memberId=-3')).toBeUndefined();
+		expect(read('memberId=2.5')).toBeUndefined();
+	});
+
+	it('reports a form value that names no id of the target', () => {
+		const validate = (value: object) => formSchema(notes, 'create')['~standard'].validate(value);
+		expect(validate({ memberId: '3' })).toEqual({ value: { memberId: 3 } });
+		expect(validate({ memberId: '-3' })).toEqual({
+			issues: [expect.objectContaining({ path: ['memberId'] })]
+		});
 	});
 });
 
@@ -282,14 +309,12 @@ describe('a Reference on the create and edit forms', () => {
 		});
 	});
 
-	it.each([['3a'], ['03'], ['3.0'], ['1e0'], [' 3']])(
-		'rejects %j for a number id, as a route param would be',
-		(text) => {
-			expect(validate('create', { title: 'Hi', userId: text })).toEqual({
-				issues: [expect.objectContaining({ path: ['userId'] })]
-			});
-		}
-	);
+	it('rejects text that names no id, by the input codec', () => {
+		// Every rule for reading a Reference's id is the input codec's, and tested with it.
+		expect(validate('create', { title: 'Hi', userId: '03' })).toEqual({
+			issues: [expect.objectContaining({ path: ['userId'] })]
+		});
+	});
 
 	it('reports an empty required Reference as Required', () => {
 		expect(validate('create', { title: 'Hi', userId: '' })).toEqual({
