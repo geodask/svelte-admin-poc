@@ -13,6 +13,6 @@ The proof of concept proved the core promise (one Zod schema per Resource, plus 
 
 ## Consequences
 
-- `apps/demo`, with recipes, users and posts against a local REST backend, stands in as the success test until a real app adopts the framework: 3+ Resources at about 4 lines of wiring each.
+- `apps/demo`, with recipes, users and posts against a local REST backend, stands in as the success test until a real app adopts the framework: 3+ Resources at 7 lines of wiring each, as measured in ADR 0002.
 - Remote functions and async Svelte are still experimental. They stay behind the core's own helpers, version bumps are deliberate, and nothing is published to npm until they are stable.
 - The build follows the milestone change list in the resolution of the Linear verdict ticket (PER-14), not the order the proof of concept was written in.

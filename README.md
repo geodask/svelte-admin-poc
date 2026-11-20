@@ -44,7 +44,7 @@ CI (`.github/workflows/ci.yml`) runs check, lint, the docs check, unit, the clie
 
 ## Wiring a Resource
 
-Each Resource costs about 4 lines of wiring in the demo, beside its shared module: a remote module of one statement, and one entry in `src/lib/admin.ts`. [Adding a Resource](docs/add-the-admin-to-a-sveltekit-app.md#10-adding-a-resource) in the setup guide walks through the three steps and both Provider choices. The rest of the guide quotes every other file the admin needs.
+Each Resource costs 7 lines of wiring in the demo, beside its shared module: a remote module of 5 lines (three imports and one statement), and 2 lines in `src/lib/admin.ts` (its import and its entry). [ADR 0002](docs/adr/0002-the-demo-passes-the-success-test.md) records how they were counted, and the success test they are part of. [Adding a Resource](docs/add-the-admin-to-a-sveltekit-app.md#10-adding-a-resource) in the setup guide walks through the three steps and both Provider choices. The rest of the guide quotes every other file the admin needs.
 
 Each route passes its View the admin, beside the Resource and its remote functions, and the core's headless helpers take it as their first argument: `createListView(admin, resource, remote)`, `createDetailView(admin, resource, remote, id)` and `createFormView(admin, resource, remote, 'create')` (or `'edit', id`). It is always an argument, never context, and it is typed as the core's `Admin`, so anything that isn't an admin is a type error. It is how the Views reach the admin's other Resources: a Reference's target, for one (see [References](#references)).
 
