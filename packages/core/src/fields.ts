@@ -239,7 +239,7 @@ export type DateType = 'date' | 'datetime' | 'Date';
  * A Field's Kind with the details its inputs need, as `describeField` records them: an enum's
  * options, which date a date Field holds (`dateType`), whether a number Field is an integer
  * (`integer`), and a Reference's target and id type. Every module that reads or writes an input
- * for a Field reads these from the Field, never from the Resource's schema.
+ * for a Field finds these details on the Field, never in the Resource's schema.
  */
 export type FieldKind =
 	| { kind: Exclude<KindName, 'enum' | 'reference' | 'number' | 'date'> }

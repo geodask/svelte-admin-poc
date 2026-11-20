@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ReferenceKind } from './fields.ts';
 import type { IdOf, Resource } from './resource.ts';
 
 /**
@@ -134,6 +135,6 @@ const ID_TYPE_SCHEMAS = { string: z.string(), number: z.number() } as const;
  * `String(id)` (`3`, not `03` or `3a`). A Reference's Field records its target's id type, so a
  * Reference's value is read by it.
  */
-export function idOfType(type: 'string' | 'number', text: string): string | number | undefined {
+export function idOfType(type: ReferenceKind['id'], text: string): string | number | undefined {
 	return idFromText(ID_TYPE_SCHEMAS[type], text);
 }

@@ -136,9 +136,10 @@ export function canonicalFilters<F extends ListFilter>(
 /**
  * The schema of one filter value of a Field: its Kind's base type, never the Field's own
  * refinements (a filter value isn't a record value, so `name.contains=piz` is fine on a Field
- * that needs five letters). A date keeps the Field's own type: an ISO date or datetime string,
- * or a `Date`. A Reference's value is an id, so it keeps the Field's own type, which is its
- * target's id type.
+ * that needs five letters). A date keeps the type the Field records (`dateType`): an ISO date or
+ * datetime string, or a `Date`, a datetime in the Field's own format (offset and precision). A
+ * Reference's value is an id, so it keeps the Field's own type, which is its target's id type.
+ * Only a filterable Field has one: it throws for any other Kind.
  */
 export function filterValueSchema(field: Field, schema: z.ZodType): z.ZodType<FilterValue> {
 	switch (field.kind) {
