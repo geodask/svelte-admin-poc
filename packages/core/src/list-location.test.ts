@@ -153,21 +153,22 @@ describe('the search text', () => {
 		expect(location.search).toBe('pasta');
 	});
 
-	it('tells the caller each time it changes, so a View can render it', async () => {
-		const router = createMemoryListRouter('/admin/recipes');
-		const changes: string[] = [];
+	it('tells the caller when typing is taken and when a cancelled search is dropped', () => {
+		const router = createMemoryListRouter('/admin/recipes?q=pasta');
+		let seen: string | undefined;
 		const location: ListLocation<typeof recipes> = createListLocation(recipes, router, {
 			onChange: () => {
-				changes.push(location.search);
+				seen = location.search;
 			}
 		});
 
-		location.setSearch('pasta');
-		pause();
+		location.setSearch('chicken');
+		expect(seen).toBe('chicken');
+		router.click('/admin/recipes?page=2&q=pasta');
 		router.land();
-		await vi.runAllTimersAsync();
+		pause();
 
-		expect(changes).toEqual(['pasta', 'pasta']);
+		expect(seen).toBe('pasta');
 	});
 });
 
@@ -251,6 +252,37 @@ describe('latest intent wins', () => {
 
 		expect(router.entries).toEqual(['/admin/recipes', '/admin/recipes?page=2']);
 		expect(location.search).toBe('');
+	});
+
+	it('submitting the search box while a pager navigation loads doesn’t undo it', () => {
+		const { router, location } = setup('/admin/recipes');
+
+		location.setSearch('chicken');
+		router.click('/admin/recipes?page=2');
+		location.submitSearch();
+		router.land();
+
+		expect(router.navigations).toEqual([]);
+		expect(router.current()).toBe('/admin/recipes?page=2');
+	});
+
+	it('Back to an earlier search’s URL cancels a search still waiting', async () => {
+		const { router, location } = setup('/admin/recipes');
+
+		location.setSearch('pas');
+		pause();
+		router.land();
+		await vi.advanceTimersByTimeAsync(0);
+		router.click('/admin/recipes?page=2&q=pas');
+		router.land();
+		location.setSearch('past');
+		// Back, to the URL the earlier search wrote, before the new search's pause ends.
+		router.click('/admin/recipes?q=pas');
+		router.land();
+		pause();
+
+		expect(router.navigations.map(({ href }) => href)).toEqual(['/admin/recipes?q=pas']);
+		expect(location.search).toBe('pas');
 	});
 });
 
