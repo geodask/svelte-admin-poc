@@ -152,15 +152,16 @@ export function filterValueSchema(field: Field, schema: z.ZodType): z.ZodType<Fi
 			return z.boolean();
 		case 'enum':
 			return z.literal(field.options);
-		default: {
-			const type = unwrap(schema);
-			if (type instanceof z.ZodISODate) return z.iso.date();
-			if (type instanceof z.ZodISODateTime) {
-				const { offset, local, precision } = type._zod.def;
-				return z.iso.datetime({ offset, local, precision });
-			}
-			return z.date();
+		case 'date': {
+			if (field.dateType === 'date') return z.iso.date();
+			if (field.dateType === 'Date') return z.date();
+			// The Field's own datetime format: whether it takes an offset or no zone, and its
+			// precision.
+			const { offset, local, precision } = (unwrap(schema) as z.ZodISODateTime)._zod.def;
+			return z.iso.datetime({ offset, local, precision });
 		}
+		default:
+			throw new Error(`A ${field.kind} Field can't be filtered.`);
 	}
 }
 

@@ -329,7 +329,7 @@ export function createListView<R extends Resource>(
 			}
 			case 'number':
 			case 'date': {
-				const input = field.kind === 'number' ? 'number' : dateInputType(resource, field.key);
+				const input = field.kind === 'number' ? 'number' : dateInputType(field);
 				if (allows('gte') && allows('lte')) {
 					const [from, to] = [filterInput(field, 'gte'), filterInput(field, 'lte')];
 					return { field, operators: ['lte', 'gte'], type: 'range', input, from, to };

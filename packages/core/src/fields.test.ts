@@ -255,6 +255,75 @@ describe("a Resource's Fields", () => {
 	});
 });
 
+describe("a Field's input details", () => {
+	it.each([
+		['an ISO date', z.iso.date(), 'date'],
+		['an ISO datetime', z.iso.datetime(), 'datetime'],
+		['an ISO datetime with an offset', z.iso.datetime({ offset: true }), 'datetime'],
+		['a Date', z.date(), 'Date'],
+		['a coerced Date', z.coerce.date(), 'Date']
+	])('records which date %s holds', (_, schema, dateType) => {
+		expect(firstField({ value: schema })).toMatchObject({ kind: 'date', dateType });
+	});
+
+	it.each([
+		['a number', z.number(), false],
+		['a coerced number', z.coerce.number(), false],
+		['an int', z.int(), true],
+		['a number with an int check', z.number().int(), true],
+		['a number with an int check among others', z.number().min(0).int().max(9), true]
+	])('records whether %s is an integer', (_, schema, integer) => {
+		expect(firstField({ value: schema })).toMatchObject({ kind: 'number', integer });
+	});
+
+	it.each([
+		['optional', (schema: z.ZodType) => schema.optional()],
+		['nullable', (schema: z.ZodType) => schema.nullable()],
+		['optional and nullable', (schema: z.ZodType) => schema.nullable().optional()],
+		['inside field() inside a wrapper', (schema: z.ZodType) => field(schema, {}).optional()],
+		['outside field() around a wrapper', (schema: z.ZodType) => field(schema.nullable(), {})]
+	])('sees the details through %s', (_, wrap) => {
+		const details = (schema: z.ZodType) => firstField({ value: wrap(schema) });
+		expect(details(z.iso.date())).toMatchObject({ kind: 'date', dateType: 'date' });
+		expect(details(z.iso.datetime())).toMatchObject({ kind: 'date', dateType: 'datetime' });
+		expect(details(z.date())).toMatchObject({ kind: 'date', dateType: 'Date' });
+		expect(details(z.int())).toMatchObject({ kind: 'number', integer: true });
+		expect(details(z.number())).toMatchObject({ kind: 'number', integer: false });
+	});
+
+	it("records a Reference's id type, through its wrappers", () => {
+		const target = defineResource({
+			name: 'targets',
+			label: 'Targets',
+			schema: z.object({ id: z.number(), name: z.string() })
+		});
+		const slugged = defineResource({
+			name: 'slugged',
+			label: 'Slugged',
+			schema: z.object({ id: z.string(), name: z.string() })
+		});
+		const [byNumber, byString, optional, nullable] = fieldsOf({
+			byNumber: field(z.number(), { ref: () => target }),
+			byString: field(z.string(), { ref: () => slugged }),
+			optional: field(z.string(), { ref: () => slugged }).optional(),
+			nullable: field(z.number().nullable(), { ref: () => target })
+		});
+		expect(byNumber).toMatchObject({ kind: 'reference', id: 'number' });
+		expect(byString).toMatchObject({ kind: 'reference', id: 'string' });
+		expect(optional).toMatchObject({ kind: 'reference', id: 'string', required: false });
+		expect(nullable).toMatchObject({ kind: 'reference', id: 'number', required: false });
+	});
+
+	it('records no input details on a Field of another Kind', () => {
+		const [name, tags] = fieldsOf({ name: z.string(), tags: z.array(z.iso.date()) });
+		for (const described of [name, tags]) {
+			expect(described).not.toHaveProperty('dateType');
+			expect(described).not.toHaveProperty('integer');
+			expect(described).not.toHaveProperty('id');
+		}
+	});
+});
+
 describe('sortable Fields', () => {
 	it('are not sortable unless they say so', () => {
 		expect(firstField({ name: z.string() }).sortable).toBe(false);

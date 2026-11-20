@@ -47,8 +47,8 @@ describe('toFormSpec', () => {
 			['a number with an int check', z.number().int(), { kind: 'number', integer: true }],
 			['a boolean', z.boolean(), { kind: 'checkbox' }],
 			['an enum', z.enum(['Easy', 'Hard']), { kind: 'select', options: ['Easy', 'Hard'] }],
-			['an ISO date', z.iso.date(), { kind: 'date' }],
-			['a Date', z.date(), { kind: 'date' }],
+			['an ISO date', z.iso.date(), { kind: 'date', dateType: 'date' }],
+			['a Date', z.date(), { kind: 'date', dateType: 'Date' }],
 			['an ISO datetime', z.iso.datetime(), { kind: 'datetime' }]
 		])('%s', (_, schema, input) => {
 			expect(specOf(schema)).toMatchObject(input);
@@ -77,8 +77,8 @@ describe('toFormSpec', () => {
 			[z.url(), { kind: 'text', format: 'url' }],
 			[z.number(), { kind: 'number', integer: false }],
 			[z.boolean(), { kind: 'checkbox' }],
-			[z.iso.date(), { kind: 'date' }],
-			[z.date(), { kind: 'date' }],
+			[z.iso.date(), { kind: 'date', dateType: 'date' }],
+			[z.date(), { kind: 'date', dateType: 'Date' }],
 			[z.iso.datetime(), { kind: 'datetime' }]
 		];
 		for (const [schema, input] of scalars) {

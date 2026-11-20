@@ -99,7 +99,7 @@ function valueText(resource: ListUrlResource, field: Field, value: FilterValue):
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) return String(value);
 	const day = dateFormat.format(date);
-	if (dateInputType(resource, field.key) !== 'datetime') return day;
+	if (dateInputType(field) !== 'datetime') return day;
 	// The time as the filter input writes it, in UTC: `HH:mm`, with seconds only when they aren't zero.
 	const time = datetimeInputValue(date).slice(11);
 	return time === '00:00' ? day : `${day}, ${time} UTC`;

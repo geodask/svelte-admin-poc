@@ -6,13 +6,14 @@ import type { StandardSchemaV1 } from './standard-schema.ts';
 import {
 	describeField,
 	unwrap,
+	type DateType,
 	type Field,
 	type FieldBrandOf,
 	type IsWrapped,
 	type UnwrappedSchema
 } from './fields.ts';
 import { dateInputValue, datetimeInputValue, LOCAL_DATETIME } from './date-input.ts';
-import { idFromParam, idFromText } from './ids.ts';
+import { idFromParam, idOfType } from './ids.ts';
 import { ownKind, type KindInputOf, type KindRegistry } from './kinds.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 
@@ -59,7 +60,8 @@ export type FormInputSpec = FormFieldBase & {
 		 * Resource's name, under which `admin.ts` lists it.
 		 */
 		| { kind: 'reference'; target: string; id: 'string' | 'number' }
-		| { kind: 'date' }
+		/** A day, edited in a `date` input: an ISO date string, or a `Date` at midnight UTC. */
+		| { kind: 'date'; dateType: Exclude<DateType, 'datetime'> }
 		/** An ISO datetime, edited in a `datetime-local` input and read and written in UTC. */
 		| { kind: 'datetime' }
 		/**
@@ -125,8 +127,9 @@ function specsOf(fields: readonly Field[], object: z.ZodObject): FormInputSpec[]
 }
 
 /**
- * The input for a Field, from its Kind, refined by its unwrapped type where the Kind leaves a
- * choice (a text format, an integer, a date or a datetime) and by its `input` metadata.
+ * The input for a Field, from its Kind and the input details the Field records (an integer, a
+ * date or a datetime), refined by its unwrapped type for a text format and by its `input`
+ * metadata.
  * `undefined` for a type with no input (a union, a record, a list of booleans) and for a list,
  * rows or group holding one.
  */
@@ -140,7 +143,7 @@ function inputFor(field: Field, schema: z.ZodType): InputOf | undefined {
 			return { kind: 'text', format: format === 'email' || format === 'url' ? format : 'text' };
 		}
 		case 'number':
-			return { kind: 'number', integer: (type as z.ZodNumber).isInt };
+			return { kind: 'number', integer: field.integer };
 		case 'reference':
 			// Only once every Resource module has loaded: `assertFormInputs` never gets here.
 			return { kind: 'reference', target: field.ref().name, id: field.id };
@@ -149,7 +152,9 @@ function inputFor(field: Field, schema: z.ZodType): InputOf | undefined {
 		case 'enum':
 			return { kind: 'select', options: field.options };
 		case 'date':
-			return type instanceof z.ZodISODateTime ? { kind: 'datetime' } : { kind: 'date' };
+			return field.dateType === 'datetime'
+				? { kind: 'datetime' }
+				: { kind: 'date', dateType: field.dateType };
 		case 'list': {
 			const element = (type as z.ZodArray).element as z.ZodType;
 			const own = describeField(field.key, element);
@@ -755,7 +760,7 @@ function normalizeScalar(spec: FormInputSpec, schema: z.ZodType, raw: unknown): 
 		case 'reference':
 			return referenceId(spec, raw);
 		case 'date': {
-			if (!(unwrap(schema) instanceof z.ZodDate) || typeof raw !== 'string') return raw;
+			if (spec.dateType !== 'Date' || typeof raw !== 'string') return raw;
 			const date = new Date(`${raw}T00:00:00Z`);
 			return Number.isNaN(date.getTime()) ? raw : date;
 		}
@@ -780,9 +785,6 @@ function numberFromText(raw: unknown): unknown {
 	return Number(raw);
 }
 
-/** The plain schema of each id type, which reads an id as a route param is read. */
-const ID_SCHEMAS = { string: z.string(), number: z.number() } as const;
-
 /**
  * The id a Reference's picker sent, in the target's id type, by the rule a route param is read
  * by (`idFromParam`): for a number id, only a number written as `String(id)` (`3`, not `03` or
@@ -790,7 +792,7 @@ const ID_SCHEMAS = { string: z.string(), number: z.number() } as const;
  */
 function referenceId(spec: Extract<FormInputSpec, { kind: 'reference' }>, raw: unknown): unknown {
 	if (typeof raw !== 'string' && typeof raw !== 'number') return raw;
-	return idFromText(ID_SCHEMAS[spec.id], String(raw)) ?? raw;
+	return idOfType(spec.id, String(raw)) ?? raw;
 }
 
 /**

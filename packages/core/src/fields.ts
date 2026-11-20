@@ -230,6 +230,25 @@ export type DetectedKind =
 export type ReferenceKind = { kind: 'reference'; ref: () => Resource; id: 'string' | 'number' };
 
 /**
+ * Which date a date Field holds: an ISO date string (`z.iso.date()`), an ISO datetime string
+ * (`z.iso.datetime()`), or a `Date` (`z.date()`).
+ */
+export type DateType = 'date' | 'datetime' | 'Date';
+
+/**
+ * A Field's Kind with the details its inputs need, as `describeField` records them: an enum's
+ * options, which date a date Field holds (`dateType`), whether a number Field is an integer
+ * (`integer`), and a Reference's target and id type. Every module that reads or writes an input
+ * for a Field reads these from the Field, never from the Resource's schema.
+ */
+export type FieldKind =
+	| { kind: Exclude<KindName, 'enum' | 'reference' | 'number' | 'date'> }
+	| { kind: 'enum'; options: readonly (string | number)[] }
+	| { kind: 'number'; integer: boolean }
+	| { kind: 'date'; dateType: DateType }
+	| ReferenceKind;
+
+/**
  * The operators a filter on a Field of each Kind can use, in the canonical order. Its keys are the
  * Kinds a Field can be filtered by: the scalar Kinds, and a Reference, by equality.
  */
@@ -343,11 +362,12 @@ export function defaultLabel(key: string): string {
 
 /**
  * One Field of a Resource, as the Views need it. `kind` is its built-in Kind, which sorting,
- * filtering, the forms' validation and export follow; its Kind's details (an enum's options, a
- * Reference's target and id type) sit beside it. `namedKind` is the Kind it names, if any, which
- * the Views render it with.
+ * filtering, the forms' validation and export follow; its Kind's details (an enum's options,
+ * which date a date Field holds, whether a number is an integer, a Reference's target and id
+ * type) sit beside it: see `FieldKind`. `namedKind` is the Kind it names, if any, which the Views
+ * render it with.
  */
-export type Field = (DetectedKind | ReferenceKind) & {
+export type Field = FieldKind & {
 	key: string;
 	/** The named Kind the Views render it with (`FieldMeta.kind`), if it names one. */
 	namedKind?: string;
@@ -399,6 +419,27 @@ function fieldMeta(schema: z.ZodType): FieldMeta {
 	);
 }
 
+/** Which date a date Field's unwrapped type holds. */
+function dateTypeOf(type: z.ZodType): DateType {
+	if (type instanceof z.ZodISODateTime) return 'datetime';
+	return type instanceof z.ZodDate ? 'Date' : 'date';
+}
+
+/**
+ * A detected Kind with the details its inputs need, read from the Field's unwrapped type: which
+ * date a date Field holds, and whether a number Field is an integer (`z.int()` or `.int()`).
+ */
+function withInputDetails(detected: DetectedKind, type: z.ZodType): FieldKind {
+	switch (detected.kind) {
+		case 'date':
+			return { kind: 'date', dateType: dateTypeOf(type) };
+		case 'number':
+			return { kind: 'number', integer: (type as z.ZodNumber).isInt };
+		default:
+			return detected as FieldKind;
+	}
+}
+
 /**
  * Describe one Field from its key and schema. Metadata is looked up on the schema and every
  * wrapper inside it, so it is found whether `field()` went inside or outside `.optional()`;
@@ -407,9 +448,9 @@ function fieldMeta(schema: z.ZodType): FieldMeta {
 export function describeField(key: string, schema: z.ZodType): Field {
 	const chain = wrapperChain(schema);
 	const meta = fieldMeta(schema);
-	const kind: DetectedKind | ReferenceKind =
+	const kind: FieldKind =
 		meta.ref === undefined
-			? detectKind(schema)
+			? withInputDetails(detectKind(schema), unwrap(schema))
 			: { kind: 'reference', ref: meta.ref, id: referenceIdType(schema) ?? 'string' };
 	const hidden = meta.hidden ?? false;
 	const object = kind.kind === 'object' ? nestedObject(schema) : undefined;
