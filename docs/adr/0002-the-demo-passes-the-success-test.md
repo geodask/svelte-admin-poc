@@ -4,15 +4,22 @@ status: accepted
 
 # The demo passes the success test
 
-PER-11 set a success test for the Admin framework: one real app runs its admin on it with 3+ Resources, each wired in about 4 lines plus its schema, with replaced Views as the exception. It also set a rethink trigger: most Resources in that app need replaced Views, or per-Field metadata grows until it is no shorter than hand-written Fields. After M5 we measured the demo, which stands in for that app (ADR 0001), under the counting rule below. Each of its three Resources is wired in 7 lines. None of them needs a replaced View. Per-Field metadata averages 1.0 line, against 7.3 and 14.6 lines per Field in the demo's two hand-written Views. Neither half of the trigger fired, so the design stays as it is, and the docs say 7 lines instead of "about 4".
+PER-11, the Linear ticket that decided the core promise is worth building, set a success test: one real app runs its admin on the framework with 3+ Resources, each wired in about 4 lines plus its schema, with replaced Views as the exception. It also set a rethink trigger: most Resources in that app need replaced Views, or per-Field metadata grows until it is no shorter than hand-written Fields. We measured the demo, which stands in for that app (ADR 0001), at the end of M5, and neither half of the trigger fired, so the design stays as it is and the docs say 7 lines of wiring instead of "about 4".
+
+## Outcome
+
+- **Wiring:** 7 lines for each of the three Resources. That is more than "about 4", but the number isn't part of the rethink trigger.
+- **Replaced Views:** two Resources replace a View, and none of the three needs to.
+- **Per-Field metadata:** 1.0 line per Field, and 4 at most, against 17 lines for the one Field the demo writes fully by hand. It is clearly shorter.
 
 ## Counting rule
 
 Written down so that the next run is comparable.
 
 - Lines are counted as Prettier formats them (the repo's `.prettierrc`, print width 100), leaving out blank lines and whole-line comments.
-- **Wiring** is every line an app writes per Resource beyond its shared module: the remote module, imports included, plus the Resource's import and its entry in `admin.ts`. An own Provider module counts separately, as **Provider code**. Files an app writes once for all its Resources (the route files, `backend.ts`, the app's own Kinds) are not per Resource and aren't counted.
+- **Wiring** is every line an app writes per Resource beyond its shared module: the remote module, imports included, plus the Resource's import and its entry in `admin.ts`. An own Provider module counts separately, as **Provider code**. Files an app writes once for all its Resources (the route files, `backend.ts`, the app's Kinds) are not per Resource and aren't counted.
 - **Per-Field metadata** is the lines a Field's `field()` call and its settings add beyond the same Field written as its bare Zod type. A Field whose settings still fit on its one line counts as 1, so no setting is free. Zod's own checks and modifiers (`.min(1)`, `.optional()`) are schema, not metadata. A Resource's settings outside its schema (`label`, `icon`, `defaultSort` and the rest) aren't per-Field metadata either.
+- A Field's **settings** are the keys of its `field()` settings object.
 - **Hand-written cost per Field** is a replaced View's lines divided by the Fields it lays out.
 
 ## Wiring
@@ -25,7 +32,7 @@ Written down so that the next run is comparable.
 
 The remote module is three imports and one statement that Prettier breaks over two lines. In `admin.ts` the Resource takes its import and its one-line entry. So 4 of the 7 lines are imports. The bundled REST Provider costs the app 3 lines once (`backend.ts`), shared by every Resource that uses it.
 
-7 is more than PER-11's "about 4". The success test's number isn't part of the rethink trigger, so this doesn't fire it. The README and ADR 0001 now say 7.
+The README and ADR 0001 now say 7 lines instead of "about 4".
 
 ## Replaced Views
 
@@ -35,8 +42,8 @@ The remote module is three imports and one statement that Prettier breaks over t
 | users    | list (a card grid)         | to demonstrate replacing one | No                    |
 | posts    | create (a two-column form) | to demonstrate replacing one | No                    |
 
-- **Users' list View.** Six short Fields fit the stock table well, and the stock table has the sort that the card grid leaves out. A real app would keep the stock View.
-- **Posts' create View.** The stock create View renders the same Fields with the same inputs: the body's textarea, the tags' list and the author's Reference picker. Only the layout differs. A real app would keep the stock View unless its authors wanted that layout.
+- **Users' list View.** Users' seven short Fields fit the stock table well, and the stock table has the sort that the card grid leaves out. A real app would keep the stock View.
+- **Posts' create View.** The stock create View renders the same inputs for the same Fields: the body's textarea, the tags' list and the author's Reference picker. It also lays out the post this one replies to, which the replaced View leaves out, so a new post can't be a reply there. Beyond that, only the layout, the heading and the title's placeholder differ. A real app would keep the stock View unless its authors wanted that layout.
 
 By presence, 2 of the 3 Resources replace a View, which reads as "most". By need, which is what the trigger asks, none of them do. The first half of the trigger has not fired.
 
@@ -65,13 +72,15 @@ The baseline is the demo's two replaced Views, which are hand-written:
 | posts' create View (two columns) | 73      | 5               | 14.6            |
 | **Both**                         | **117** | **11**          | **10.6**        |
 
-This is a lower bound. Both Views reuse the core's helpers (`createListView`, `createFormView`) and the Theme's parts, and a View written without the framework would be longer. Within posts' create View, the one Field written fully by hand, the title, takes 17 lines (3 in the script and 14 in the markup). Each of its other four Fields takes 1 line, through the Theme's `FieldInput` or `ReferencePicker`, but only because that Field's metadata tells the part what to render. The card grid likewise loops over the Resource's Fields.
+This is a lower bound. Both Views reuse the core's helpers (`createListView`, `createFormView`) and the Theme's parts, and a View written without the framework would be longer. It is also an average: it spreads each View's fixed parts (the toolbar, the pager, the form's issues and actions) over its Fields, so it isn't what one more Field costs.
 
-At 1.0 line per Field, and 4 at most, per-Field metadata is about a tenth of the baseline's 10.6, and about a seventeenth of the 17 lines of the one Field written by hand. It is clearly shorter. The second half of the trigger has not fired.
+What one more Field costs by hand shows within posts' create View. The one Field written fully by hand, the title, takes 17 lines: 3 in the script and 14 in the markup. Each of the View's other four Fields takes 1 line, through the Theme's `FieldInput` or `ReferencePicker`, but only because that Field's metadata tells the part what to render. The card grid likewise loops over the Resource's Fields, so its Fields cost it nothing beyond their metadata.
+
+Per-Field metadata, at 1.0 line per Field and 4 at most, is a quarter of the 17 lines of the one hand-written Field at worst, and about a tenth of the 10.6-line average. It is clearly shorter. The second half of the trigger has not fired.
 
 ## Limits
 
 - The demo stands in for PER-11's "one real app" (ADR 0001). Its Resources were written to show the features, so recipes, which holds a Field of every built-in Kind, may carry more metadata than a typical Resource, and both replaced Views exist only as examples. The check runs again, under the counting rule above, when a real app adopts the framework, and that run is the one that counts.
 - The baseline comes from two Views, and it is a lower bound.
-- The app's own Kinds (`stars`, `numberOrSlug`, and the boolean cell) aren't counted. They are registered once in `admin.ts`, with their components, and any Field of any Resource may name them. In the demo, only recipes does.
-- The measurement was taken once by hand on the code as of M5.4, not by a test.
+- The app's Kind registrations in `admin.ts`, and their components, aren't counted, since an app writes them once for all its Resources. The app's own Kinds, `stars` and `numberOrSlug`, may be named by any Field, though in the demo only recipes names them. The replaced cell of the built-in boolean Kind applies to every boolean Field: recipes' `vegetarian` and users' `active`.
+- The measurement was taken once by hand, not by a test, on the code as M5.4 (the setup guide) left it.
