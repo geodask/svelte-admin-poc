@@ -69,8 +69,9 @@ export function createListLocation<R extends ListUrlResource>(
 	} = {}
 ) {
 	let debounce: ReturnType<typeof setTimeout> | undefined;
-	// Counts the cleanups asked for, so a newer one, or `dispose`, drops one still waiting.
-	let cleanups = 0;
+	// Goes up with each cleanup asked for, and on `dispose`, so a cleanup still waiting can tell
+	// it has been replaced or dropped.
+	let cleanupGeneration = 0;
 	// The text typed but not yet in the URL, and where the list was going when it was typed. While
 	// it is set the search box shows it, so a navigation that lands after more typing never
 	// rewinds the text.
@@ -96,6 +97,12 @@ export function createListLocation<R extends ListUrlResource>(
 	function dropDraft() {
 		clearTimeout(debounce);
 		draft = undefined;
+	}
+
+	/** Drop a cancelled search, and tell the View, so the search box shows the URL's search. */
+	function cancelDraft() {
+		dropDraft();
+		onChange();
 	}
 
 	/** Write a search to the URL now, in place, at page 1, from where the list is going. */
@@ -192,8 +199,7 @@ export function createListLocation<R extends ListUrlResource>(
 			onChange();
 			debounce = setTimeout(() => {
 				if (!superseded()) return writeSearch(text);
-				dropDraft();
-				onChange();
+				cancelDraft();
 			}, SEARCH_DEBOUNCE_MS);
 		},
 		/**
@@ -213,13 +219,13 @@ export function createListLocation<R extends ListUrlResource>(
 		 * time the URL changes. Resolves once the rewrite has started, or been skipped.
 		 */
 		async cleanUp(): Promise<void> {
-			const cleanup = ++cleanups;
+			const generation = ++cleanupGeneration;
 			if (router.pending() !== undefined) return;
 			const from = router.current();
 			const rewrite = listUrlRewrite(new URL(from, BASE), resource);
 			if (rewrite === undefined) return;
 			await ready().catch(() => {});
-			if (cleanup !== cleanups || goingTo() !== from) return;
+			if (generation !== cleanupGeneration || goingTo() !== from) return;
 			// The clean URL is the same list, so a search still waiting goes on from it.
 			if (draft?.typedAt === from) draft.typedAt = rewrite;
 			void router.navigate(rewrite, { replace: true });
@@ -233,10 +239,7 @@ export function createListLocation<R extends ListUrlResource>(
 		 * list keeps the search the form holds, which is the URL's.
 		 */
 		applyFilters(formData: FormData): Promise<void> {
-			if (draft !== undefined) {
-				dropDraft();
-				onChange();
-			}
+			if (draft !== undefined) cancelDraft();
 			const entries = [...formData].filter(
 				(entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== ''
 			);
@@ -247,7 +250,7 @@ export function createListLocation<R extends ListUrlResource>(
 		},
 		/** Drop a search or a cleanup still waiting, e.g. when the list goes away. */
 		dispose() {
-			cleanups++;
+			cleanupGeneration++;
 			dropDraft();
 		}
 	};

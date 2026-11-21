@@ -21,6 +21,14 @@ function setup(href: string) {
 	return { router, location };
 }
 
+/** A list location for recipes whose list is ready to navigate once the test says so. */
+function setupWaiting(href: string) {
+	const router = createMemoryListRouter(href);
+	const ready = Promise.withResolvers<void>();
+	const location = createListLocation(recipes, router, { ready: () => ready.promise });
+	return { router, location, ready };
+}
+
 /** Let typing pause for long enough that a waiting search ends. */
 const pause = () => vi.advanceTimersByTime(SEARCH_DEBOUNCE_MS);
 
@@ -49,6 +57,19 @@ describe('a search', () => {
 	});
 });
 
+describe('the URL', () => {
+	it('is the path and query of the URL the list shows, once a navigation lands', () => {
+		const { router, location } = setup('/admin/recipes?page=2');
+		const pathAndQuery = () => location.url.pathname + location.url.search;
+
+		router.click('/admin/recipes?page=3');
+		expect(pathAndQuery()).toBe('/admin/recipes?page=2');
+		router.land();
+
+		expect(pathAndQuery()).toBe('/admin/recipes?page=3');
+	});
+});
+
 describe('the params', () => {
 	it('are the current URL’s, with the Resource’s defaults for what it leaves out', () => {
 		const { location } = setup('/admin/recipes?page=2&q=pasta&sort=name&order=desc');
@@ -59,16 +80,6 @@ describe('the params', () => {
 			search: 'pasta',
 			sort: { field: 'name', order: 'desc' }
 		});
-	});
-
-	it('come with the path and query of the URL the list shows', () => {
-		const { router, location } = setup('/admin/recipes?page=2');
-
-		router.click('/admin/recipes?page=3');
-		expect(location.url.pathname + location.url.search).toBe('/admin/recipes?page=2');
-		router.land();
-
-		expect(location.url.pathname + location.url.search).toBe('/admin/recipes?page=3');
 	});
 
 	it('follow the URL once a navigation lands, not before', () => {
@@ -323,9 +334,7 @@ describe('the URL cleanup', () => {
 	});
 
 	it('waits until the list is ready to navigate', async () => {
-		const router = createMemoryListRouter('/admin/recipes?foo=1');
-		const ready = Promise.withResolvers<void>();
-		const location = createListLocation(recipes, router, { ready: () => ready.promise });
+		const { router, location, ready } = setupWaiting('/admin/recipes?foo=1');
 
 		const cleaned = location.cleanUp();
 		await vi.advanceTimersByTimeAsync(0);
@@ -346,14 +355,6 @@ describe('the URL cleanup', () => {
 });
 
 describe('latest intent wins over the URL cleanup', () => {
-	/** A list location whose list is ready once the test says so. */
-	function setupWaiting(href: string) {
-		const router = createMemoryListRouter(href);
-		const ready = Promise.withResolvers<void>();
-		const location = createListLocation(recipes, router, { ready: () => ready.promise });
-		return { router, location, ready };
-	}
-
 	it('a pager click before the rewrite starts keeps the pager’s page', async () => {
 		const { router, location, ready } = setupWaiting('/admin/recipes?foo=1');
 
@@ -465,6 +466,7 @@ describe('applying filters', () => {
 		return data;
 	}
 
+	/** A list location for filterable recipes over an in-memory router that starts at `href`. */
 	function setupFilters(href: string) {
 		const router = createMemoryListRouter(href);
 		const location = createListLocation(filterable, router);

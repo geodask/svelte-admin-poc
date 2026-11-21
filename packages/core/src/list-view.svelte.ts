@@ -155,9 +155,10 @@ export function createListView<R extends Resource>(
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>, IdOf<R>, ListParams<R>>
 ) {
+	const fields = resource.fields.filter((field) => field.list);
 	// The admin entries of the Resources the list's References point to.
-	const referenceTargets = resource.fields.flatMap((field) =>
-		field.list && field.kind === 'reference' ? [admin.resources[field.ref().name]] : []
+	const referenceTargets = fields.flatMap((field) =>
+		field.kind === 'reference' ? [admin.resources[field.ref().name]] : []
 	);
 
 	// The list location owns the URL, the params, the pager and sort hrefs, the search, the URL
@@ -184,7 +185,6 @@ export function createListView<R extends Resource>(
 	const params = $derived(listLocation.params);
 	/** The href of this list with `next` params, leaving out the Resource's defaults. */
 	const hrefOf = (next: ListParams) => listLocation.href(next);
-	const fields = resource.fields.filter((field) => field.list);
 	// The stock page sizes, with the Resource's own in its place among them.
 	const perPageOptions: readonly number[] = PER_PAGE_OPTIONS.includes(resource.perPage)
 		? PER_PAGE_OPTIONS

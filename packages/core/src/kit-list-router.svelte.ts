@@ -30,7 +30,6 @@ export function createKitListRouter(): ListRouter {
 			return shown === current ? undefined : shown;
 		},
 		navigate(href, { replace }) {
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- the current list's path
 			return goto(href, { replace, reset: false });
 		}
 	};
