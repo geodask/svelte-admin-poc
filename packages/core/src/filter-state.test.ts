@@ -37,7 +37,7 @@ const recipes = defineResource({
 	})
 });
 
-/** A filter control without its Field, each type of control keeping its own properties. */
+/** A filter control without its Field, each control keeping its own keys. */
 type WithoutField<C> = C extends unknown ? Omit<C, 'field'> : never;
 
 /** The list params a recipes list URL names. */
