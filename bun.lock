@@ -74,6 +74,8 @@
         "svelte": "catalog:",
         "svelte-check": "catalog:",
         "typescript": "catalog:",
+        "vitest": "catalog:",
+        "zod": "catalog:",
       },
       "peerDependencies": {
         "svelte": "catalog:",

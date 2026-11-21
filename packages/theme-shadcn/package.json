@@ -11,7 +11,8 @@
 		}
 	},
 	"scripts": {
-		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings"
+		"check": "svelte-check --tsconfig ./tsconfig.json --fail-on-warnings",
+		"test": "vitest run"
 	},
 	"peerDependencies": {
 		"svelte": "catalog:"
@@ -26,6 +27,8 @@
 	"devDependencies": {
 		"svelte": "catalog:",
 		"svelte-check": "catalog:",
-		"typescript": "catalog:"
+		"typescript": "catalog:",
+		"vitest": "catalog:",
+		"zod": "catalog:"
 	}
 }

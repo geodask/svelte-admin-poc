@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { defineResource, field, readListParams, type Field } from '@svelte-admin/core';
-import { filterState, type FilterControl } from './filter-state.ts';
+import {
+	defineResource,
+	field,
+	listHref,
+	readListParams,
+	type Field,
+	type FilterValue,
+	type ListParams
+} from '@svelte-admin/core';
+import { filterState, type FilterControl, type FilterTitleResolver } from './filter-state.ts';
 import type { ReferencePicker } from './reference-picker.ts';
 
 const users = defineResource({
@@ -48,8 +56,16 @@ const paramsAt = (search: string) =>
 const fakePicker = (field: Field, current: string) =>
 	({ made: `${field.key}=${current}` }) as unknown as ReferencePicker;
 
+/** The href of the recipes list with `params`, as the list location writes it. */
+const hrefOf = (params: ListParams) =>
+	listHref(new URL('http://admin.test/admin/recipes'), params, recipes);
+
+/** A stand-in Record title resolver, which knows no record. */
+const noTitle: FilterTitleResolver = async () => undefined;
+
 /** The filter state of the recipes list at a URL. */
-const stateAt = (search: string) => filterState(recipes, paramsAt(search), { picker: fakePicker });
+const stateAt = (search: string, title: FilterTitleResolver = noTitle) =>
+	filterState(recipes, paramsAt(search), { picker: fakePicker, title, href: hrefOf });
 
 /** The control of the Field `key`, without its Field, which is the Resource's own. */
 function controlOf(search: string, key: string) {
@@ -456,5 +472,130 @@ describe('the next params', () => {
 			{ field: 'calories', operator: 'lt', value: 500 },
 			{ field: 'internalNotes', operator: 'eq', value: 'draft' }
 		]);
+	});
+});
+
+describe('the chips', () => {
+	/** The chips of the recipes list at a URL, each by its Field's key, operator and values. */
+	const partsAt = async (search: string, title?: FilterTitleResolver) =>
+		(await stateAt(search, title).chips).map(({ field, operator, values }) => ({
+			field: field.key,
+			operator,
+			values
+		}));
+
+	it('are empty while no filter is on', async () => {
+		expect(await stateAt('').chips).toEqual([]);
+		expect(await stateAt('?q=pasta&sort=prepTimeMinutes&page=2&difficulty=').chips).toEqual([]);
+	});
+
+	it.each<[string, string, string, FilterValue[]]>([
+		['difficulty=Easy', 'eq', 'difficulty', ['Easy']],
+		['difficulty=Hard&difficulty=Easy', 'in', 'difficulty', ['Easy', 'Hard']],
+		['name.contains=piz', 'contains', 'name', ['piz']],
+		// Operators no control offers: a text `eq` beside `contains`, and `lt` and `gt`.
+		['name=Pizza', 'eq', 'name', ['Pizza']],
+		['calories.lt=500', 'lt', 'calories', [500]],
+		['prepTimeMinutes.gt=-5', 'gt', 'prepTimeMinutes', [-5]],
+		['prepTimeMinutes.lte=1500', 'lte', 'prepTimeMinutes', [1500]],
+		['prepTimeMinutes.gte=45.5', 'gte', 'prepTimeMinutes', [45.5]],
+		['vegetarian=false', 'eq', 'vegetarian', [false]],
+		['servedOn=2024-03-01', 'eq', 'servedOn', ['2024-03-01']],
+		['publishedAt.gte=2024-03-01T10:30', 'gte', 'publishedAt', ['2024-03-01T10:30:00.000Z']],
+		['cookedOn.lte=2024-12-31', 'lte', 'cookedOn', [new Date('2024-12-31')]]
+	])('name the Field, operator and values of %s', async (query, operator, key, values) => {
+		expect(await partsAt(`?${query}`)).toEqual([
+			{ field: key, operator, values: values.map((value) => ({ value })) }
+		]);
+	});
+
+	it("give each chip the Resource's own Field, hidden or not", async () => {
+		const chips = await stateAt('?internalNotes=draft&difficulty=Easy').chips;
+
+		expect(chips.map((chip) => chip.field)).toEqual([
+			recipes.fields.find((candidate) => candidate.key === 'difficulty'),
+			recipes.fields.find((candidate) => candidate.key === 'internalNotes')
+		]);
+	});
+
+	it('give a filter on a hidden Field a chip too', async () => {
+		expect(await partsAt('?internalNotes=draft')).toEqual([
+			{ field: 'internalNotes', operator: 'eq', values: [{ value: 'draft' }] }
+		]);
+	});
+
+	it('come in the canonical order, one per filter', async () => {
+		expect(
+			(await partsAt('?vegetarian=true&prepTimeMinutes.gte=10&difficulty=Easy')).map(
+				({ field, operator }) => `${field}.${operator}`
+			)
+		).toEqual(['difficulty.eq', 'vegetarian.eq', 'prepTimeMinutes.gte']);
+	});
+
+	describe("a Reference's value", () => {
+		it('has its Record title, through the resolver the caller gives', async () => {
+			const title: FilterTitleResolver = async (field, value) =>
+				field.key === 'authorId' && value === 3 ? 'Ada Lovelace' : undefined;
+
+			expect(await partsAt('?authorId=3', title)).toEqual([
+				{ field: 'authorId', operator: 'eq', values: [{ value: 3, title: 'Ada Lovelace' }] }
+			]);
+		});
+
+		it('has no title when the resolver finds no record', async () => {
+			expect(await partsAt('?authorId=1234')).toEqual([
+				{ field: 'authorId', operator: 'eq', values: [{ value: 1234 }] }
+			]);
+		});
+
+		it('is the only value the resolver is asked for', async () => {
+			const asked: [string, FilterValue][] = [];
+			const title: FilterTitleResolver = async (field, value) => {
+				asked.push([field.key, value]);
+				return 'Ada Lovelace';
+			};
+
+			const parts = await partsAt('?authorId=3&difficulty=Easy&name=Ada', title);
+
+			expect(asked).toEqual([['authorId', 3]]);
+			expect(parts.map(({ values }) => values)).toEqual([
+				[{ value: 'Ada' }],
+				[{ value: 'Easy' }],
+				[{ value: 3, title: 'Ada Lovelace' }]
+			]);
+		});
+	});
+
+	describe('the href that removes a chip', () => {
+		it('keeps the search, sort, page size and every other filter, at page 1', async () => {
+			const chips = await stateAt(
+				'?page=3&perPage=25&sort=prepTimeMinutes&order=desc&q=pasta&difficulty=Easy&difficulty=Hard&prepTimeMinutes.gte=10&prepTimeMinutes.lte=30&vegetarian=true'
+			).chips;
+
+			expect(chips.map((chip) => chip.href)).toEqual([
+				'/admin/recipes?perPage=25&sort=prepTimeMinutes&order=desc&q=pasta&vegetarian=true&prepTimeMinutes.lte=30&prepTimeMinutes.gte=10',
+				'/admin/recipes?perPage=25&sort=prepTimeMinutes&order=desc&q=pasta&difficulty=Easy&difficulty=Hard&prepTimeMinutes.lte=30&prepTimeMinutes.gte=10',
+				'/admin/recipes?perPage=25&sort=prepTimeMinutes&order=desc&q=pasta&difficulty=Easy&difficulty=Hard&vegetarian=true&prepTimeMinutes.gte=10',
+				'/admin/recipes?perPage=25&sort=prepTimeMinutes&order=desc&q=pasta&difficulty=Easy&difficulty=Hard&vegetarian=true&prepTimeMinutes.lte=30'
+			]);
+		});
+
+		it('writes the other filters as the filter form sends them', async () => {
+			const chips = await stateAt(
+				'?vegetarian=true&publishedAt.gte=2024-03-01T10:30&cookedOn.lte=2024-12-31'
+			).chips;
+
+			expect(chips.map((chip) => chip.href)).toEqual([
+				'/admin/recipes?publishedAt.gte=2024-03-01T10%3A30&cookedOn.lte=2024-12-31',
+				'/admin/recipes?vegetarian=true&cookedOn.lte=2024-12-31',
+				'/admin/recipes?vegetarian=true&publishedAt.gte=2024-03-01T10%3A30'
+			]);
+		});
+
+		it("leaves out the Resource's own page size and default sort", async () => {
+			const chips = await stateAt('?page=2&perPage=10&sort=name&difficulty=Easy').chips;
+
+			expect(chips.map((chip) => chip.href)).toEqual(['/admin/recipes']);
+		});
 	});
 });

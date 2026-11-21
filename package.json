@@ -48,7 +48,7 @@
 		"check": "bun run --filter '*' check",
 		"lint": "eslint . && prettier --check .",
 		"format": "prettier --write .",
-		"test:unit": "bun run --filter @svelte-admin/core test",
+		"test:unit": "bun run --filter @svelte-admin/core --filter @svelte-admin/theme-shadcn test",
 		"test:e2e": "bun run --filter @svelte-admin/demo test:e2e"
 	},
 	"devDependencies": {
