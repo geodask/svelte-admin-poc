@@ -17,14 +17,6 @@
 			"types": "./src/server.ts",
 			"default": "./src/server.ts"
 		},
-		"./export": {
-			"types": "./src/export.ts",
-			"default": "./src/export.ts"
-		},
-		"./lookup": {
-			"types": "./src/lookup.ts",
-			"default": "./src/lookup.ts"
-		},
 		"./hooks": {
 			"types": "./src/hooks.ts",
 			"default": "./src/hooks.ts"

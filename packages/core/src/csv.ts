@@ -1,6 +1,6 @@
 // The CSV writer behind a list View's export. Pure, with no browser or Kit import, but meant for
-// the server only: `serveResource`'s `exportList` runs it, and it must never reach the client
-// build (the demo's client bundle check looks for it). Seeded from the proof of concept's
+// the server only: the resource operations' `exportList` runs it, tested through that module, and
+// it must never reach the client build (the demo's client bundle check looks for it). Seeded from the proof of concept's
 // `export.ts`, with a formula-injection guard added.
 import type { Resource } from './resource.ts';
 
