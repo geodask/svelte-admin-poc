@@ -1,4 +1,3 @@
-import { z } from 'zod';
 import { NotFoundError, ProviderError } from './errors.ts';
 import { toCsv } from './csv.ts';
 import { MAX_PER_PAGE, withDefaultSort } from './list-params.ts';
@@ -23,8 +22,8 @@ export type ResourceOperationsOptions = {
 
 /** Why the Provider refused an operation: a `NotFoundError`, or any other Provider error. */
 export type OperationFailure =
-	| { kind: 'not-found'; status: 404; message: string }
-	| { kind: 'provider-error'; status: Exclude<ProviderError['status'], 404>; message: string };
+	| { reason: 'not-found'; status: 404; message: string }
+	| { reason: 'provider-error'; status: Exclude<ProviderError['status'], 404>; message: string };
 
 /** What an operation gives: its value, or why the Provider refused it. */
 export type Outcome<T> = { ok: true; value: T } | { ok: false; failure: OperationFailure };
@@ -32,7 +31,7 @@ export type Outcome<T> = { ok: true; value: T } | { ok: false; failure: Operatio
 /**
  * A Resource's operations on its Provider, without Kit: what `serveResource` serves as its remote
  * functions. Each one takes the request's `ProviderContext` and gives an `Outcome`: its value, or
- * the Provider error it got as a failure (`not-found` for a `NotFoundError`, `provider-error` with
+ * the Provider error it got as a failure, by its reason (`not-found` for a `NotFoundError`, `provider-error` with
  * the status and message of any other). Anything else is unexpected and rejects: an error that is
  * no Provider error, a record that doesn't match the schema, or the record of another id than the
  * one asked for.
@@ -58,16 +57,14 @@ export function resourceOperations<R extends Resource>(
 	{ maxExportRows = DEFAULT_MAX_EXPORT_ROWS }: ResourceOperationsOptions = {}
 ) {
 	if (!Number.isInteger(maxExportRows) || maxExportRows < 1) {
-		// Named after `serveResource`, which takes the option and is this module's only caller.
 		throw new Error(
-			`serveResource(${resource.name}): \`maxExportRows\` must be a whole number from 1, not ${maxExportRows}.`
+			`Resource "${resource.name}": its \`maxExportRows\` must be a whole number from 1, not ${maxExportRows}.`
 		);
 	}
-	const records = z.array(resource.schema);
 	const parse = (record: unknown) => resource.schema.parse(record) as RecordOf<R>;
 	const listPage = async (context: ProviderContext, params: ListParams<R>) => {
 		const result = await provider.getList(context, params);
-		return { ...result, data: records.parse(result.data) as RecordOf<R>[] };
+		return { ...result, data: result.data.map(parse) };
 	};
 	return {
 		async getList(
@@ -134,13 +131,13 @@ async function outcomeOf<T>(operation: () => Promise<T>): Promise<Outcome<T>> {
 			ok: false,
 			failure:
 				status === 404
-					? { kind: 'not-found', status, message }
-					: { kind: 'provider-error', status, message }
+					? { reason: 'not-found', status, message }
+					: { reason: 'provider-error', status, message }
 		};
 	}
 }
 
-/** Where `resolveIds` reads records from: a Provider's `getOne` and `getMany`, bound to the request. */
+/** Where `resolveIds` reads records: a Provider's `getOne` and `getMany`, bound to the request. */
 type IdSource<Id> = {
 	/** One record by its id. It throws `NotFoundError` for an id with no record. */
 	getOne(id: Id): Promise<unknown>;
@@ -206,7 +203,7 @@ async function resolveIds<Id extends string | number, T extends object>(
  * never asks for more than it keeps. It stops at the last page (the `total` is reached,
  * `hasNextPage` is false, or a page comes back short) or at the cap, keeping the first `maxRows`
  * records, and says whether it stopped at the cap with more left. A page that fails fails the
- * whole collection: it rejects with that failure, and keeps nothing.
+ * whole export: it rejects with that failure, and keeps nothing.
  */
 async function collectPages<T>(
 	getPage: (page: number, perPage: number) => Promise<ListResult<T>>,

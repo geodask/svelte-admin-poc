@@ -163,7 +163,7 @@ describe('listing a page of records', () => {
 
 		expect(outcome).toEqual({
 			ok: false,
-			failure: { kind: 'provider-error', status: 400, message: 'Bad filter' }
+			failure: { reason: 'provider-error', status: 400, message: 'Bad filter' }
 		});
 	});
 });
@@ -185,7 +185,7 @@ describe('getting one record', () => {
 
 		expect(await resourceOperations(notes, provider).getOne(context, 7)).toEqual({
 			ok: false,
-			failure: { kind: 'not-found', status: 404, message: 'No such note' }
+			failure: { reason: 'not-found', status: 404, message: 'No such note' }
 		});
 	});
 
@@ -202,7 +202,7 @@ describe('getting one record', () => {
 
 		expect(await resourceOperations(notes, provider).getOne(context, 1)).toEqual({
 			ok: false,
-			failure: { kind: 'provider-error', status: 409, message: 'Locked' }
+			failure: { reason: 'provider-error', status: 409, message: 'Locked' }
 		});
 	});
 
@@ -308,7 +308,7 @@ describe('looking up records by id for References, with a Provider without getMa
 
 		expect(await resourceOperations(users, provider).lookup(context, [1, 2])).toEqual({
 			ok: false,
-			failure: { kind: 'provider-error', status: 409, message: 'Locked' }
+			failure: { reason: 'provider-error', status: 409, message: 'Locked' }
 		});
 	});
 
@@ -412,7 +412,7 @@ describe('looking up records by id for References, with a Provider that has getM
 
 		expect(await resourceOperations(users, provider).lookup(context, [1, 2])).toEqual({
 			ok: false,
-			failure: { kind: 'provider-error', status: 409, message: 'Locked' }
+			failure: { reason: 'provider-error', status: 409, message: 'Locked' }
 		});
 	});
 
@@ -656,7 +656,7 @@ describe('the pages an export reads', () => {
 
 		expect(await resourceOperations(items, provider).exportList(context, {})).toEqual({
 			ok: false,
-			failure: { kind: 'provider-error', status: 400, message: 'Bad filter' }
+			failure: { reason: 'provider-error', status: 400, message: 'Bad filter' }
 		});
 	});
 

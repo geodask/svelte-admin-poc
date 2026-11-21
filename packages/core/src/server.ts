@@ -48,19 +48,14 @@ const MAX_REFRESHED_LISTS = 25;
 /** How many ids one bulk delete takes at most. */
 const MAX_BULK_DELETE = 1000;
 
-/**
- * What `serveResource` takes besides the Resource and its Provider: `maxExportRows`, how many
- * records an export holds at most, a whole number from 1. Defaults to 10,000. An export that
- * stops at it says so.
- */
+/** What `serveResource` takes besides the Resource and its Provider (see `maxExportRows`). */
 export type ServeResourceOptions = ResourceOperationsOptions;
 
 /**
  * Build a Resource's remote functions from its Provider. The app's `.remote.ts` re-exports
  * them in one line and exports nothing else.
  *
- * - `getList` and `getOne` are remote queries. When `getList` is asked for no sort and the
- *   Resource has a `defaultSort`, the Provider gets that sort, so it needn't know the default.
+ * - `getList` and `getOne` are remote queries.
  * - `create` is a remote form, validated with `formSchema(resource, 'create', kinds)`, which the
  *   browser also runs as its preflight. The server's `kinds` are the admin's, which
  *   `adminHooks(admin)` in `hooks.server.ts` hands it: a form with a Field that names a Kind fails
@@ -77,24 +72,16 @@ export type ServeResourceOptions = ResourceOperationsOptions;
  *   message, or a logged unexpected error as a generic 500), instead of throwing, so the list
  *   queries the client asks for are refreshed either way (`deleteMany(ids).updates(getList)`).
  * - `lookup` is a batched remote query (Kit's `query.batch`), for the References that point to
- *   this Resource. It takes one typed id and gives its record, parsed with the schema as on
- *   `getOne`, or `null` when there is none. Every `lookup` a page makes in the same tick reaches
- *   the server as one request, whose distinct ids it resolves at once: one Provider
- *   `getMany` per 100 distinct ids, an id it doesn't return as `null`; or without `getMany`, one
- *   `getOne` per id, a `NotFoundError` as `null`. A record for another id is ignored. Any other
+ *   this Resource. It takes one typed id and gives its record, or `null` when there is none.
+ *   Every `lookup` a page makes in the same tick reaches the server as one request, and a
  *   Provider error fails the whole batch with its status.
  * - `exportList` is a remote command too, so export needs JavaScript. It takes the list params
  *   without the page and the page size (a search, a sort and filters), checked by the same rules
- *   as `getList`'s, and gets the default sort when it names no sort. It pages through the
- *   Provider's `getList` (in pages of `MAX_PER_PAGE`, or of the cap when
- *   that is smaller), parsing each page with the Resource schema, until the last page (the
- *   `total` is reached, `hasNextPage` is false, or a page comes back short) or the cap: 10,000
- *   records, or the `maxExportRows` option. It returns the records as CSV (see `toCsv`), how
- *   many it holds, whether it stopped at the cap with more left, and the Provider's `total` when
- *   it gave one. A Provider error on any page fails the whole export with its status and
- *   message, as on reads; there is never a partial file.
+ *   as `getList`'s, and returns the CSV with how many records it holds, whether it stopped at the
+ *   cap (10,000, or the `maxExportRows` option) and the Provider's `total` when it gave one.
  *
- * The reads and the export are the resource operations' (see `resourceOperations`), which
+ * The reads and the export are the resource operations' (see `resourceOperations` for the
+ * default sort, the batching of `lookup`, the export's pages and the records' parsing), which
  * `serveResource` only serves through Kit.
  *
  * From a read or a delete, a Provider error becomes an HTTP error with its message:
