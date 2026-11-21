@@ -1,8 +1,9 @@
 // The filter state of a list: for a Resource and the list params in its URL, the filter controls
-// to offer with their current values, the hidden inputs the filter form and the search form keep,
-// and, from what the filter form holds, the next list params. Every decision about one filter's
-// control lives here. Shared and pure: a Reference's control gets its picker from the caller, so
-// it imports no Kit or remote module.
+// to offer with their current values, the active filter chips, the hidden inputs the filter form
+// and the search form keep, and, from what the filter form holds, the next list params. Every
+// decision about one filter's control or chip lives here. Shared and pure: a Reference's control
+// gets its picker, and its chip its Record title, from the caller, and so do the chips' hrefs, so
+// it imports no Kit or remote module. It formats no value: the Theme writes a chip's text.
 import type { Field, FilterOperator } from './fields.ts';
 import {
 	dateInputType,
@@ -12,7 +13,7 @@ import {
 	readListParams,
 	type ListUrlResource
 } from './list-url.ts';
-import type { FilterValue, ListParams } from './provider.ts';
+import type { FilterValue, ListFilter, ListParams } from './provider.ts';
 import type { ReferencePicker } from './reference-picker.ts';
 
 /** One choice of a list View's filter control: a checkbox or a radio button. */
@@ -94,13 +95,54 @@ export type FilterControl = { field: Field; operators: readonly FilterOperator[]
 export type FilterPickerResolver = (field: Field, current: string) => ReferencePicker;
 
 /**
- * The filter state of a list: see `FilterState`. `params` are the list params in its URL, and
- * `picker` gives each Reference filter its picker, e.g. `createReferencePicker` through the admin.
+ * Gives a Reference filter's value its Record title: for the Reference Field and the id the list
+ * is filtered by, the target record's Record title, or `undefined` when there is no such record
+ * or it can't be looked up. It never rejects.
  */
+export type FilterTitleResolver = (field: Field, value: FilterValue) => Promise<string | undefined>;
+
+/** One value of a chip: as the list params hold it, and for a Reference its record's Record title. */
+export type FilterChipValue = {
+	value: FilterValue;
+	/** A Reference's record's Record title, when the record was found. */
+	title?: string;
+};
+
+/**
+ * One filter the list is filtered by, for the active filter chips, as parts the Theme writes the
+ * chip's text from (as in "Prep time (min) ≥ 10" or "Author: Ada Lovelace"): its Field, its
+ * operator, its values (several only for `in`) and the href of the list without it.
+ */
+export type FilterChip = {
+	field: Field;
+	operator: FilterOperator;
+	values: FilterChipValue[];
+	/**
+	 * The href of the list without this filter: at page 1, keeping the search, the sort, the page
+	 * size and every other filter.
+	 */
+	href: string;
+};
+
+/**
+ * What the filter state takes from its caller, so it stays pure:
+ *
+ * - `picker`: each Reference filter's picker, e.g. `createReferencePicker` through the admin.
+ * - `title`: a Reference filter value's Record title, e.g. through `resolveReference`.
+ * - `href`: the href of the list with other params, e.g. the list location's `href`, which
+ *   keeps the path of the list the person is on, so the chips carry the admin's base path.
+ */
+export type FilterStateOptions = {
+	picker: FilterPickerResolver;
+	title: FilterTitleResolver;
+	href: (params: ListParams) => string;
+};
+
+/** The filter state of a list: see `FilterState`. `params` are the list params in its URL. */
 export function filterState<R extends ListUrlResource>(
 	resource: R,
 	params: ListParams<R>,
-	{ picker }: { picker: FilterPickerResolver }
+	{ picker, title, href }: FilterStateOptions
 ): FilterState<R> {
 	// Read through the loose `ListParams`, which has every param: a Resource that isn't searchable
 	// has no `search` in its own, one with no sortable Field no `sort`, and one with no filterable
@@ -216,8 +258,40 @@ export function filterState<R extends ListUrlResource>(
 	/** The hidden inputs that keep `kept`, leaving out their defaults. */
 	const hiddenInputs = (kept: ListParams): HiddenInput[] => [...listSearchParams(kept, resource)];
 
+	/** A filter's chip, or `undefined` for a filter on a Field the Resource doesn't have. */
+	async function chip(filter: ListFilter): Promise<FilterChip | undefined> {
+		const field = resource.fields.find((candidate) => candidate.key === filter.field);
+		if (field === undefined) return undefined;
+		// The href first, before any lookup, so it is written for these params.
+		const others = filters.filter((other) => other !== filter);
+		const removeHref = href({
+			page: 1,
+			perPage,
+			sort,
+			search,
+			filters: others.length > 0 ? others : undefined
+		});
+		const chipValue = async (value: FilterValue): Promise<FilterChipValue> => {
+			const found = field.kind === 'reference' ? await title(field, value) : undefined;
+			return found === undefined ? { value } : { value, title: found };
+		};
+		const values = await Promise.all(
+			filter.operator === 'in' ? filter.value.map(chipValue) : [chipValue(filter.value)]
+		);
+		return { field, operator: filter.operator, values, href: removeHref };
+	}
+
+	// Made once, when first asked for, so a list that shows no chips looks up no Record title.
+	let chips: Promise<FilterChip[]> | undefined;
+
 	return {
 		controls,
+		get chips(): Promise<FilterChip[]> {
+			chips ??= Promise.all(filters.map(chip)).then((all) =>
+				all.filter((made) => made !== undefined)
+			);
+			return chips;
+		},
 		hidden: {
 			filterForm: hiddenInputs({ page: 1, perPage, sort, search, filters: uncontrolled }),
 			searchForm: hiddenInputs({ page: 1, perPage, sort, filters })
@@ -246,6 +320,13 @@ export type FilterState<R extends ListUrlResource = ListUrlResource> = {
 	 * operators no control offers, still work from the URL.
 	 */
 	controls: FilterControl[];
+	/**
+	 * The active filter chips: one per filter the list is filtered by, in the canonical order,
+	 * whatever its operator (including ones no control offers) and whether or not its Field is
+	 * hidden, so a person can always see and remove what narrows the list. Empty while no filter
+	 * is on. A promise, since a Reference's Record title is looked up; the same one each time.
+	 */
+	readonly chips: Promise<FilterChip[]>;
 	/**
 	 * The hidden inputs each GET form keeps, so it works without JavaScript too, never naming the
 	 * page (so it starts again at page 1) or a param at its default (the Resource's own page size

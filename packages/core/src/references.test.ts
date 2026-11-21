@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
-	activeFilters,
 	defineAdmin,
 	defineResource,
 	field,
@@ -411,57 +410,6 @@ describe("a Reference's link, for the list and detail Views", () => {
 		expect(await resolveReference(admin, author, undefined)).toBeUndefined();
 		expect(await resolveReference(admin, author, null)).toBeUndefined();
 		expect(await resolveReference(admin, title, 3)).toBeUndefined();
-		expect(asked).toEqual([]);
-	});
-});
-
-describe('a Reference filter chip', () => {
-	const chips = async (search: string, admin?: Parameters<typeof activeFilters>[2]) =>
-		(await activeFilters(new URL(`http://admin.test/admin/posts${search}`), posts, admin)).map(
-			({ label, href }) => ({ label, href })
-		);
-
-	it("names the record by its Record title, through the target's lookup", async () => {
-		const { admin, asked } = adminWith(known);
-
-		expect(await chips('?userId=3', admin)).toEqual([
-			{ label: 'Author: Ada Lovelace', href: '/admin/posts' }
-		]);
-		expect(asked).toEqual([3]);
-	});
-
-	it('names a string id by its record too', async () => {
-		const { admin } = adminWith(known);
-
-		expect(await chips('?tagId=bread%2Frye', admin)).toEqual([
-			{ label: 'Tag ID: Bread', href: '/admin/posts' }
-		]);
-	});
-
-	it('names the id as the URL writes it when the record is missing', async () => {
-		const { admin } = adminWith(known);
-
-		expect(await chips('?userId=1234', admin)).toEqual([
-			{ label: 'Author: 1234', href: '/admin/posts' }
-		]);
-	});
-
-	it('names the id when the lookup fails, so the list never fails for it', async () => {
-		const { admin } = adminWith(async () => {
-			throw { status: 500, body: { message: 'Internal Error' } };
-		});
-
-		expect(await chips('?userId=3', admin)).toEqual([{ label: 'Author: 3', href: '/admin/posts' }]);
-	});
-
-	it('names the id without the admin, which reaches the target', async () => {
-		expect(await chips('?userId=3')).toEqual([{ label: 'Author: 3', href: '/admin/posts' }]);
-	});
-
-	it('asks nothing for a list with no Reference filter', async () => {
-		const { admin, asked } = adminWith(known);
-
-		expect(await chips('?q=x', admin)).toEqual([]);
 		expect(asked).toEqual([]);
 	});
 });

@@ -1,13 +1,17 @@
 import { settled } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
-import { activeFilters, type ActiveFilter } from './active-filters.ts';
 import type { Admin } from './admin.ts';
 import { resolveReference, type ReferenceLink } from './reference-link.ts';
 import { createReferencePicker, type ReferencePicker } from './reference-picker.ts';
 import { createPath, hasPathSegment, recordPath } from './ids.ts';
 import type { Field } from './fields.ts';
-import { filterState, type FilterControl, type HiddenInput } from './filter-state.ts';
-import type { ListParams, SortableKey, SortOrder } from './provider.ts';
+import {
+	filterState,
+	type FilterChip,
+	type FilterControl,
+	type HiddenInput
+} from './filter-state.ts';
+import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
 import { createKitListRouter } from './kit-list-router.svelte.ts';
 import { createListLocation } from './list-location.ts';
 import { titleKeys } from './record-title.ts';
@@ -136,7 +140,6 @@ export function createListView<R extends Resource>(
 	const looseParams = $derived(params satisfies ListParams as ListParams);
 	const urlSearch = $derived(looseParams.search);
 	const filterCount = $derived(looseParams.filters?.length ?? 0);
-	const activeFilterList = $derived(activeFilters(url, resource, admin));
 
 	const selection = createSelection<IdOf<R>>();
 
@@ -154,8 +157,16 @@ export function createListView<R extends Resource>(
 		return made;
 	}
 
-	// The filter controls and the hidden inputs the forms keep, for the params in the URL.
-	const filters = $derived(filterState(resource, params, { picker }));
+	/** A Reference filter value's Record title, through the target's lookup in the admin. */
+	async function title(field: Field, value: FilterValue): Promise<string | undefined> {
+		return (await resolveReference(admin, field, value))?.title;
+	}
+
+	// The filter controls, the chips and the hidden inputs the forms keep, for the params in the
+	// URL. The chips' hrefs are the list location's, so they keep the list's path.
+	const filters = $derived(
+		filterState(resource, params, { picker, title, href: (next) => listLocation.href(next) })
+	);
 
 	return {
 		resource,
@@ -355,16 +366,17 @@ export function createListView<R extends Resource>(
 			return { action: url.pathname, hidden: filters.hidden.filterForm };
 		},
 		/**
-		 * Each filter the list is filtered by now, for the chips under the toolbar: whatever its
-		 * operator (including ones no filter control offers) and whether or not its Field is hidden,
-		 * with a readable label ("Prep time (min) ≥ 10", "Difficulty: Easy, Medium", a Reference by
-		 * its record's Record title, as in "Author: Ada Lovelace") and the href of the list without
-		 * it, which starts again at page 1 and keeps the search, the sort, the page size and every
-		 * other filter. Empty while no filter is on. It resolves during SSR: await it, e.g.
-		 * `$derived(await view.activeFilters)`.
+		 * The active filter chips under the toolbar: one per filter the list is filtered by now,
+		 * whatever its operator (including ones no filter control offers) and whether or not its
+		 * Field is hidden, in the canonical order. Each is a set of parts (see `FilterChip`), not a
+		 * finished label: its Field, its operator, its values (a Reference's with its record's
+		 * Record title, when found) and the href of the list without it, which starts again at page
+		 * 1 and keeps the search, the sort, the page size and every other filter. The Theme writes
+		 * the chip's text from them, with the formatting its cells use. Empty while no filter is on.
+		 * It resolves during SSR: await it, e.g. `$derived(await view.activeFilters)`.
 		 */
-		get activeFilters(): Promise<ActiveFilter[]> {
-			return activeFilterList;
+		get activeFilters(): Promise<FilterChip[]> {
+			return filters.chips;
 		},
 		/** The href of the list with no filters, at page 1, keeping the search, sort and page size. */
 		get clearFiltersHref(): string {

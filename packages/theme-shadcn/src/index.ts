@@ -19,6 +19,8 @@ export { default as Pager, type PagerProps } from './Pager.svelte';
 export { default as SortHeader, type SortHeaderProps } from './SortHeader.svelte';
 export { default as FilterPanel, type FilterPanelProps } from './FilterPanel.svelte';
 export { default as ActiveFilters, type ActiveFiltersProps } from './ActiveFilters.svelte';
+// A chip's text from its parts, for a replaced View that renders its own chips.
+export { formatFilterChip } from './format.ts';
 export { default as ExportButton, type ExportButtonProps } from './ExportButton.svelte';
 export {
 	default as SelectionCheckbox,
