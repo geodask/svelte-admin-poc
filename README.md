@@ -48,7 +48,7 @@ Each Resource costs 7 lines of wiring in the demo, beside its shared module: a r
 
 Each route passes its View the admin, beside the Resource and its remote functions, and the core's headless helpers take it as their first argument: `createListView(admin, resource, remote)`, `createDetailView(admin, resource, remote, id)` and `createFormView(admin, resource, remote, 'create')` (or `'edit', id`). It is always an argument, never context, and it is typed as the core's `Admin`, so anything that isn't an admin is a type error. It is how the Views reach the admin's other Resources: a Reference's target, for one (see [References](#references)).
 
-`@svelte-admin/core` is the browser-safe entry. `serveResource` lives in `@svelte-admin/core/server`, the bundled REST Provider in `@svelte-admin/core/rest`, and the export's CSV writer and pager in `@svelte-admin/core/export`; import those only from `.remote.ts` files and server-only modules.
+`@svelte-admin/core` is the browser-safe entry. `serveResource` lives in `@svelte-admin/core/server` and the bundled REST Provider in `@svelte-admin/core/rest`; import those only from `.remote.ts` files and server-only modules.
 
 ## Writes
 
@@ -158,7 +158,7 @@ export const { getList, getOne, lookup, create, update, deleteOne, deleteMany, e
 
 The file has one column per Field the detail View shows (every Field that isn't hidden), in schema order, headed by the Field's label. Text is written as it is, numbers as plain decimals (never with an exponent), booleans as `true` and `false`, dates as ISO strings, lists of scalars joined with `, `, and objects (or lists of them) as JSON; a missing value is an empty cell. Every cell is quoted, with `"` doubled, every row ends with CRLF (RFC 4180), and the file starts with a UTF-8 byte order mark, so a spreadsheet shows accented text correctly. A text cell (a header, or a list joined as text, included) that starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a `'` in front, so opening the file can never run a formula. Numbers are never prefixed, so `-5` stays a number.
 
-A replaced list View calls `createListView(...).exportCsv()`, which never rejects: it resolves to `{ ok: true, rows, capped, total? }` after starting the download, or `{ ok: false, message, status? }` with a message that is safe to show. The writer and the pager are pure modules on `@svelte-admin/core/export`, as `toCsv(resource, records)` and `collectPages(getPage, maxRows)`, so they are unit-tested on their own. They are server-only: the client bundle check fails if the CSV writer reaches the client build. In the demo, posts cap their export at 50, so with the 60 seeded posts the cap shows.
+A replaced list View calls `createListView(...).exportCsv()`, which never rejects: it resolves to `{ ok: true, rows, capped, total? }` after starting the download, or `{ ok: false, message, status? }` with a message that is safe to show. The writer and the pager sit inside the core's resource operations module, the plain module behind `serveResource`'s reads, and are unit-tested through it with an in-memory Provider. They are server-only: the client bundle check fails if the CSV writer reaches the client build. In the demo, posts cap their export at 50, so with the 60 seeded posts the cap shows.
 
 ## Kinds and References
 

@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, hydrated, test } from './fixtures.ts';
+import { open } from './form-helpers.ts';
 import { backendRequestsFor, captureGetList, dataRows, pager, uniquePage } from './list-helpers.ts';
 
 const searchBox = (page: Page) => page.getByRole('searchbox', { name: 'Search recipes' });
@@ -11,7 +12,7 @@ test.describe('searching recipes, which are searchable', () => {
 	test('submitting the search form shows only matching recipes, and the URL holds only q', async ({
 		page
 	}) => {
-		await page.goto('/admin/recipes');
+		await open(page, '/admin/recipes');
 
 		await searchBox(page).fill('pasta');
 		await searchBox(page).press('Enter');
@@ -23,7 +24,7 @@ test.describe('searching recipes, which are searchable', () => {
 	});
 
 	test('searching from page 2 lands on page 1 and keeps the page size', async ({ page }) => {
-		await page.goto('/admin/recipes?page=2&perPage=5');
+		await open(page, '/admin/recipes?page=2&perPage=5');
 
 		await searchBox(page).fill('chicken');
 		await searchBox(page).press('Enter');

@@ -29,13 +29,15 @@ import {
 	listPathOfCreateView,
 	recordPath
 } from './ids.ts';
-import { toCsv } from './csv.ts';
 import { servedFormSchema } from './hooks.ts';
-import { collectPages } from './export-pages.ts';
-import { resolveIds } from './resolve-ids.ts';
-import { exportParamsSchema, listParamsSchema, withDefaultSort } from './list-params.ts';
-import type { ListParams, ListResult, ProviderContext, ResourceProvider } from './provider.ts';
+import { exportParamsSchema, listParamsSchema } from './list-params.ts';
+import type { ListResult, ProviderContext, ResourceProvider } from './provider.ts';
 import type { DeleteManyReport, ExportReport, ServedFailure } from './remote.ts';
+import {
+	resourceOperations,
+	type Outcome,
+	type ResourceOperationsOptions
+} from './resource-operations.ts';
 import type { IdOf, RecordOf, Resource } from './resource.ts';
 import type { StandardSchemaV1 } from './standard-schema.ts';
 import { describeUnexpected, UNEXPECTED_MESSAGE } from './unexpected.ts';
@@ -46,24 +48,14 @@ const MAX_REFRESHED_LISTS = 25;
 /** How many ids one bulk delete takes at most. */
 const MAX_BULK_DELETE = 1000;
 
-/** How many records an export holds at most, unless `serveResource` is given another cap. */
-const DEFAULT_MAX_EXPORT_ROWS = 10_000;
-
-/** What `serveResource` takes besides the Resource and its Provider. */
-export type ServeResourceOptions = {
-	/**
-	 * How many records an export holds at most: a whole number from 1. Defaults to 10,000. An
-	 * export that stops at it says so.
-	 */
-	maxExportRows?: number;
-};
+/** What `serveResource` takes besides the Resource and its Provider (see `maxExportRows`). */
+export type ServeResourceOptions = ResourceOperationsOptions;
 
 /**
  * Build a Resource's remote functions from its Provider. The app's `.remote.ts` re-exports
  * them in one line and exports nothing else.
  *
- * - `getList` and `getOne` are remote queries. When `getList` is asked for no sort and the
- *   Resource has a `defaultSort`, the Provider gets that sort, so it needn't know the default.
+ * - `getList` and `getOne` are remote queries.
  * - `create` is a remote form, validated with `formSchema(resource, 'create', kinds)`, which the
  *   browser also runs as its preflight. The server's `kinds` are the admin's, which
  *   `adminHooks(admin)` in `hooks.server.ts` hands it: a form with a Field that names a Kind fails
@@ -80,22 +72,17 @@ export type ServeResourceOptions = {
  *   message, or a logged unexpected error as a generic 500), instead of throwing, so the list
  *   queries the client asks for are refreshed either way (`deleteMany(ids).updates(getList)`).
  * - `lookup` is a batched remote query (Kit's `query.batch`), for the References that point to
- *   this Resource. It takes one typed id and gives its record, parsed with the schema as on
- *   `getOne`, or `null` when there is none. Every `lookup` a page makes in the same tick reaches
- *   the server as one request, whose distinct ids it resolves with `resolveIds`: one Provider
- *   `getMany` per 100 distinct ids, an id it doesn't return as `null`; or without `getMany`, one
- *   `getOne` per id, a `NotFoundError` as `null`. A record for another id is ignored. Any other
+ *   this Resource. It takes one typed id and gives its record, or `null` when there is none.
+ *   Every `lookup` a page makes in the same tick reaches the server as one request, and a
  *   Provider error fails the whole batch with its status.
  * - `exportList` is a remote command too, so export needs JavaScript. It takes the list params
  *   without the page and the page size (a search, a sort and filters), checked by the same rules
- *   as `getList`'s, and gets the default sort when it names no sort. It pages through the
- *   Provider's `getList` with `collectPages` (in pages of `MAX_PER_PAGE`, or of the cap when
- *   that is smaller), parsing each page with the Resource schema, until the last page (the
- *   `total` is reached, `hasNextPage` is false, or a page comes back short) or the cap: 10,000
- *   records, or the `maxExportRows` option. It returns the records as CSV (see `toCsv`), how
- *   many it holds, whether it stopped at the cap with more left, and the Provider's `total` when
- *   it gave one. A Provider error on any page fails the whole export with its status and
- *   message, as on reads; there is never a partial file.
+ *   as `getList`'s, and returns the CSV with how many records it holds, whether it stopped at the
+ *   cap (10,000, or the `maxExportRows` option) and the Provider's `total` when it gave one.
+ *
+ * The reads and the export are the resource operations' (see `resourceOperations` for the
+ * default sort, the batching of `lookup`, the export's pages and the records' parsing), which
+ * `serveResource` only serves through Kit.
  *
  * From a read or a delete, a Provider error becomes an HTTP error with its message:
  * `NotFoundError` a 404, `InvalidInputError` a 400 and `ConflictError` a 409. From a save, it
@@ -123,14 +110,9 @@ export type ServeResourceOptions = {
 export function serveResource<R extends Resource>(
 	resource: R,
 	provider: ResourceProvider<R>,
-	{ maxExportRows = DEFAULT_MAX_EXPORT_ROWS }: ServeResourceOptions = {}
+	options: ServeResourceOptions = {}
 ) {
-	if (!Number.isInteger(maxExportRows) || maxExportRows < 1) {
-		throw new Error(
-			`serveResource(${resource.name}): \`maxExportRows\` must be a whole number from 1, not ${maxExportRows}.`
-		);
-	}
-	const records = z.array(resource.schema);
+	const operations = resourceOperations(resource, provider, options);
 	const save = {
 		create: formSaver(resource, 'create'),
 		edit: formSaver(resource, 'edit', { notFound: NO_LONGER_EXISTS })
@@ -138,42 +120,20 @@ export function serveResource<R extends Resource>(
 
 	const getList = query(
 		listParamsSchema(resource),
-		async (params): Promise<ListResult<RecordOf<R>>> => {
-			// Asked for no sort, the Provider gets the default, so every caller gets the same order.
-			const sorted = withDefaultSort(params, resource);
-			const result = await served(() => provider.getList(providerContext(), sorted));
-			// A record that doesn't match the schema is an unexpected error, masked as a 500.
-			// Parsing also drops any key the schema doesn't declare before it reaches the browser.
-			return { ...result, data: records.parse(result.data) as RecordOf<R>[] };
-		}
+		async (params): Promise<ListResult<RecordOf<R>>> =>
+			served(await operations.getList(providerContext(), params))
 	);
 
 	// The id schema never coerces, so `getOne('1')` is invalid input for a number id, not record 1.
 	const idSchema = resource.schema.shape.id as z.ZodType<IdOf<R>, IdOf<R>>;
 
-	const getOne = query(idSchema, async (id): Promise<RecordOf<R>> => {
-		const record = resource.schema.parse(
-			await served(() => provider.getOne(providerContext(), id))
-		);
-		// Never serve a different record than the one asked for, whatever the backend did with
-		// the id: like a record that doesn't match the schema, that is an unexpected error.
-		if (record.id !== id) {
-			throw new Error(`The Provider for ${resource.name} returned another record for an id`);
-		}
-		return record as RecordOf<R>;
-	});
+	const getOne = query(idSchema, async (id): Promise<RecordOf<R>> =>
+		served(await operations.getOne(providerContext(), id))
+	);
 
 	// The same id schema as `getOne`: `lookup('1')` is invalid input for a number id.
 	const lookup = query.batch(idSchema, async (ids) => {
-		const context = providerContext();
-		const parse = (record: unknown) => resource.schema.parse(record) as RecordOf<R>;
-		const { getMany } = provider;
-		const source = {
-			getOne: (id: IdOf<R>) => provider.getOne(context, id),
-			// Called on the Provider, as `getOne` is, so a Provider written as a class keeps its `this`.
-			...(getMany && { getMany: (chunk: IdOf<R>[]) => getMany.call(provider, context, chunk) })
-		};
-		const records = await served(() => resolveIds(ids, source, parse));
+		const records = served(await operations.lookup(providerContext(), ids));
 		return (id: IdOf<R>): RecordOf<R> | null => records.get(id) ?? null;
 	});
 
@@ -223,7 +183,7 @@ export function serveResource<R extends Resource>(
 
 	// The same id schema as `getOne`: `deleteOne('1')` is invalid input for a number id.
 	const deleteOne = command(idSchema, async (id): Promise<void> => {
-		await served(() => provider.deleteOne(providerContext(), id));
+		await servedCall(() => provider.deleteOne(providerContext(), id));
 		await requested(getList, MAX_REFRESHED_LISTS).refreshAll();
 	});
 
@@ -256,20 +216,8 @@ export function serveResource<R extends Resource>(
 		return failure ? { deleted, failure } : { deleted };
 	});
 
-	const exportList = command(
-		exportParamsSchema(resource),
-		async (params): Promise<ExportReport> => {
-			// Asked for no sort, the export gets the default, in the same order as the list View.
-			const query = withDefaultSort(params, resource);
-			const { records: exported, ...summary } = await collectPages(async (page, perPage) => {
-				const listParams = { ...query, page, perPage } as ListParams<R>;
-				// A Provider error fails the whole export, as on a read: there is no partial file.
-				const result = await served(() => provider.getList(providerContext(), listParams));
-				// Like `getList`, a record that doesn't match the schema is an unexpected error.
-				return { ...result, data: records.parse(result.data) as RecordOf<R>[] };
-			}, maxExportRows);
-			return { csv: toCsv(resource, exported), rows: exported.length, ...summary };
-		}
+	const exportList = command(exportParamsSchema(resource), async (params): Promise<ExportReport> =>
+		served(await operations.exportList(providerContext(), params))
 	);
 
 	return {
@@ -313,8 +261,14 @@ function bulkDeleteFailure(thrown: unknown, resourceName: string): ServedFailure
 	return { status: 500, message: UNEXPECTED_MESSAGE };
 }
 
+/** An operation's value, or the HTTP error with the status and message of its failure. */
+function served<T>(outcome: Outcome<T>): T {
+	if (!outcome.ok) error(outcome.failure.status, outcome.failure.message);
+	return outcome.value;
+}
+
 /** Run a Provider call, turning a Provider error into the HTTP error with its status. */
-async function served<T>(call: () => Promise<T>): Promise<T> {
+async function servedCall<T>(call: () => Promise<T>): Promise<T> {
 	try {
 		return await call();
 	} catch (failure) {
