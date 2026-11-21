@@ -44,8 +44,7 @@ const BASE = 'http://list.invalid';
  *   waits until the list is `ready` to navigate, and skips the rewrite when any navigation has
  *   started or landed meanwhile, so it never undoes one. A search still waiting goes on from the
  *   clean URL.
- * - Applying filters adds a history entry, at page 1, and cancels a search still waiting or
- *   loading.
+ * - Applying filters adds a history entry and cancels a search still waiting or loading.
  *
  * It reads the router through `ListRouter` only, so the rule is tested without Kit. It holds no
  * reactive state: `onChange` is called whenever the search being typed is taken, written or
@@ -231,22 +230,16 @@ export function createListLocation<R extends ListUrlResource>(
 			void router.navigate(rewrite, { replace: true });
 		},
 		/**
-		 * Filter the list by what a filter form holds (its controls and its hidden inputs, which keep
-		 * the search, the sort and the page size): go to the clean href it names, at page 1, from
-		 * the list's path, with no empty param. It adds a history entry, so Back undoes it.
+		 * Filter the list: go to the list with `next` params (those the filter form names, from the
+		 * filter state's `nextParams`, which start again at page 1), from the list's path, leaving
+		 * out their defaults. It adds a history entry, so Back undoes it.
 		 *
 		 * It is the person's newest intent, so it cancels a search still waiting or loading; the
-		 * list keeps the search the form holds, which is the URL's.
+		 * list keeps the search `next` holds, which the filter form keeps from the URL.
 		 */
-		applyFilters(formData: FormData): Promise<void> {
+		applyFilters(next: ListParams<R>): Promise<void> {
 			if (draft !== undefined) cancelDraft();
-			const entries = [...formData].filter(
-				(entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== ''
-			);
-			const from = router.current();
-			const { pathname } = new URL(from, BASE);
-			const next = { ...paramsAt(`${pathname}?${new URLSearchParams(entries)}`), page: 1 };
-			return router.navigate(hrefAt(from, next), { replace: false });
+			return router.navigate(hrefAt(router.current(), next), { replace: false });
 		},
 		/** Drop a search or a cleanup still waiting, e.g. when the list goes away. */
 		dispose() {

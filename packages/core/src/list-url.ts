@@ -267,22 +267,29 @@ export function encodeListParams(
 export type ListHrefResource = ListSettings & FilterFieldsResource;
 
 /**
- * The href of the list at `url`'s path with `params`, for pager, page-size and search links.
- * It keeps the path, so it carries the admin's base path and works the same in a replaced
- * View. Only params that differ from their defaults are written (the Resource's own page size
- * and default sort included, and a blank search is none), and every other search param is
- * dropped. Params with no sort read back with the Resource's default sort. Filter values are
- * written as the filter form sends them: a datetime as `YYYY-MM-DDTHH:mm` in UTC (with seconds
- * only when they aren't zero), and a `Date` as its day, `YYYY-MM-DD`.
+ * The search params of the list with `params`, as a list link writes them: only params that
+ * differ from their defaults (the Resource's own page size and default sort included, and a blank
+ * search is none). Params with no sort read back with the Resource's default sort. Filter values
+ * are written as the filter form sends them: a datetime as `YYYY-MM-DDTHH:mm` in UTC (with
+ * seconds only when they aren't zero), and a `Date` as its day, `YYYY-MM-DD`.
  */
-export function listHref(url: URL, params: ListParams, resource: ListHrefResource): string {
+export function listSearchParams(params: ListParams, resource: ListHrefResource): URLSearchParams {
 	const filters = params.filters?.map((filter): ListFilter => {
 		const write = (value: FilterValue) => filterInputValue(resource, filter.field, value);
 		return filter.operator === 'in'
 			? { ...filter, value: filter.value.map(write) }
 			: { ...filter, value: write(filter.value) };
 	});
-	const query = encodeListParams({ ...params, filters }, urlDefaults(resource)).toString();
+	return encodeListParams({ ...params, filters }, urlDefaults(resource));
+}
+
+/**
+ * The href of the list at `url`'s path with `params`, for pager, page-size and search links.
+ * It keeps the path, so it carries the admin's base path and works the same in a replaced
+ * View. Its query is `listSearchParams`, so every other search param is dropped.
+ */
+export function listHref(url: URL, params: ListParams, resource: ListHrefResource): string {
+	const query = listSearchParams(params, resource).toString();
 	return query ? `${url.pathname}?${query}` : url.pathname;
 }
 
