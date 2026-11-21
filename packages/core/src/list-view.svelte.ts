@@ -1,5 +1,3 @@
-import { goto } from '$app/navigation';
-import { page } from '$app/state';
 import { settled } from 'svelte';
 import { SvelteSet } from 'svelte/reactivity';
 import { activeFilters, type ActiveFilter } from './active-filters.ts';
@@ -9,15 +7,9 @@ import { createReferencePicker, type ReferencePicker } from './reference-picker.
 import { createPath, hasPathSegment, recordPath } from './ids.ts';
 import type { Field, FilterOperator } from './fields.ts';
 import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
-import { createKitListRouter } from './kit-list-router.ts';
+import { createKitListRouter } from './kit-list-router.svelte.ts';
 import { createListLocation } from './list-location.ts';
-import {
-	dateInputType,
-	filterParamName,
-	listUrlRewrite,
-	readListParams,
-	filterInputValue
-} from './list-url.ts';
+import { dateInputType, filterParamName, filterInputValue } from './list-url.ts';
 import { titleKeys } from './record-title.ts';
 import type { DeleteFailure, ExportSummary, RemoteFailure, ResourceRemote } from './remote.ts';
 import { readRemoteFailure } from './remote-failure.ts';
@@ -163,21 +155,36 @@ export function createListView<R extends Resource>(
 	resource: R,
 	remote: ResourceRemote<RecordOf<R>, IdOf<R>, ListParams<R>>
 ) {
-	// Kit 3 types `page.url` as a read-only URL, so the helpers take a plain copy. Nothing mutates
-	// it: a new copy is derived whenever `page.url` changes.
-	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
-	const url = $derived(new URL(page.url.href));
-	// The list location owns the params, the pager and sort hrefs, and the search: it is the one
-	// place that navigates for the search. It holds no reactive state of its own, so it says when
-	// the search text changes, and the search box reads it again.
+	const fields = resource.fields.filter((field) => field.list);
+	// The admin entries of the Resources the list's References point to.
+	const referenceTargets = fields.flatMap((field) =>
+		field.kind === 'reference' ? [admin.resources[field.ref().name]] : []
+	);
+
+	// The list location owns the URL, the params, the pager and sort hrefs, the search, the URL
+	// cleanup and the filter form: it is the one place that navigates for the list. It holds no
+	// reactive state of its own, so it says when the search text changes, and the search box reads
+	// it again. Kit's adapter reads Kit's router state, which is reactive, so what is derived from
+	// the list location follows the URL.
 	let searchChanges = $state(0);
 	const listLocation = createListLocation(resource, createKitListRouter(), {
-		onChange: () => searchChanges++
+		onChange: () => searchChanges++,
+		// A workaround: Kit's router (3.2) crashes on a navigation that starts while hydration still
+		// waits for something the page loads, here the page of records or the remote module of a
+		// Reference's target, which each cell imports to resolve its title. So the URL cleanup waits
+		// for both (`getList` answers from the query cache the page already holds, without a
+		// request), then for `settled()`, so the cells that awaited them have rendered too. Drop it
+		// once Kit handles such a navigation.
+		ready: (): Promise<unknown> =>
+			Promise.allSettled([
+				remote.getList(params),
+				...referenceTargets.map((entry) => entry.remote())
+			]).then(() => settled())
 	});
+	const url = $derived(listLocation.url);
 	const params = $derived(listLocation.params);
 	/** The href of this list with `next` params, leaving out the Resource's defaults. */
 	const hrefOf = (next: ListParams) => listLocation.href(next);
-	const fields = resource.fields.filter((field) => field.list);
 	// The stock page sizes, with the Resource's own in its place among them.
 	const perPageOptions: readonly number[] = PER_PAGE_OPTIONS.includes(resource.perPage)
 		? PER_PAGE_OPTIONS
@@ -188,37 +195,13 @@ export function createListView<R extends Resource>(
 			.map((key) => fields.find((field) => field.key === key))
 			.find(Boolean) ?? fields[0];
 
-	// The admin entries of the Resources the list's References point to.
-	const referenceTargets = fields.flatMap((field) =>
-		field.kind === 'reference' ? [admin.resources[field.ref().name]] : []
-	);
-
+	// Clean the URL whenever it changes: the one the page was opened with, or one typed in the
+	// address bar. The list location skips a rewrite a newer navigation has overtaken.
 	$effect(() => {
-		const rewrite = listUrlRewrite(url, resource);
-		if (rewrite === undefined) return;
-		// A workaround: Kit's router (3.2) crashes on a navigation that starts while hydration still
-		// waits for something the page loads, here the page of records or the remote module of a
-		// Reference's target, which each cell imports to resolve its title. So wait for both
-		// (`getList` answers from the query cache the page already holds, without a request), then
-		// for `settled()`, so the cells that awaited them have rendered too. Drop it once Kit
-		// handles such a navigation.
-		const loading = [remote.getList(params), ...referenceTargets.map((entry) => entry.remote())];
-		// Set when the URL changes first, e.g. a click on the pager: that rewrite is stale then.
-		let stale = false;
-		void Promise.allSettled(loading)
-			.then(() => settled())
-			.then(() => {
-				if (stale) return;
-				// The rewrite only cleans the URL the page was opened with, so keep scroll and focus.
-				// eslint-disable-next-line svelte/no-navigation-without-resolve -- the current list path
-				return goto(rewrite, { replace: true, reset: false });
-			});
-		return () => {
-			stale = true;
-		};
+		void listLocation.cleanUp();
 	});
 
-	// Leaving the list (or switching Resource) drops a search that was still waiting.
+	// Leaving the list (or switching Resource) drops a search or a cleanup that was still waiting.
 	$effect(() => () => listLocation.dispose());
 
 	// The search and the sort in the URL, if any. Read through the loose `ListParams`, since a
@@ -575,16 +558,11 @@ export function createListView<R extends Resource>(
 		/**
 		 * Filter the list by what the filter form holds (its controls and hidden inputs): go to the
 		 * clean href it names, with no empty param, at page 1. A navigation that adds a history
-		 * entry, so Back undoes it; the scroll and focus stay where they are.
+		 * entry, so Back undoes it; the scroll and focus stay where they are. It cancels a search
+		 * still waiting: the list keeps the search the URL had, which the form holds.
 		 */
 		applyFilters(formData: FormData): Promise<void> {
-			const entries = [...formData].filter(
-				(entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== ''
-			);
-			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
-			const target = new URL(`${url.pathname}?${new URLSearchParams(entries)}`, url);
-			const next = { ...readListParams(target, resource), page: 1 };
-			return goto(hrefOf(next), { reset: false });
+			return listLocation.applyFilters(formData);
 		}
 	};
 

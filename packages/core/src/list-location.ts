@@ -1,4 +1,4 @@
-import { listHref, readListParams, type ListUrlResource } from './list-url.ts';
+import { listHref, listUrlRewrite, readListParams, type ListUrlResource } from './list-url.ts';
 import type { ListParams, SortableKey, SortOrder } from './provider.ts';
 
 /** How long typing must pause before a search is written to the URL. */
@@ -30,27 +30,48 @@ export type ListRouter = {
 const BASE = 'http://list.invalid';
 
 /**
- * A list's location: the list params in its URL, the hrefs of the pager and the sort headers,
- * and the search being typed, which it writes to the URL once typing pauses. It is the one place
- * that navigates for the search.
+ * A list's location: the URL the list shows and the list params in it, the hrefs of the pager
+ * and the sort headers, the search being typed, which it writes to the URL once typing pauses,
+ * the URL cleanup, and the filter form. It is the one place that navigates for the list.
  *
- * Its rule is "latest intent wins". A search waits out a short pause, and a navigation the
- * person starts meanwhile (a pager or sort link, Back) cancels it, whether that navigation is
- * still loading or has landed; the search box then shows that URL's search. Typing again starts
- * a fresh search, from where the list is going. A search the URL already holds navigates nowhere.
+ * Its rule is "latest intent wins":
+ *
+ * - A search waits out a short pause, and a navigation the person starts meanwhile (a pager or
+ *   sort link, Back, applying filters) cancels it, whether that navigation is still loading or
+ *   has landed; the search box then shows that URL's search. Typing again starts a fresh search,
+ *   from where the list is going. A search the URL already holds navigates nowhere.
+ * - The URL cleanup rewrites a URL with bad or unknown params to its clean form, in place. It
+ *   waits until the list is `ready` to navigate, and skips the rewrite when any navigation has
+ *   started or landed meanwhile, so it never undoes one. A search still waiting goes on from the
+ *   clean URL.
+ * - Applying filters adds a history entry, at page 1, and cancels a search still waiting or
+ *   loading.
  *
  * It reads the router through `ListRouter` only, so the rule is tested without Kit. It holds no
  * reactive state: `onChange` is called whenever the search being typed is taken, written or
  * dropped, so a View reads the search text again.
  *
- * Call `dispose` when the list goes away, so a waiting search is dropped.
+ * Call `dispose` when the list goes away, so a waiting search or cleanup is dropped.
  */
 export function createListLocation<R extends ListUrlResource>(
 	resource: R,
 	router: ListRouter,
-	{ onChange = () => {} }: { onChange?: () => void } = {}
+	{
+		onChange = () => {},
+		ready = () => Promise.resolve()
+	}: {
+		onChange?: () => void;
+		/**
+		 * Settles once the list can navigate, which the URL cleanup waits for: e.g. once the page
+		 * has hydrated. Called only when the URL needs cleaning. By default, at once.
+		 */
+		ready?: () => Promise<unknown>;
+	} = {}
 ) {
 	let debounce: ReturnType<typeof setTimeout> | undefined;
+	// Goes up with each cleanup asked for, and on `dispose`, so a cleanup still waiting can tell
+	// it has been replaced or dropped.
+	let cleanupGeneration = 0;
 	// The text typed but not yet in the URL, and where the list was going when it was typed. While
 	// it is set the search box shows it, so a navigation that lands after more typing never
 	// rewinds the text.
@@ -76,6 +97,12 @@ export function createListLocation<R extends ListUrlResource>(
 	function dropDraft() {
 		clearTimeout(debounce);
 		draft = undefined;
+	}
+
+	/** Drop a cancelled search, and tell the View, so the search box shows the URL's search. */
+	function cancelDraft() {
+		dropDraft();
+		onChange();
 	}
 
 	/** Write a search to the URL now, in place, at page 1, from where the list is going. */
@@ -116,6 +143,13 @@ export function createListLocation<R extends ListUrlResource>(
 	}
 
 	return {
+		/**
+		 * The URL the list shows. Only its path and query mean anything: its origin is a placeholder,
+		 * since the router gives hrefs.
+		 */
+		get url(): URL {
+			return new URL(router.current(), BASE);
+		},
 		/** The list params in the URL the list shows, with defaults for what it leaves out. */
 		get params(): ListParams<R> {
 			return paramsAt(router.current());
@@ -165,8 +199,7 @@ export function createListLocation<R extends ListUrlResource>(
 			onChange();
 			debounce = setTimeout(() => {
 				if (!superseded()) return writeSearch(text);
-				dropDraft();
-				onChange();
+				cancelDraft();
 			}, SEARCH_DEBOUNCE_MS);
 		},
 		/**
@@ -179,8 +212,45 @@ export function createListLocation<R extends ListUrlResource>(
 			if (draft === undefined && router.pending() !== undefined) return;
 			writeSearch(searchText());
 		},
-		/** Drop a search still waiting to be written, e.g. when the list goes away. */
+		/**
+		 * Rewrite the URL the list shows to its clean form (see `listUrlRewrite`), in place, when it
+		 * has bad or unknown params, once the list is `ready`. A navigation in flight, or one that
+		 * starts or lands before then, skips it, as does a newer cleanup or `dispose`. Call it each
+		 * time the URL changes. Resolves once the rewrite has started, or been skipped.
+		 */
+		async cleanUp(): Promise<void> {
+			const generation = ++cleanupGeneration;
+			if (router.pending() !== undefined) return;
+			const from = router.current();
+			const rewrite = listUrlRewrite(new URL(from, BASE), resource);
+			if (rewrite === undefined) return;
+			await ready().catch(() => {});
+			if (generation !== cleanupGeneration || goingTo() !== from) return;
+			// The clean URL is the same list, so a search still waiting goes on from it.
+			if (draft?.typedAt === from) draft.typedAt = rewrite;
+			void router.navigate(rewrite, { replace: true });
+		},
+		/**
+		 * Filter the list by what a filter form holds (its controls and its hidden inputs, which keep
+		 * the search, the sort and the page size): go to the clean href it names, at page 1, from
+		 * the list's path, with no empty param. It adds a history entry, so Back undoes it.
+		 *
+		 * It is the person's newest intent, so it cancels a search still waiting or loading; the
+		 * list keeps the search the form holds, which is the URL's.
+		 */
+		applyFilters(formData: FormData): Promise<void> {
+			if (draft !== undefined) cancelDraft();
+			const entries = [...formData].filter(
+				(entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== ''
+			);
+			const from = router.current();
+			const { pathname } = new URL(from, BASE);
+			const next = { ...paramsAt(`${pathname}?${new URLSearchParams(entries)}`), page: 1 };
+			return router.navigate(hrefAt(from, next), { replace: false });
+		},
+		/** Drop a search or a cleanup still waiting, e.g. when the list goes away. */
 		dispose() {
+			cleanupGeneration++;
 			dropDraft();
 		}
 	};

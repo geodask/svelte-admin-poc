@@ -8,7 +8,8 @@ export type MemoryNavigation = { href: string; replace: boolean };
  * most one navigation in flight, which lands only when the test says so, as a slow page load
  * would. A newer navigation replaces the one in flight, as Kit's router does.
  *
- * - `navigate` is how the list location navigates (a search). It is logged in `navigations`.
+ * - `navigate` is how the list location navigates (a search, the URL cleanup, applying
+ *   filters). It is logged in `navigations`.
  * - `click` is a navigation the person starts with a plain link (a pager or sort link), which
  *   Kit's router handles without the list location.
  * - `land` completes the navigation in flight.
