@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { defineResource, field } from '@svelte-admin/core';
+import { defineResource, field, type ListParams } from '@svelte-admin/core';
 import { createListLocation, SEARCH_DEBOUNCE_MS, type ListLocation } from './list-location.ts';
 import { createMemoryListRouter } from './memory-list-router.ts';
 
@@ -459,12 +459,13 @@ describe('applying filters', () => {
 		})
 	});
 
-	/** What a filter form holds: its controls and its hidden inputs. */
-	function formData(entries: [string, string][]) {
-		const data = new FormData();
-		for (const [name, value] of entries) data.append(name, value);
-		return data;
-	}
+	/** The next params of a filter form that keeps the search `pasta` and sends Vegetarian: Yes. */
+	const pastaVegetarian: ListParams<typeof filterable> = {
+		page: 1,
+		perPage: 25,
+		search: 'pasta',
+		filters: [{ field: 'vegetarian', operator: 'eq', value: true }]
+	};
 
 	/** A list location for filterable recipes over an in-memory router that starts at `href`. */
 	function setupFilters(href: string) {
@@ -473,18 +474,15 @@ describe('applying filters', () => {
 		return { router, location };
 	}
 
-	it('starts again at page 1 and adds a history entry, leaving out the empty controls', () => {
+	it('goes to the list with the next params, adding a history entry and leaving out defaults', () => {
 		const { router, location } = setupFilters('/admin/recipes?page=3&perPage=10&q=pasta');
 
-		void location.applyFilters(
-			formData([
-				['perPage', '10'],
-				['q', 'pasta'],
-				['difficulty', 'Easy'],
-				['difficulty', 'Hard'],
-				['vegetarian', '']
-			])
-		);
+		void location.applyFilters({
+			page: 1,
+			perPage: 10,
+			search: 'pasta',
+			filters: [{ field: 'difficulty', operator: 'in', value: ['Easy', 'Hard'] }]
+		});
 		router.land();
 
 		expect(router.navigations).toEqual([
@@ -500,12 +498,7 @@ describe('applying filters', () => {
 		const { router, location } = setupFilters('/admin/recipes?q=pasta');
 
 		location.setSearch('chicken');
-		void location.applyFilters(
-			formData([
-				['q', 'pasta'],
-				['vegetarian', 'true']
-			])
-		);
+		void location.applyFilters(pastaVegetarian);
 		expect(location.search).toBe('pasta');
 		router.land();
 		pause();
@@ -521,12 +514,7 @@ describe('applying filters', () => {
 
 		location.setSearch('chicken');
 		pause();
-		void location.applyFilters(
-			formData([
-				['q', 'pasta'],
-				['vegetarian', 'true']
-			])
-		);
+		void location.applyFilters(pastaVegetarian);
 		router.land();
 
 		expect(router.entries).toEqual([
@@ -546,7 +534,7 @@ describe('applying filters', () => {
 		});
 
 		location.setSearch('chicken');
-		void location.applyFilters(formData([['q', 'pasta']]));
+		void location.applyFilters({ page: 1, perPage: 25, search: 'pasta' });
 
 		expect(seen).toBe('pasta');
 	});

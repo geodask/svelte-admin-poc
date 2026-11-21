@@ -5,11 +5,11 @@ import type { Admin } from './admin.ts';
 import { resolveReference, type ReferenceLink } from './reference-link.ts';
 import { createReferencePicker, type ReferencePicker } from './reference-picker.ts';
 import { createPath, hasPathSegment, recordPath } from './ids.ts';
-import type { Field, FilterOperator } from './fields.ts';
-import type { FilterValue, ListParams, SortableKey, SortOrder } from './provider.ts';
+import type { Field } from './fields.ts';
+import { filterState, type FilterControl, type HiddenInput } from './filter-state.ts';
+import type { ListParams, SortableKey, SortOrder } from './provider.ts';
 import { createKitListRouter } from './kit-list-router.svelte.ts';
 import { createListLocation } from './list-location.ts';
-import { dateInputType, filterParamName, filterInputValue } from './list-url.ts';
 import { titleKeys } from './record-title.ts';
 import type { DeleteFailure, ExportSummary, RemoteFailure, ResourceRemote } from './remote.ts';
 import { readRemoteFailure } from './remote-failure.ts';
@@ -45,83 +45,11 @@ export type BulkDeleteResult =
  */
 export type ExportResult = ({ ok: true } & ExportSummary) | ({ ok: false } & RemoteFailure);
 
-/** One choice of a list View's filter control: a checkbox or a radio button. */
-export type FilterOption = {
-	/** The value the control sends for it, as the list URL writes it. Empty for "Any". */
-	value: string;
-	label: string;
-	/** Whether the list is filtered by it now. */
-	checked: boolean;
-};
-
 /**
  * A GET form that keeps some list params as hidden inputs: where it goes, and each hidden input's
  * name and value.
  */
-export type KeptForm = { action: string; hidden: [name: string, value: string][] };
-
-/**
- * One text, number or date input of a filter control: its name, as the list URL names the filter
- * (`name.contains`, `prepTimeMinutes.gte`), and the value the list is filtered by now, as the URL
- * writes it, or empty when it filters nothing.
- */
-export type FilterInput = { name: string; value: string };
-
-/**
- * Which input a text, number or date filter control uses: a text box, a number, a date, or a
- * date and time (a `datetime-local` input, read and written in UTC, as the forms do).
- */
-export type FilterInputType = 'text' | 'number' | 'date' | 'datetime';
-
-/**
- * The filter control of one filterable Field, in a list View's filter form. Its inputs are named
- * as the list URL names the filter. `operators` are the ones it sends; a filter with any other
- * operator (text `eq` when the control offers `contains`, `lt`, `gt`) still works from the URL,
- * and the filter form keeps it.
- *
- * - `checkboxes`: one per option, any number of them checked, for an enum Field that allows
- *   `in`. One checked option filters with `eq`, several with `in`, none not at all.
- * - `radio`: one of the options, the first of which is "Any" (no filter, an empty value), for a
- *   boolean Field (Any / Yes / No) or an enum Field that allows only `eq`. It filters with `eq`.
- * - `input`: one input. For a text Field a text box, filtering with `contains` when the Field
- *   allows it, else with `eq` (and, when the list is filtered by an `in` from the URL, one box
- *   per value, so the control owns the `in` too); for a number or date Field that doesn't allow a
- *   range, its one value, filtering with `eq`. Empty, it filters nothing.
- * - `range`: a from and a to input, for a number or date Field that allows `gte` and `lte`.
- *   Either may be left empty, to filter one side only.
- * - `reference`: a choice of the target's records by their Record title, for a Reference, with
- *   the headless picker (`createReferencePicker`) whose current choice is the record the list is
- *   filtered by. It sends the chosen id under the Field's key, filtering with `eq`; its "Any"
- *   choice sends an empty value, which filters nothing.
- */
-export type FilterControl = { field: Field; operators: readonly FilterOperator[] } & (
-	| {
-			type: 'checkboxes' | 'radio';
-			/** The name of each of its inputs. */
-			name: string;
-			options: FilterOption[];
-	  }
-	| {
-			type: 'input';
-			input: FilterInputType;
-			/**
-			 * Its inputs: one, or for an exact-match text box on a Field that allows `in`, one per value
-			 * the list is filtered by. They share a name, so they send an `in` while more than one is
-			 * filled, and clearing one leaves the others.
-			 */
-			values: FilterInput[];
-	  }
-	| { type: 'range'; input: Exclude<FilterInputType, 'text'>; from: FilterInput; to: FilterInput }
-	| {
-			type: 'reference';
-			/** Its input: the Field's key, and the id the list is filtered by now, or empty. */
-			current: FilterInput;
-			/** The label of the choice that sends an empty value and so filters nothing: "Any". */
-			emptyLabel: string;
-			/** The headless picker, whose current choice is the id the list is filtered by now. */
-			picker: ReferencePicker;
-	  }
-);
+export type KeptForm = { action: string; hidden: HiddenInput[] };
 
 /**
  * The headless list View: the Fields to show, the list params in the URL, the query to await,
@@ -183,8 +111,6 @@ export function createListView<R extends Resource>(
 	});
 	const url = $derived(listLocation.url);
 	const params = $derived(listLocation.params);
-	/** The href of this list with `next` params, leaving out the Resource's defaults. */
-	const hrefOf = (next: ListParams) => listLocation.href(next);
 	// The stock page sizes, with the Resource's own in its place among them.
 	const perPageOptions: readonly number[] = PER_PAGE_OPTIONS.includes(resource.perPage)
 		? PER_PAGE_OPTIONS
@@ -214,127 +140,22 @@ export function createListView<R extends Resource>(
 
 	const selection = createSelection<IdOf<R>>();
 
-	/** The values the list is filtered by a Field with, by `eq` or `in`, as the URL writes them. */
-	function filteredValues(key: string): string[] {
-		const values: FilterValue[] = [];
-		for (const filter of looseParams.filters ?? []) {
-			if (filter.field !== key) continue;
-			if (filter.operator === 'eq') values.push(filter.value);
-			if (filter.operator === 'in') values.push(...filter.value);
-		}
-		return values.map((value) => filterInputValue(resource, key, value));
-	}
-
-	/** The input of a Field's filter with one operator, and its value now as the URL writes it. */
-	function filterInput(field: Field, operator: Exclude<FilterOperator, 'in'>): FilterInput {
-		const filter = looseParams.filters?.find(
-			(candidate) => candidate.field === field.key && candidate.operator === operator
-		);
-		return {
-			name: filterParamName(field.key, operator),
-			value:
-				filter === undefined || filter.operator === 'in'
-					? ''
-					: filterInputValue(resource, field.key, filter.value)
-		};
-	}
-
 	// Each Reference filter's picker, kept while the id it is filtered by stays the same, so a
 	// change of page, sort or another filter doesn't load the target's records again.
 	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- a cache, never read reactively
-	const pickers = new Map<string, { value: string; picker: ReferencePicker }>();
+	const pickers = new Map<string, { current: string; picker: ReferencePicker }>();
 
-	/** The picker of a Reference filter whose input holds `value`. */
-	function picker(field: Field, { value }: FilterInput): ReferencePicker {
+	/** The picker of a Reference filter on `field`, filtered by the id `current` now. */
+	function picker(field: Field, current: string): ReferencePicker {
 		const kept = pickers.get(field.key);
-		if (kept?.value === value) return kept.picker;
-		const made = createReferencePicker(admin, field, value);
-		pickers.set(field.key, { value, picker: made });
+		if (kept?.current === current) return kept.picker;
+		const made = createReferencePicker(admin, field, current);
+		pickers.set(field.key, { current, picker: made });
 		return made;
 	}
 
-	/** The filter control of a filterable Field, or `undefined` when no stock control fits it. */
-	function filterControl(field: Field): FilterControl | undefined {
-		const allows = (operator: FilterOperator) => field.filterOperators.includes(operator);
-		const values = filteredValues(field.key);
-		const option = (value: string, label: string): FilterOption => ({
-			value,
-			label,
-			checked: value === '' ? values.length === 0 : values.includes(value)
-		});
-		const radio = (options: FilterOption[]): FilterControl => ({
-			field,
-			operators: ['eq'],
-			type: 'radio',
-			name: field.key,
-			options: [option('', 'Any'), ...options]
-		});
-		switch (field.kind) {
-			case 'boolean':
-				return radio([option('true', 'Yes'), option('false', 'No')]);
-			case 'enum': {
-				const options = field.options.map((value) => option(String(value), String(value)));
-				if (!allows('in')) return radio(options);
-				return { field, operators: ['eq', 'in'], type: 'checkboxes', name: field.key, options };
-			}
-			case 'text': {
-				const operator = allows('contains') ? 'contains' : allows('eq') ? 'eq' : undefined;
-				if (operator === undefined) return undefined;
-				if (operator === 'contains' || !allows('in')) {
-					const values = [filterInput(field, operator)];
-					return { field, operators: [operator], type: 'input', input: 'text', values };
-				}
-				// Exact matches on a Field that allows `in`: one box per value, so an `in` from the URL
-				// shows, and is replaced rather than added to.
-				const name = filterParamName(field.key, 'eq');
-				const current = filteredValues(field.key).map((value) => ({ name, value }));
-				const values = current.length > 0 ? current : [{ name, value: '' }];
-				return { field, operators: ['eq', 'in'], type: 'input', input: 'text', values };
-			}
-			case 'number':
-			case 'date': {
-				const input = field.kind === 'number' ? 'number' : dateInputType(field);
-				if (allows('gte') && allows('lte')) {
-					const [from, to] = [filterInput(field, 'gte'), filterInput(field, 'lte')];
-					return { field, operators: ['lte', 'gte'], type: 'range', input, from, to };
-				}
-				if (!allows('eq')) return undefined;
-				const values = [filterInput(field, 'eq')];
-				return { field, operators: ['eq'], type: 'input', input, values };
-			}
-			case 'reference': {
-				if (!allows('eq')) return undefined;
-				const current = filterInput(field, 'eq');
-				return {
-					field,
-					operators: ['eq'],
-					type: 'reference',
-					current,
-					emptyLabel: 'Any',
-					picker: picker(field, current)
-				};
-			}
-			default:
-				return undefined;
-		}
-	}
-
-	// One control per filterable Field the list View shows anywhere (`detail`: not hidden).
-	const filterControls = $derived(
-		resource.fields
-			.filter((field) => field.detail && field.filterOperators.length > 0)
-			.map(filterControl)
-			.filter((control) => control !== undefined)
-	);
-	/** Each filter a control sends, as `{field}.{operator}`. */
-	const controlled = $derived(
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
-		new Set(
-			filterControls.flatMap((control) =>
-				control.operators.map((operator) => `${control.field.key}.${operator}`)
-			)
-		)
-	);
+	// The filter controls and the hidden inputs the forms keep, for the params in the URL.
+	const filters = $derived(filterState(resource, params, { picker }));
 
 	return {
 		resource,
@@ -508,8 +329,7 @@ export function createListView<R extends Resource>(
 		 * names no empty param.
 		 */
 		get searchForm(): KeptForm & { name: 'q' } {
-			const { perPage, sort, filters } = looseParams;
-			return { ...keptForm({ page: 1, perPage, sort, filters }), name: 'q' };
+			return { action: url.pathname, hidden: filters.hidden.searchForm, name: 'q' };
 		},
 		/**
 		 * The filter controls to offer: one per filterable Field that isn't hidden, in schema order,
@@ -517,7 +337,7 @@ export function createListView<R extends Resource>(
 		 * operators no control offers, still work from the URL.
 		 */
 		get filterControls(): FilterControl[] {
-			return filterControls;
+			return filters.controls;
 		},
 		/** How many filters the list is filtered by now. */
 		get filterCount(): number {
@@ -532,12 +352,7 @@ export function createListView<R extends Resource>(
 		 * leaves them out.
 		 */
 		get filterForm(): KeptForm {
-			const { perPage, sort, search, filters } = looseParams;
-			// Keep every filter no control sends.
-			const uncontrolled = filters?.filter(
-				({ field, operator }) => !controlled.has(`${field}.${operator}`)
-			);
-			return keptForm({ page: 1, perPage, sort, search, filters: uncontrolled });
+			return { action: url.pathname, hidden: filters.hidden.filterForm };
 		},
 		/**
 		 * Each filter the list is filtered by now, for the chips under the toolbar: whatever its
@@ -553,7 +368,7 @@ export function createListView<R extends Resource>(
 		},
 		/** The href of the list with no filters, at page 1, keeping the search, sort and page size. */
 		get clearFiltersHref(): string {
-			return hrefOf({ ...looseParams, page: 1, filters: undefined });
+			return listLocation.href({ ...looseParams, page: 1, filters: undefined });
 		},
 		/**
 		 * Filter the list by what the filter form holds (its controls and hidden inputs): go to the
@@ -562,16 +377,9 @@ export function createListView<R extends Resource>(
 		 * still waiting: the list keeps the search the URL had, which the form holds.
 		 */
 		applyFilters(formData: FormData): Promise<void> {
-			return listLocation.applyFilters(formData);
+			return listLocation.applyFilters(filters.nextParams(formData));
 		}
 	};
-
-	/** A GET form's action and the hidden inputs that keep `kept`, leaving out their defaults. */
-	function keptForm(kept: ListParams): KeptForm {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- never mutated
-		const target = new URL(hrefOf(kept), url);
-		return { action: target.pathname, hidden: [...target.searchParams] };
-	}
 }
 
 /**

@@ -8,14 +8,17 @@ export {
 	createListView,
 	type BulkDeleteResult,
 	type ExportResult,
-	type FilterControl,
-	type FilterInput,
-	type FilterInputType,
-	type FilterOption,
 	type KeptForm,
 	type ListSelection,
 	type ListViewState
 } from './list-view.svelte.ts';
+export type {
+	FilterControl,
+	FilterInput,
+	FilterInputType,
+	FilterOption,
+	HiddenInput
+} from './filter-state.ts';
 // Also on the shared entry; here too, so a Theme imports what its parts take from one place.
 export type { ActiveFilter } from './active-filters.ts';
 export {
